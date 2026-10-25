@@ -4,24 +4,39 @@
 对候选体取 5 个身体采样点（人：0.30H、0.55H、0.90H 与沿航向 ±0.35L 的 0.5H；车同式）做世界网格视线与车辆盒遮挡，
 可见点比例 fv < 0.2 不出检测。像素高度 `h = fx · (H cos el + max(L, W) sin el) / R · fv`，大气透过率
 `τ = exp(−3.912 R / V) · (1 − 0.02 r)`，检测概率 `logistic((h − 8) / 2) · clip((τ − 0.2) / 0.3, 0, 1)`；h ≥ 16 px 且 fv ≥ 0.5
-时可识别并给出带噪外观。地面位置以本机导航误差为参照（真值 + e_xy + sigma(R) 噪声），`det_id` 每帧匿名（键含帧序号），
-检测列表按 `det_id` 排序，不携带演员序号。随机数键 `(seed, 21, uav_no·65536 + actor_no, seq, ch)`。
+时可识别并给出带噪外观。地面位置以本机导航误差为参照（真值 + e_xy + sigma(R) 噪声），检测列表按 `det_id` 排序，不携带
+演员序号。随机数键 `(seed, 21, uav_no·65536 + actor_no, seq, ch)`。
+
+`det_id`（M26 §8.2 L-04、L-05；D3-AC-16，A07）：每帧匿名的 64 位标识，取带密钥 BLAKE2b（密钥为运行种子派生的 32 字节，
+个性化串 `DET_ID_PERSON`）对 `(uav_no, actor_no, seq)` 的 8 字节摘要。摘要单向，不再直接下发计数器随机数的内部键（v1 曾以
+`hex64(seed, 21, ag, seq, 4)` 生成）：标识不能跨帧关联到演员，也不携带可用于推算随机流的数值；同一种子下逐字节可复现，
+映射 `det_id → actor` 只写入真值层。
 
 真值侧记录（只写入运行真值层，不进入观测）：`det_id → actor`、无遮挡像素高度、fv、是否可识别。
 """
 
 from __future__ import annotations
 
+import hashlib
 import math
+import struct
 from dataclasses import dataclass
 
 import numpy as np
 
 from awr.agentsdk.env.camera import CameraModel, project
 from awr.agentsdk.env.geom import los
-from awr.agentsdk.rng import CH, STREAM_L1, hex64, nrm, u01
+from awr.agentsdk.rng import CH, STREAM_L1, nrm, u01
 
-__all__ = ["L1Model", "L1Params"]
+__all__ = ["DET_ID_PERSON", "L1Model", "L1Params", "det_id_key"]
+
+DET_ID_PERSON = b"d4d-l1-det-id-v2"          # BLAKE2b 个性化串（16 字节）
+_DET_MSG = struct.Struct("<IIQ")              # uav_no、actor_no、seq
+
+
+def det_id_key(seed: int) -> bytes:
+    """`det_id` 摘要的密钥：运行种子（u64 小端）经 BLAKE2b 派生的 32 字节，只在 Env 内存中。"""
+    return hashlib.blake2b((int(seed) & 0xFFFF_FFFF_FFFF_FFFF).to_bytes(8, "little"), digest_size=32, person=b"d4d-l1-detid-key").digest()
 
 _VIS_STATES = (1, 2)
 
@@ -72,6 +87,12 @@ class L1Model:
         self.size = np.array([a["size_m"] for a in self.info], np.float64)          # (n, 3) L, W, H
         self.app = [_appearance(a) for a in self.info]
         self.n_rays = 0
+        self._det_key = det_id_key(self.seed)
+
+    def det_id(self, uav_no: int, actor_no: int, seq: int) -> str:
+        """每帧匿名标识（16 位十六进制）：带密钥 BLAKE2b 的 8 字节摘要。"""
+        return hashlib.blake2b(_DET_MSG.pack(int(uav_no), int(actor_no), int(seq)), digest_size=8, key=self._det_key,
+                               person=DET_ID_PERSON).hexdigest()
 
     def frame(self, uav_no: int, seq: int, t_ns: int, o: np.ndarray, axes, e_nav: np.ndarray, env) -> tuple[list[dict], list[dict]]:
         """o 为相机光心（真值，ENU）；axes = (forward, right, down)；e_nav 为本机导航误差。→ (检测列表, 真值记录)。"""
@@ -131,7 +152,7 @@ class L1Model:
             sig = P.sig0_m + P.sig_per_m * Rn
             g = base[n, :2] + e_nav[:2] + sig * np.array([nrm(self.seed, STREAM_L1, ag, seq, CH["l1_gx"]),
                                                         nrm(self.seed, STREAM_L1, ag, seq, CH["l1_gy"])])
-            det_id = hex64(self.seed, STREAM_L1, ag, seq, CH["l1_detid"])
+            det_id = self.det_id(uav_no, int(a), seq)
             corners = self._corners(base[n], float(yaw[n]), L[n], W[n], Hh[n])
             cu, cv, _ = project(self.cam, o, axes, corners)
             x0, x1 = float(np.clip(cu.min(), 0, self.cam.width)), float(np.clip(cu.max(), 0, self.cam.width))

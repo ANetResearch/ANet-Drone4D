@@ -77,7 +77,8 @@ def test_ids_unique():
 
 
 # 生成的快照：由 tools/contracts/gen_openapi.py 从 api 导出，test_openapi_snapshot.py 比对（不另设 schema）
-GENERATED = {"rest/openapi.snapshot.json", "rest/sandbox.openapi.snapshot.json"}
+GENERATED = {"rest/openapi.snapshot.json", "rest/sandbox.openapi.snapshot.json",
+             "bench/openapi/bench.openapi.snapshot.json"}    # D3 bench-api（gen_openapi.py --app bench；tests/d3/lab/test_openapi_roles.py 比对）
 
 
 def test_every_data_file_is_covered():

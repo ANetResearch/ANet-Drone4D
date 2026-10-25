@@ -1,5 +1,6 @@
-"""BN-42、BN-43、BN-49 至 BN-52：运行列表与状态、帧索引、单帧、区间帧与真值帧（AWR-17 §18.8；M27-FR-052）。
-运行的事件磁带（`truth/event/tape`）等同事件真值，只对评测员及以上（M27 §7.9）。
+"""BN-49 至 BN-52：帧索引、单帧、区间帧与真值帧（AWR-17 §18.8；M27-FR-052）；运行列表与状态（BN-42、BN-43）见 `runs`。
+运行的事件磁带（`truth/event/tape`）等同事件真值，只对评测员及以上（M27 §7.9）。test 划分（`awr.bench.api.truth`）：test Run 的
+观测帧对评测员以下 403 `691`；test Run 的真值帧与磁带经 HiddenStore 从 `hidden/` 读取并写 `truth_read` 审计。
 
 单帧返回交付字节（`Content-Type` 按通道，`X-Frame-T-Ns`），`ETag` 为内容 sha256，支持单区间 `Range` 与 `If-None-Match`。
 帧接口接受会话、bench token 或 `aud = frames` 的短期令牌。
@@ -15,11 +16,13 @@ from typing import Literal
 from fastapi import APIRouter, Query, Request, Response
 
 from awr.api.problem import ApiProblem
-from awr.bench.api.deps import FrameReader, Researcher, TruthReader
+from awr.bench.api.deps import FrameReader, TruthReader
+from awr.bench.api.truth import event_tape_dir, guard_run, run_truth_paths
+from awr.bench.auth import Principal
 from awr.bench.recorder.read import FrameLimitError, FrameStore, TruthStore
 from awr.bench.recorder.truth import CONTENT_TYPE as GT_CONTENT_TYPE
 from awr.bench.recorder.truth import decode_blocks, pack_camera_gt, unpack_camera_gt
-from awr.bench.runs_store import env_run_item, find_run, list_runs, truth_paths
+from awr.bench.runs_store import find_run, truth_paths
 
 router = APIRouter()
 _IMMUTABLE = "private, max-age=31536000, immutable"
@@ -36,8 +39,8 @@ class StoreCache:
     def get(self, run_dir: Path, run_id: str) -> FrameStore | None:
         return self._get(run_id, run_dir / "frames.idx", lambda: FrameStore(run_dir, run_id))
 
-    def truth(self, run_dir: Path, run_id: str) -> TruthStore | None:
-        mc, idx = truth_paths(run_dir)
+    def truth(self, run_dir: Path, run_id: str, paths: tuple[Path, Path] | None = None) -> TruthStore | None:
+        mc, idx = paths or truth_paths(run_dir)
         return self._get("truth:" + run_id, idx, lambda: TruthStore(mc, idx))
 
     def _get(self, key: str, idx: Path, make):
@@ -58,46 +61,20 @@ class StoreCache:
             return fs
 
 
-def _store(request: Request, rid: str) -> FrameStore:
+def _store(request: Request, rid: str, p: Principal) -> FrameStore:
     d = find_run(request.app.state.settings.dataset_dir, rid)
+    if d is not None:
+        guard_run(request, p, rid, d)                            # test Run：评测员以下 691
     fs = request.app.state.frame_stores.get(d, rid) if d else None
     if fs is None:
         raise ApiProblem(305, detail={"run_id": rid})
     return fs
 
 
-@router.get("/runs")
-def runs(request: Request, p: Researcher) -> dict:
-    items = list_runs(request.app.state.settings.dataset_dir)
-    return {"items": items, "next_cursor": None}
-
-
-@router.get("/runs/{rid}")
-def run(rid: str, request: Request, p: Researcher) -> dict:
-    d = find_run(request.app.state.settings.dataset_dir, rid)
-    if d is None:
-        raise ApiProblem(305, detail={"run_id": rid})
-    m = d / "run_manifest.json"
-    doc = json.loads(m.read_text(encoding="utf-8")) if m.exists() else {}
-    out = {"run_id": rid, "event_id": d.parent.parent.name, "state": doc.get("state", "UNKNOWN"), "kind": doc.get("kind"),
-           "world_id": doc.get("world_id"), "fleet": doc.get("fleet", [])}
-    env = d / "manifest.json"
-    if not doc and env.exists():
-        man = json.loads(env.read_text(encoding="utf-8"))
-        out.update(env_run_item(d, man))
-    ev = doc.get("event")
-    if ev:
-        out["event"] = {"event_id": ev["event_id"], "version": ev["version"], "offset_s": ev.get("offset_s", 0.0)}
-    fs = request.app.state.frame_stores.get(d, rid)
-    if fs is not None:
-        out["frames"] = [{"uav_id": u, "sensor_id": s, "latest_seq": fs.latest_seq(u, s)} for u, s in fs.idx.channels()]
-    return out
-
-
 @router.get("/runs/{rid}/frames/{uav}/{sensor}:range")
 def frame_range(rid: str, uav: str, sensor: str, request: Request, p: FrameReader, seq_from: int = Query(ge=0), seq_to: int = Query(ge=0),
                 stride: int = Query(1, ge=1)) -> Response:
-    fs = _store(request, rid)
+    fs = _store(request, rid, p)
     try:
         b = fs.range_container(uav, sensor, seq_from, seq_to, stride)
     except FrameLimitError as e:
@@ -110,7 +87,7 @@ def frame_range(rid: str, uav: str, sensor: str, request: Request, p: FrameReade
 @router.get("/runs/{rid}/frames/{uav}/{sensor}")
 def frame_index(rid: str, uav: str, sensor: str, request: Request, p: FrameReader, seq_from: int = Query(0, ge=0),
                 seq_to: int | None = Query(None, ge=0)) -> dict:
-    page = _store(request, rid).index_page(uav, sensor, seq_from, seq_to)
+    page = _store(request, rid, p).index_page(uav, sensor, seq_from, seq_to)
     if page is None:
         raise ApiProblem(305, detail={"uav": uav, "sensor": sensor})
     return page
@@ -136,7 +113,7 @@ def _range(h: str, n: int) -> tuple[int, int] | None:
 @router.get("/runs/{rid}/frames/{uav}/{sensor}/{seq}")
 def frame(rid: str, uav: str, sensor: str, seq: int, request: Request,
           p: FrameReader) -> Response:
-    f = _store(request, rid).frame(uav, sensor, seq)
+    f = _store(request, rid, p).frame(uav, sensor, seq)
     if f is None:
         raise ApiProblem(305, detail={"uav": uav, "sensor": sensor, "seq": seq})
     etag = f'"{f.sha256}"'
@@ -161,7 +138,7 @@ def truth_frame(rid: str, uav: str, sensor: str, seq: int, request: Request, p: 
     """BN-52：`awr.sensor.camera_gt.v1` 容器（frame.v1 记录 + 实例、语义、invalid_mask 等块）；只对评测员及以上。
     `decode=raw` 返回块已解压的同格式容器（观测墙评测视图使用）。"""
     d = find_run(request.app.state.settings.dataset_dir, rid)
-    ts = request.app.state.frame_stores.truth(d, rid) if d else None
+    ts = request.app.state.frame_stores.truth(d, rid, run_truth_paths(request, p, rid, d)) if d else None
     hit = ts.get(uav, sensor, seq) if ts else None
     if hit is None:
         raise ApiProblem(305, detail={"run_id": rid, "uav": uav, "sensor": sensor, "seq": seq})
@@ -180,7 +157,7 @@ def event_tape(rid: str, request: Request, p: TruthReader) -> Response:
     ev = doc.get("event")
     if not ev:
         raise ApiProblem(305, detail={"run_id": rid, "event": None})
-    tdir = request.app.state.settings.data_root / "events" / str(ev["event_id"]) / f"v{int(ev['version'])}"
+    tdir = event_tape_dir(request, p, rid, d, ev)
     if not (tdir / "tape.bin").exists() or not (tdir / "tape.json").exists():
         raise ApiProblem(305, detail={"run_id": rid, "event_id": ev["event_id"], "version": ev["version"]})
     sha = json.loads((tdir / "tape.json").read_text(encoding="utf-8"))["content_sha256"]

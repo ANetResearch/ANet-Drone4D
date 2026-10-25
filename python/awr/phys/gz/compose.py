@@ -4,6 +4,11 @@ Drone4DVelocityControl）+ Physics（dartsim + bullet，4 ms）+ UserCommands + 
 `physics` 导出档不加载渲染与传感器系统。机队按 `uavs` 顺序编号 uav_index，模型名为 `uav-01` 之类的 uav id。速度控制增益沿用 r9
 原型（velocityGain 2.7、attitudeGain (2, 3, 0.15)、angularRateGain (0.4, 0.52, 0.18)、最大加速度 3 m/s²）；限幅取
 `VelocityLimits`（缺省 12 m/s 水平、5 m/s 竖直、2 rad/s 偏航），对应 M21 限幅档。
+
+`VelocityLimits.profile = "px4"`（P09，两档对照运行与 `RefTracker`）：velocityGain 取 PX4 速度 P 增益 × 机体总质量
+（MPC_XY_VEL_P_ACC 1.8、MPC_Z_VEL_P_ACC 4.0；Lee 以 velocityGain / 质量 作为加速度增益），速度误差项的加速度限幅取倾角上限
+45° 的水平加速度 g·tan 45° 与竖直 g（PX4 速度环只受倾角与推力限幅），Lee 速度限幅在限幅档之上留 `CMD_HEADROOM_MPS` 余量
+（参考限幅由跟踪器执行，余量供速度积分与加速度前馈）。缺省 "r9" 档保持原型增益不变。
 """
 
 from __future__ import annotations
@@ -17,6 +22,10 @@ G = 9.80665
 STEP_NS = 4_000_000
 ROTORS = (("rotor_0", "ccw", 1), ("rotor_1", "ccw", 1), ("rotor_2", "cw", -1), ("rotor_3", "cw", -1))
 X500_Z0 = 0.24                                   # x500 模型原点到 base_link 的竖直偏移（model.sdf 的 pose）
+X500_MASS_KG = 2.0 + 4 * 0.016076923076923075    # x500_d4d 总质量（base_link + 4 旋翼；Lee vehicleParams.mass）
+PX4_VEL_P_ACC = (1.8, 1.8, 4.0)                  # "px4" 档速度 P 增益（加速度 / 速度误差）
+PX4_ACC_MAX = (G * math.tan(math.radians(45.0)), G * math.tan(math.radians(45.0)), G)
+CMD_HEADROOM_MPS = 3.0                           # 与 awr.phys.tracker.CMD_HEADROOM_MPS 相同
 
 
 @dataclass(frozen=True)
@@ -25,6 +34,7 @@ class VelocityLimits:
     v_z_mps: float = 5.0
     yaw_rate_rps: float = 2.0
     acc_mps2: float = 3.0
+    profile: str = "r9"                          # 速度控制增益档："r9" 原型、"px4"（P09，见模块说明）
 
 
 @dataclass(frozen=True)
@@ -41,6 +51,14 @@ def _f(v) -> str:
 
 def _vehicle(u: UavSpawn) -> str:
     lim = u.limits
+    if lim.profile == "px4":
+        gain = tuple(k * X500_MASS_KG for k in PX4_VEL_P_ACC)
+        acc = PX4_ACC_MAX
+        vmax = (lim.v_xy_mps + CMD_HEADROOM_MPS, lim.v_xy_mps + CMD_HEADROOM_MPS, lim.v_z_mps + CMD_HEADROOM_MPS)
+    elif lim.profile == "r9":
+        gain, acc, vmax = (2.7, 2.7, 2.7), (lim.acc_mps2,) * 3, (lim.v_xy_mps, lim.v_xy_mps, lim.v_z_mps)
+    else:
+        raise ValueError(f"unknown velocity control profile {lim.profile!r}")
     motors = "".join(f"""
       <plugin filename="gz-sim-multicopter-motor-model-system" name="gz::sim::systems::MulticopterMotorModel">
         <robotNamespace>{u.uav}</robotNamespace><jointName>{r}_joint</jointName><linkName>{r}</linkName>
@@ -63,11 +81,11 @@ def _vehicle(u: UavSpawn) -> str:
         <commandFrame>world</commandFrame>
         <init_hover>true</init_hover>
         <comLinkName>base_link</comLinkName>
-        <velocityGain>2.7 2.7 2.7</velocityGain>
+        <velocityGain>{_f(gain)}</velocityGain>
         <attitudeGain>2 3 0.15</attitudeGain>
         <angularRateGain>0.4 0.52 0.18</angularRateGain>
-        <maximumLinearAcceleration>{_f((lim.acc_mps2,) * 3)}</maximumLinearAcceleration>
-        <maximumLinearVelocity>{_f((lim.v_xy_mps, lim.v_xy_mps, lim.v_z_mps))}</maximumLinearVelocity>
+        <maximumLinearAcceleration>{_f(acc)}</maximumLinearAcceleration>
+        <maximumLinearVelocity>{_f(vmax)}</maximumLinearVelocity>
         <maximumAngularVelocity>{_f((3.0, 3.0, lim.yaw_rate_rps))}</maximumAngularVelocity>
         <rotorConfiguration>{rotors}
         </rotorConfiguration>

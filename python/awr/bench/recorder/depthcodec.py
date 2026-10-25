@@ -12,11 +12,12 @@ DEPTH_COMPRESSION = "bshuf4-zstd"
 ZSTD_LEVEL = 3
 
 
-def bshuf4_zstd(raw: bytes) -> bytes:
+def bshuf4_zstd(raw) -> bytes:
+    """`raw` 为 f32 行主序字节或任意 C 连续缓冲（如 f32 数组）；字节平面直接交给 zstd（不再复制为 bytes，平面重排与压缩不持有 GIL）。"""
     import zstandard
 
-    planes = np.frombuffer(raw, np.uint8).reshape(-1, 4).T
-    return zstandard.ZstdCompressor(level=ZSTD_LEVEL).compress(np.ascontiguousarray(planes).tobytes())
+    planes = np.ascontiguousarray(np.frombuffer(raw, np.uint8).reshape(-1, 4).T).reshape(-1)
+    return zstandard.ZstdCompressor(level=ZSTD_LEVEL).compress(memoryview(planes))
 
 
 def bshuf4_unzstd(data: bytes) -> bytes:

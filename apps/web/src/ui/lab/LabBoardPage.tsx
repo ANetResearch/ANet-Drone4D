@@ -130,7 +130,8 @@ export function LabBoardPage() {
   )
 }
 
-function EntryDetail({ version, entry, lane }: { version: string; entry: BoardEntry; lane: string | null }) {
+/** 条目详情（BN-84）：按测试事件分解；不可用时与其他 lab 页面一致给出处理建议（`lab.unreachableHint`）。导出供单元测试渲染 */
+export function EntryDetail({ version, entry, lane }: { version: string; entry: BoardEntry; lane: string | null }) {
   const t = useT()
   const q = useQuery({
     queryKey: ['lab', 'board-entry', version, entry.track, entry.entry_id],
@@ -149,7 +150,7 @@ function EntryDetail({ version, entry, lane }: { version: string; entry: BoardEn
     <div data-figure="lab-board-entry" className="mt-4">
       <h2 className="mb-2 text-hud-title font-semibold">{t('lab.board.detail.title', { name: sanitizeText(entry.display_name, 64) })}</h2>
       {q.isPending ? <Skeleton className="h-7 rounded-md" /> : q.isError ? (
-        <PanelEmpty title={t('lab.board.detail.unavailable')} />
+        <PanelEmpty title={t('lab.board.detail.unavailable')} description={t('lab.unreachableHint')} />
       ) : (
         <LfTable columns={cols} rows={events} rowKey={(r) => r.event} ariaLabel={t('lab.board.detail.title', { name: entry.display_name })} figureId="lab-board-entry-table" />
       )}

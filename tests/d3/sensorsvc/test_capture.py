@@ -115,7 +115,7 @@ def test_capture_run_outputs_and_readback(tmp_path: Path, monkeypatch: pytest.Mo
     gd = rec["ground_truth"]["gt_depth"]
     assert gd["codec"] == "bshuf4-zstd" and gd["ref"] in blocks
     assert np.allclose(np.frombuffer(bshuf4_unzstd(blocks[gd["ref"]]), "<f4"), 50.0 - 0.05, atol=1e-3)     # 真值深度不加噪
-    assert rec["internal"]["noise_tier"] == "realistic" and rec["internal"]["fx_version"] == "fx-basic@1"
+    assert rec["internal"]["noise_tier"] == "realistic" and rec["internal"]["fx_version"] == "fx-full@2"
     gr, gtr = rec["agent_view"]["gimbal_reading"], rec["ground_truth"]["gimbal_true"]
     assert gr != gtr
     assert json.loads((run / "run_manifest.json").read_text())["fleet"][1]["cameras"][0]["fps"] == "15"

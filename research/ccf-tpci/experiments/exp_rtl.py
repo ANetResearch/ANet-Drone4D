@@ -26,9 +26,8 @@ from typing import Any
 
 import numpy as np
 from common import PRESETS, WORLDS
-from harness import PaperSim
+from harness import PaperSim, paper_awareness
 
-from awr.sim.core.awareness import DecisionAwareness
 from awr.sim.core.envwind import env_mean_wind
 from awr.sim.core.interfaces import EstimatePath
 from awr.sim.fleet.stages import registry as R
@@ -225,7 +224,7 @@ def _override_params(task: dict) -> None:
 
 def run(task: dict) -> list[dict]:
     sw, _mode = POLICIES[task["policy"]]
-    aw = DecisionAwareness(**{"precheck_env": True, **sw})
+    aw = paper_awareness(**{"precheck_env": True, **sw})
     t_wall0 = time.perf_counter()
     sim = PaperSim(task["world"], awareness=aw, preset=task["preset"], world_seed=int(task["seed"]))
     try:

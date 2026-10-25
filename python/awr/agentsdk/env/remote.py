@@ -4,7 +4,9 @@ Env 经线协议交付 CONFIG 与逐步 OBS，并在墙钟预算内收集 ACT。
 - 握手：60 s 内无 HELLO 为 665 `hello_timeout`，30 s 内无 READY 为 665 `ready_timeout`；协议主版本不同返回 ERROR 666 `version`；
 - 步进：先向本步被调用的全部 Agent 发出 OBS，再按 `decision.step_budget_s`（自发出起计）收集 ACT；超时由 Env 按 `timeout`
   回执并沿用上一指令；迟到的 ACT（`k` 小于当前步）丢弃并计数；`k` 不一致返回 ERROR 666 `k_mismatch`，连续 3 次协议错误视为退出；
-- Agent 发送 BYE、断开或连续协议错误后视为退出：其后各步不再交付观测，Env 对该机按超时处置（沿用上一指令）。
+- Agent 发送 BYE、断开或连续协议错误后视为退出：其后各步不再交付观测，Env 对该机按超时处置（沿用上一指令）；
+- 白名单审计（`obs_audit`）：CONFIG、OBS（含 inbox）、ERROR、CLOSE 各帧在发送前按线上字节解码并校验（agent_config.v1、obs.v1、
+  wire.v1 Error 与 Close），违规帧不发送并以 644 中止运行；CLOSE 的 `reason` 取 wire.v1 枚举（`run_ended`、`shutdown` 等）。
 """
 
 from __future__ import annotations
@@ -16,14 +18,20 @@ import time
 from collections.abc import Mapping
 from pathlib import Path
 
-from awr.agentsdk.wire import PROTOCOL, T, WireError, WireSocket
+from awr.agentsdk.env.obs_audit import ObsAudit, ObsSchemaViolation, current_audit
+from awr.agentsdk.wire import PROTOCOL, T, WireError, WireSocket, encode_frame
 
-__all__ = ["SocketAgentHost", "run_remote_episode"]
+__all__ = ["CLOSE_REASONS", "SocketAgentHost", "run_remote_episode"]
+
+# 宿主内部的结束原因 → wire.v1 Close.reason 枚举
+CLOSE_REASONS = {"episode_end": "run_ended", "run_failed": "shutdown"}
 
 
 class SocketAgentHost:
-    def __init__(self, uav: str, sock_path: Path, *, hello_timeout_s: float = 60.0, ready_timeout_s: float = 30.0) -> None:
+    def __init__(self, uav: str, sock_path: Path, *, hello_timeout_s: float = 60.0, ready_timeout_s: float = 30.0,
+                 audit: ObsAudit | None = None) -> None:
         self.uav, self.path = uav, Path(sock_path)
+        self.audit = audit if audit is not None else current_audit() or ObsAudit()
         self.hello_timeout_s, self.ready_timeout_s = hello_timeout_s, ready_timeout_s
         if len(os.fsencode(self.path)) > 100:
             raise ValueError(f"agent socket path is {len(os.fsencode(self.path))} bytes (AF_UNIX limit ~108); set AWR_AGENT_SOCK_ROOT to a short directory")
@@ -64,7 +72,7 @@ class SocketAgentHost:
 
     def configure(self, config: dict) -> None:
         assert self.ws is not None
-        self.ws.send(T.CONFIG, config)
+        self._send(T.CONFIG, config)
         deadline = time.monotonic() + self.ready_timeout_s
         while True:
             try:
@@ -81,7 +89,7 @@ class SocketAgentHost:
             return False
         self.k = int(item["obs"]["k"])
         try:
-            self.ws.send(T.OBS, {"obs": item["obs"], "inbox": item["inbox"]})
+            self._send(T.OBS, {"obs": item["obs"], "inbox": item["inbox"]})
         except OSError:
             self.exited = "disconnected"
             return False
@@ -118,15 +126,15 @@ class SocketAgentHost:
             return body
         return None
 
-    def close(self, reason: str = "episode_end") -> None:
+    def close(self, reason: str = "run_ended") -> None:
         if self.closed:
             return
         self.closed = True
         if self.ws is not None and not self.exited:
             try:
-                self.ws.send(T.CLOSE, {"reason": reason})
+                self._send(T.CLOSE, {"reason": CLOSE_REASONS.get(reason, reason)})
                 self.ws.recv(time.monotonic() + 2.0)         # 可选的 BYE
-            except (OSError, TimeoutError, ConnectionError, WireError):
+            except (OSError, TimeoutError, ConnectionError, WireError, ObsSchemaViolation):   # 违规的 CLOSE 不发送（已计入审计）
                 pass
         if self.ws is not None:
             self.ws.close()
@@ -134,10 +142,17 @@ class SocketAgentHost:
         with contextlib.suppress(FileNotFoundError):
             self.path.unlink()
 
+    def _send(self, t: int, body) -> None:
+        """编码 → 按线上字节审计（违规抛 644，帧不发送）→ 发送。"""
+        assert self.ws is not None
+        frame = encode_frame(t, body)
+        self.audit.check_body(t, frame[8:], uav=self.uav)
+        self.ws.sock.sendall(frame)
+
     def _error(self, code: int, why: str) -> None:
         if self.ws is not None:
             with contextlib.suppress(OSError):
-                self.ws.send(T.ERROR, {"code": code, "why": why})
+                self._send(T.ERROR, {"code": code, "why": why})
 
     def _protocol_error(self, why: str) -> None:
         self.stats["protocol_errors"] += 1
@@ -148,13 +163,16 @@ class SocketAgentHost:
 
 
 def run_remote_episode(env, hosts: Mapping[str, SocketAgentHost], *, step_budget_s: float | None = None) -> tuple[dict, dict]:
-    """hosts 须已 `accept()`；→ (env.close() 的运行清单, 每机线协议统计)。"""
+    """hosts 须已 `accept()`；→ (env.close() 的运行清单, 每机线协议统计)。观测交付后只经线协议编码、不再修改，Env 的观测记录
+    改在后台线程写出（`BenchEnv.async_obs_record`，与 Agent 计算重叠）。"""
+    if hasattr(env, "async_obs_record"):
+        env.async_obs_record = True
     obs, infos = env.reset()
-    for u, h in hosts.items():
-        h.configure(infos[u]["config"])
-    budget = float(step_budget_s if step_budget_s is not None else infos[next(iter(hosts))]["config"]["decision"].get("step_budget_s", 2.0))
-    reason = "episode_end"
+    reason = "run_ended"
     try:
+        for u, h in hosts.items():                           # CONFIG 失败（含 644）时同样关闭 Env，写出运行清单
+            h.configure(infos[u]["config"])
+        budget = float(step_budget_s if step_budget_s is not None else infos[next(iter(hosts))]["config"]["decision"].get("step_budget_s", 2.0))
         while env.agents:
             sent = [u for u, o in obs.items() if u in env.agents and hosts[u].send_obs(o)]
             deadline = time.monotonic() + budget
@@ -165,7 +183,7 @@ def run_remote_episode(env, hosts: Mapping[str, SocketAgentHost], *, step_budget
                     acts[u] = a
             obs, _r, _t, _tr, _i = env.step(acts)
     except BaseException:
-        reason = "run_failed"
+        reason = "shutdown"
         raise
     finally:
         manifest = env.close()

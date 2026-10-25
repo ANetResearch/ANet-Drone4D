@@ -11,13 +11,31 @@ PettingZoo Parallel 风格接口。
 时序：控制步 100 ms；tick k 的观测取 t_k 的真值与导航解，L1 检测取 (t_last, t_k] 内的相机帧（10 Hz，帧序号 = tick）；动作在
 `apply_tick = k_obs + max(1, ⌈τ / 100 ms⌉)` 生效（固定延迟生效、未到即阻塞），在途期间不再调用该 Agent；物理档 `advance(k)` 推进
 (t_k, t_{k+1}]。L2 的传感器帧在 tick 末按物理档样本渲染，Agent 未被调用的 tick 的帧累积到下一次观测（按 seq 升序）。
+M25 会话（`sensorsvc`，L2 与 L2-depth）：到期帧以 `(uav, sensor, seq)` 请求提交到 Benchmark 会话，`wait_all` 阻塞至全部就绪才放行
+观测（641 时按原键重提交，仿真时钟不推进、不降频、不转离线，ADR-162）；L2Sensors 为该会话的进程内 worker 后端，每个 tick 生成一次
+并按键交付，帧字节与不经会话时相同。观测墙预览（`wall_preview`）由写入器旁路从交付的相机帧降采样（2 Hz、480 × 270、JPEG 75），
+写入 `preview/<uav>/<seq>.jpg` 或交给回调，不进入 M25 预览队列（ADR-173）。
+物理档（`spec.physics`）：`realistic`（gz 锁步，正式成绩）、`fast`（FleetSim，`awr.phys.fast`）、`kinematic`（开发夹具）；同一 Agent
+代码与观测接口在各档不变，`clock_profile` 先按 M24 时钟档规则与输出集合校验（637）。
 goto 目标解释在本机导航系，每个控制步按当前导航误差换算为真值系目标（变化 ≥ 5 cm 时更新跟踪器）。
+预滚（`env.preroll`，M26-FR-004）：reset 时先推进事件零点之前的 `[−t_pre, 0)`（缺省 2 s；地面起飞为静止、空中出生为悬停保持），
+不调用 Agent、不交付观测；此后物理档以事件时间视图出现，k = 0 观测时刻为 0，窗口判定写入 `tier_info.preroll`。
 未返回动作的 Agent 计超时（回执 `timeout`），沿用上一导航指令。回合在事件时长到达或全部机体终止时结束。
+磁带校验（`env.tapecheck`）：构造时先核对磁带与所加载世界包的版本（不符 615 `TAPE_WORLD_MISMATCH`，不创建运行目录）；正式运行（排名
+且 `realistic` 档）另拒绝栅格后端编译（`generator_version` 以 `-grid` 结尾）或 NavMesh 哈希与世界图层不符的磁带（ADR-196 决策 (5)），
+结果写入运行清单 `tape_check`。
+世界查询（`open_world_query`；K07）：缺省打开网格查询 `MeshWorldQuery`（M22），失败时正式运行（`is_formal`）拒绝并抛
+`WorldQueryFallbackRefused`，不退回 DSM；非正式运行记录 warning 后退回 DSM 查询。实际使用的查询类型与退回原因写入运行清单
+`world_query`（`{kind: mesh | dsm | other, class, fallback?}`）。
+运行种子（`write_run_seed`；K18）：不排名运行写入 `truth/run_seed.json`；排名运行不在运行目录留种子明文（写入隐藏区
+`hidden/<eid>/truth/runs/<run_id>/` 或 `spec.seed_sink`，没有隐藏区时不写），落点记入运行清单 `seed_store`。
 """
 
 from __future__ import annotations
 
+import logging
 import math
+import os
 import time
 from pathlib import Path
 
@@ -26,14 +44,21 @@ import numpy as np
 from awr.agentsdk.env.camera import CameraModel, Gimbal, cam_axes
 from awr.agentsdk.env.guard import ActionGuard, Limits
 from awr.agentsdk.env.l1 import L1Model
+from awr.agentsdk.env.l2 import CAM_SENSOR, GNSS_SENSOR, IMU_SENSOR, LIDAR_SENSOR, L2Config
 from awr.agentsdk.env.link import LinkModel
 from awr.agentsdk.env.nav import NavModel
+from awr.agentsdk.env.preroll import PREROLL_DEFAULT_S, plan_preroll, run_preroll
 from awr.agentsdk.env.recorder import EnvRecorder
 from awr.agentsdk.env.spec import EnvSpec
+from awr.agentsdk.env.tapecheck import check_tape_world, is_formal
 from awr.agentsdk.task import brief_for_agent, task_from_event
 from awr.phys.adapter import TierCommand, VehicleStatus
+from awr.sensorsvc.gpuhealth import gpu_errors
 
-__all__ = ["TICK_MS", "TICK_NS", "BenchEnv"]
+__all__ = ["SEED_FILE", "TICK_MS", "TICK_NS", "BenchEnv", "WorldQueryFallbackRefused", "open_world_query", "seed_sink_for",
+           "world_query_info", "write_run_seed"]
+
+log = logging.getLogger(__name__)
 
 TICK_MS = 100
 TICK_NS = TICK_MS * 1_000_000
@@ -69,8 +94,13 @@ class _Agent:
 
 class BenchEnv:
     def __init__(self, spec: EnvSpec, *, world=None, tape=None, tier=None, cam: CameraModel | None = None, limits: Limits | None = None,
-                 l2=None) -> None:
-        """`l2`：L2 传感器工厂 `(env) -> L2Sensors`（测试注入 CPU 渲染替身）；缺省按 `spec.l2` 构造 EGL 光栅相机。"""
+                 l2=None, sensorsvc=None, inflight_cap: int | None = None, wall_preview=False, preroll_s: float = PREROLL_DEFAULT_S,
+                 l2_cache_dir: Path | None = None) -> None:
+        """`l2`：L2 传感器工厂 `(env) -> L2Sensors`（测试注入 CPU 渲染替身）；缺省按 `spec.l2` 构造 EGL 光栅相机。
+        `sensorsvc`：M25 调度器（`awr.sensorsvc.scheduler.Scheduler`；进程内 GL 渲染须 `threaded=False`），L2 帧经其 Benchmark 会话交付；
+        `inflight_cap` 为会话在途上限（缺省 2 个 tick 的到期帧数）。`wall_preview`：True 写入运行目录，或回调
+        `(uav, seq, t_ns, jpeg_bytes)`。`preroll_s`：事件零点之前的预滚窗口（`env.preroll`；缺省 2 s，0 关闭）。`l2_cache_dir`：L2 网格
+        世界查询的派生缓存根（缺省按 `env.l2.worldquery_cache_dir` 取 `AWR_WORLDQUERY_CACHE_DIR`，再按世界目录推导；不进入运行哈希）。"""
         from awr.sim.events.tape import open_tape
 
         if spec.obs_level not in ("L1", "L2", "L2-depth"):
@@ -78,8 +108,14 @@ class BenchEnv:
         self.spec = spec
         self.uavs = [f.uav for f in spec.fleet]
         self.tape = tape or open_tape(Path(spec.event_dir))
-        self.world = world or _open_world(Path(spec.world_dir))
-        self.cam = cam or CameraModel()
+        self.tape_check = check_tape_world(self.tape, Path(spec.world_dir), formal=is_formal(spec))   # 615：磁带须为所加载世界版本编译
+        if world is None:
+            self.world, self.world_query = open_world_query(Path(spec.world_dir), formal=is_formal(spec))
+        else:
+            self.world, self.world_query = world, world_query_info(world)
+            if is_formal(spec) and self.world_query["kind"] == "dsm":
+                raise WorldQueryFallbackRefused(Path(spec.world_dir), "a DSM world query was injected into a formal run")
+        self.cam = cam or spec.camera_model()          # L1 相机：标称相机或 run_spec 相机覆盖（ADR-217）
         self.lim = limits or Limits()
         self.task = task_from_event(Path(spec.event_dir))
         self.duration_s = float(spec.duration_s or self.task["brief"]["duration_s"])
@@ -87,10 +123,22 @@ class BenchEnv:
         self.nav = NavModel(spec.seed, spec.noise)
         self.l1 = L1Model(spec.seed, self.world, self.tape, self.cam)
         self.link = LinkModel(spec.seed, tuple(self.uavs), self.world, self.tape, spec.comm)
-        self.rec = EnvRecorder(spec.out_dir)
+        self.rec = EnvRecorder(spec.out_dir, spec=spec, tape=self.tape)
         self._tier = tier
         self._l2_factory = l2
+        self._l2_cache = Path(l2_cache_dir) if l2_cache_dir else None
         self.l2 = None
+        self._svc, self._svc_cap, self._sess = sensorsvc, inflight_cap, None
+        self._svc_wait = {"ticks": 0, "rejected_641": 0, "resubmits": 0, "wait_s": 0.0, "backpressure_s": 0.0, "blocked_ticks": 0}
+        self._svc_cache: tuple[int, dict] | None = None
+        self._truth_q: list = []                          # 推迟计算的 L2 真值行（Future，按 tick、机序）
+        # 观测记录（摘要与 raw.mcap 观测通道）在后台线程按交付顺序写出，下一步结算动作之前取齐：只在观测交付后不再被修改时开启
+        # （`run_remote_episode`：观测经线协议编码发送）；写入顺序与同步写入相同
+        self.async_obs_record = False
+        self._rec_pool = None
+        self._rec_futs: list = []
+        self._wall = _WallPreview(spec.out_dir, wall_preview) if wall_preview else None
+        self.preroll = plan_preroll(((f.uav, f.airborne) for f in spec.fleet), preroll_s, TICK_MS)
         self.possible_agents = list(self.uavs)
         self.agents: list[str] = []
         self.k = 0
@@ -99,11 +147,12 @@ class BenchEnv:
     def _make_l2(self):
         import json as _json
 
-        from awr.agentsdk.env.l2 import L2Config, L2Sensors
+        from awr.agentsdk.env.l2 import L2Sensors
 
         wd = Path(self.spec.world_dir)
         meta = _json.loads((wd / "world.json").read_text(encoding="utf-8")) if (wd / "world.json").is_file() else {}
-        cfg = L2Config(**{k: v for k, v in (self.spec.l2 or {}).items() if k in ("camera_profile", "jpeg_quality", "lidar", "imu", "gnss")})
+        cfg = L2Config(**{k: v for k, v in (self.spec.l2 or {}).items() if k in ("camera_profile", "jpeg_quality", "lidar", "imu", "gnss")},
+                       cache_dir=self._l2_cache)
         return L2Sensors(world_dir=wd, tape=self.tape, uavs=self.uavs, seed=self.spec.seed, noise=self.spec.noise, obs_level=self.spec.obs_level,
                          nav=self.nav, mount_t_bs_m=self.cam.mount_t_bs_m, hfov_deg=self.cam.hfov_deg, cfg=cfg, world_meta=meta)
 
@@ -127,9 +176,27 @@ class BenchEnv:
             from awr.phys.kinematic import KinematicTier
 
             return KinematicTier(self.uavs, spawn, lambda xy: self.world.height_dsm(np.asarray(xy, np.float64)), grounded=grounded)
+        if self.spec.physics == "fast":
+            from awr.phys.fast import FastTier
+
+            return FastTier(self.uavs, spawn, self.world, grounded=grounded, vehicles={f.uav: f.vehicle_ref for f in self.spec.fleet},
+                            clock_profile=self.spec.clock_profile, tick_ms=TICK_MS, outputs=self._tier_outputs())
         if self.spec.physics == "realistic":
+            from awr.phys.adapter import validate_clock
+            from awr.phys.fast import check_physics_hz, clock_of
+
+            cp = clock_of(self.spec.clock_profile)
+            validate_clock("realistic", cp, TICK_MS, self._tier_outputs())
+            check_physics_hz(cp, self._tier_outputs())
             return _GzTier.create(self.spec, spawn, grounded, self.world)
-        raise ValueError(f"physics {self.spec.physics!r} is not available in P0a")
+        raise ValueError(f"physics {self.spec.physics!r} is not available (kinematic, fast, realistic)")
+
+    def _tier_outputs(self) -> tuple[str, ...]:
+        """时钟档相容性校验用的输出集合（M24-FR-005）：L2 与 L2-depth 按 `spec.l2` 开关给出 camera、lidar、imu。"""
+        if self.spec.obs_level == "L1":
+            return ("detections",)
+        cfg = L2Config(**{k: v for k, v in (self.spec.l2 or {}).items() if k in ("lidar", "imu", "gnss")})
+        return ("camera", *(["lidar"] if cfg.lidar else []), *(["imu"] if cfg.imu else []))
 
     def agent_config(self, uav: str) -> dict:
         nominal = {"gnss_pos_std_m": self.nav.pos_std_m, "l1_ground_sigma_m": [self.l1.p.sig0_m, self.l1.p.sig_per_m]}
@@ -157,8 +224,15 @@ class BenchEnv:
             raise ValueError("the run seed is fixed by the run specification")
         self.tier = self._make_tier()
         self.tier.open()
+        self.tier = run_preroll(self.tier, self.preroll)    # [−t_pre, 0)：不调用 Agent、不交付观测；窗口内接触只记入 tier_info.preroll
         if self.spec.obs_level != "L1":
-            self.l2 = self._l2_factory(self) if self._l2_factory is not None else self._make_l2()
+            with gpu_errors("l2 open"):                     # GPU 丢失（设备节点、EGL、Warp）→ 647 平台失败，不再崩溃（K18）
+                self.l2 = self._l2_factory(self) if self._l2_factory is not None else self._make_l2()
+            if self._svc is None and hasattr(self.l2, "defer_truth"):
+                self.l2.defer_truth = True                 # 真值可见度归约在等待 Agent 动作期间由后台线程完成（`_flush_truth`）
+            if self._svc is not None:
+                cap = self._svc_cap or 2 * len(self.uavs) * len(self._l2_sensors(1))
+                self._sess = self._svc.open(f"{self.spec.run_id}/0", "benchmark", produce=self._produce, inflight_cap=cap)
         self.st = {u: _Agent(u, i) for i, u in enumerate(self.uavs)}
         self.gim = {u: Gimbal(cam=self.cam) for u in self.uavs}
         self.guard = {u: ActionGuard(u, [p for p in self.uavs if p != u], self.lim, self.task["report_types"], self.spec.comm.enabled,
@@ -170,17 +244,35 @@ class BenchEnv:
         self.agents = list(self.uavs)
         self.status = dict(self.tier.status())
         self.rec.write_json("task.json", self.task)
-        self.rec.write_json("truth/run_seed.json", {"run_seed": self.spec.seed})
+        self.seed_store = write_run_seed(self.spec, self.rec)
         self.configs = {u: self.agent_config(u) for u in self.uavs}
         for u, c in self.configs.items():
             self.rec.write_json(f"agents/{u}/config.json", c)
         self._t0 = time.perf_counter()
+        if self.l2 is not None:                             # 预滚样本只进入 L2 的 IMU 预热，不产生帧
+            for u in self.uavs:
+                self.l2.ingest(u, *self.tier.preroll_samples(u))
         self._feed_l2(0)
         self._sense(0)
         self._log_fleet()
         return self._observe(), {u: {"config": self.configs[u]} for u in self.uavs}
 
+    def _flush_truth(self) -> None:
+        """按序写出推迟计算的 L2 真值行（上一次感知的各机）：在每次推进之前（本 tick 的接触事件之前）与关闭时写出，真值层的写入顺序
+        与不推迟时相同。"""
+        q, self._truth_q = self._truth_q, []
+        with gpu_errors("l2 truth"):
+            for fut in q:
+                for tr in fut.result():
+                    self.rec.on_vis(tr)
+
+    def _flush_obs(self) -> None:
+        futs, self._rec_futs = self._rec_futs, []
+        for f in futs:
+            f.result()
+
     def step(self, actions: dict[str, dict]):
+        self._flush_obs()
         for u in list(actions):
             if u not in self.st or self.st[u].k_obs is None:
                 raise KeyError(f"{u} has no observation in flight")
@@ -189,9 +281,11 @@ class BenchEnv:
                 continue
             if u in actions:
                 self._settle(a, actions[u])
-            else:
+            else:                                           # 超时：沿用上一导航与云台指令（不产生新的物理档指令），计数并回执 661
                 a.timeouts += 1
-                a.acks.append({"k": a.k_obs, "item": "act", "index": 0, "result": "timeout", "code": 661})
+                r = self.guard[u].timeout(a.k_obs)
+                a.acks.extend(r.acks)
+                self.rec.on_act(u, a.k_obs, None, r.acks, None)
                 a.next_k = a.k_obs + 1
             a.k_obs = None
         while True:
@@ -244,6 +338,7 @@ class BenchEnv:
                 cmd = TierCommand(a.uav, kind, apply_tick)
             res = self.tier.submit([cmd])[0]
             if not res.ok:
+                self.guard[a.uav].tier_rejected()
                 r.acks = [x for x in r.acks if x["item"] != "nav"] + [{"k": a.k_obs, "item": "nav", "index": 0, "result": "rejected",
                                                                      "code": res.code, "why": "tier"}]
         if r.gimbal is not None:
@@ -259,6 +354,7 @@ class BenchEnv:
         a.wall_s += time.perf_counter() - t_wall
 
     def _advance(self) -> None:
+        self._flush_truth()
         k = self.k
         for a in self.st.values():                          # 估计系目标随导航误差更新（≥ 5 cm）
             if a.cmd_kind == "goto" and a.goto_nav is not None and not a.done:
@@ -294,16 +390,75 @@ class BenchEnv:
         self._sense(self.k)
         self._log_fleet()
 
+    # ------------------------------------------------------------------ M25 会话（Benchmark 锁步）
+    def _l2_sensors(self, k: int) -> list[tuple[str, int]]:
+        """tick k 每架机的到期帧 (sensor, seq)，顺序与 `L2Sensors.sense_all` 的 `sensors` 映射一致；集合只由规格与 k 决定。"""
+        cfg = getattr(self.l2, "cfg", None) or L2Config()
+        out = [(CAM_SENSOR, k)]
+        if k > 0 and cfg.lidar:
+            out.append((LIDAR_SENSOR, k - 1))
+        if k > 0 and cfg.imu:
+            out.append((IMU_SENSOR, k - 1))
+        if cfg.gnss:
+            out.append((GNSS_SENSOR, k))
+        return out
+
+    def _produce(self, batch):
+        """会话的 worker 后端：tick 的首个请求触发一次 `sense_all`（同一实现、同一顺序），其余请求按键取出。
+        帧为 `(frame | None, 真值行)`；IMU 窗口不足时为 None（与 `sense_all` 不输出该键一致）。"""
+        out = []
+        for r in batch:
+            k, live = r.payload
+            if self._svc_cache is None or self._svc_cache[0] != k:
+                self._svc_cache = (k, self.l2.sense_all(k, list(live)))
+            frames, truth = self._svc_cache[1][r.key.uav]
+            fs = frames.get(r.key.sensor) or []
+            fr = next((f for f in fs if int(f["seq"]) == r.key.seq), None)
+            out.append((r, (fr, truth if r.key.sensor == CAM_SENSOR else [])))
+        return out
+
+    def _sense_m25(self, k: int, live: list[tuple[str, int]]) -> dict:
+        from awr.sensorsvc.scheduler import FrameKey, Request, wait_all
+
+        payload = (k, tuple(live))
+        reqs = [Request(FrameKey(u, sid, seq), "online", payload) for u, _no in live for sid, seq in self._l2_sensors(k)]
+        got, st = wait_all(self._svc, self._sess, reqs)
+        self._svc_cache = None
+        w = self._svc_wait
+        w["ticks"] += 1
+        w["rejected_641"] += st.rejected_641
+        w["resubmits"] += st.resubmits
+        w["wait_s"] += st.wait_s
+        w["backpressure_s"] += st.backpressure_s
+        w["blocked_ticks"] += int(st.rejected_641 > 0)
+        res = {}
+        for u, _no in live:
+            sensors, truth = {}, []
+            for sid, seq in self._l2_sensors(k):
+                fr, tr = got[FrameKey(u, sid, seq)]
+                if fr is not None:
+                    sensors[sid] = [fr]
+                truth.extend(tr)
+            res[u] = (sensors, truth)
+        return res
+
     def _sense(self, k: int) -> None:
         t = k * TICK_NS
         if self.l2 is not None:
             live = [(u, a.no) for u, a in self.st.items() if not a.done and self.status[u] != VehicleStatus.CRASHED]
-            for u, (frames, truth) in self.l2.sense_all(k, live).items():
+            with gpu_errors("l2 sense"):                    # 运行中 CUDA / EGL 设备丢失类异常 → 647（K18）
+                res = self._sense_m25(k, live) if self._sess is not None else self.l2.sense_all(k, live)
+            for u, (frames, truth) in res.items():
                 a = self.st[u]
                 for sid, fs in frames.items():
                     a.frames.setdefault(sid, []).extend(fs)
-                for tr in truth:
-                    self.rec.on_vis(tr)
+                if isinstance(truth, list):
+                    for tr in truth:
+                        self.rec.on_vis(tr)
+                else:
+                    self._truth_q.append(truth)
+                if self._wall is not None:
+                    self._wall.on_frames(u, k, frames.get(CAM_SENSOR) or [])
             return
         env = self.tape.env_at(t)
         for u, a in self.st.items():
@@ -340,7 +495,16 @@ class BenchEnv:
                    "term": a.term if (a.term["terminated"] or a.term["truncated"]) else {"terminated": False, "truncated": False, "reason": "none"}}
             msg = {"obs": obs, "inbox": a.inbox}
             self.guard[u].saw(a.dets)
-            self.rec.on_obs(u, self.k, msg)
+            if self.l2 is not None:                         # L2 的 report 证据引用交付的相机帧（框证据，无 det_id）
+                self.guard[u].saw_frames(a.frames)
+            if self.async_obs_record:
+                if self._rec_pool is None:
+                    from concurrent.futures import ThreadPoolExecutor
+
+                    self._rec_pool = ThreadPoolExecutor(1, thread_name_prefix="env-obs-rec")
+                self._rec_futs.append(self._rec_pool.submit(self.rec.on_obs, u, self.k, msg))
+            else:
+                self.rec.on_obs(u, self.k, msg)
             out[u] = msg
             a.dets, a.acks, a.inbox, a.frames = [], [], [], {}
             a.k_obs = self.k
@@ -356,7 +520,17 @@ class BenchEnv:
         self._fleet["status"].append([str(self.status[u]) for u in self.uavs])
 
     def close(self) -> dict:
+        self._flush_obs()
+        if self._rec_pool is not None:
+            self._rec_pool.shutdown(wait=True)
+            self._rec_pool = None
+        self._flush_truth()
         info = self.tier.close() if hasattr(self, "tier") else {}
+        svc = None
+        if self._sess is not None:
+            svc = {**self._svc.close_session(self._sess), **{k: round(v, 3) if isinstance(v, float) else v for k, v in self._svc_wait.items()},
+                   "delay_s": self._svc.delay_s}
+            self._sess = None
         if self.l2 is not None:
             self.l2.close()
         wall = time.perf_counter() - self._t0 if hasattr(self, "_t0") else 0.0
@@ -374,21 +548,177 @@ class BenchEnv:
                     "ranked": self.spec.ranked, "policy": self.spec.policy, "decision": self.spec.decision.config(),
                     "comm": {"enabled": self.spec.comm.enabled, "bucket_Bps": self.spec.comm.bucket_Bps},
                     "duration_s": self.duration_s, "n_ticks": self.k, "pose_sha256": info.get("pose_sha256"), "tier_info": info,
-                    "wall_s": round(wall, 2), "l1_rays": self.l1.n_rays, "agents": stats}
+                    "wall_s": round(wall, 2), "l1_rays": self.l1.n_rays, "agents": stats, "tape_check": self.tape_check,
+                    "world_query": self.world_query, "seed_store": getattr(self, "seed_store", None)}
+        if not self.spec.ranked or self.spec.seed_commit:     # 运行身份（M27-FR-007）；排名运行须有 M27 的种子承诺值
+            manifest.update(self.spec.identity())
+        if self.cam != CameraModel():                       # L1 相机不是标称相机（相机覆盖，ADR-217）：评测器的 AO oracle 按此相机计算
+            manifest["camera"] = self.cam.manifest()
+        if self.l2 is not None:                             # 网格 LiDAR 后端（cpu：Open3D 参考；warp：M25 GPU 产品路径）
+            manifest["l2"] = {"lidar_backend": getattr(self.l2, "lidar_backend", None)}
+            probe = getattr(self.l2, "gpu_probe", None)
+            if isinstance(probe, dict):                     # 建立 GPU 上下文之前的体检（`awr.sensorsvc.gpuhealth.require_gpu`）
+                manifest["l2"]["gpu_probe"] = {k: probe[k] for k in ("mode", "expected", "warp_cuda_devices") if k in probe}
+        if svc is not None:
+            manifest["sensorsvc"] = svc
+        if self._wall is not None:
+            manifest["wall_preview"] = self._wall.summary()
         self.rec.write_json("manifest.json", manifest)
         self.rec.close()
         return manifest
 
 
-def _open_world(world_dir: Path):
+class _WallPreview:
+    """观测墙预览（ADR-173；M27 FR-171）：从交付给 Agent 的相机帧按仿真时间 2 Hz 降采样为 480 × 270 JPEG（质量 75），
+    写入 `preview/<uav>/<seq:06d>.jpg` 或交给回调；不经 M25 队列，不影响观测。"""
+
+    HZ, SIZE, QUALITY = 2.0, (480, 270), 75
+
+    def __init__(self, out_dir, target) -> None:
+        self.sink = target if callable(target) else None
+        self.dir = Path(out_dir) / "preview" if (self.sink is None and out_dir) else None
+        self.every = max(1, round(1000 / (self.HZ * TICK_MS)))
+        self.n: dict[str, int] = {}
+
+    def on_frames(self, uav: str, k: int, frames: list[dict]) -> None:
+        import io
+
+        from PIL import Image
+
+        for f in frames:
+            if int(f["seq"]) % self.every:
+                continue
+            im = Image.open(io.BytesIO(f["rgb"]["data"])).convert("RGB").resize(self.SIZE, Image.BILINEAR)
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=self.QUALITY)
+            b = buf.getvalue()
+            if self.sink is not None:
+                self.sink(uav, int(f["seq"]), int(f["t_mid_ns"]), b)
+            elif self.dir is not None:
+                p = self.dir / uav / f"{int(f['seq']):06d}.jpg"
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(b)
+            self.n[uav] = self.n.get(uav, 0) + 1
+
+    def summary(self) -> dict:
+        return {"hz": self.HZ, "size": list(self.SIZE), "jpeg_quality": self.QUALITY, "frames": dict(self.n), "source": "delivered"}
+
+
+SEED_FILE = "run_seed.json"
+
+
+def seed_sink_for(spec: EnvSpec) -> tuple[Path | None, bool]:
+    """排名运行种子明文的隐藏区目录 → (目录, 是否显式给出)：`spec.seed_sink`；未给出而运行目录为 M27 数据集布局
+    `<data>/dataset/<eid>/runs/<run_id>`（subworker、board_v1_formal 同）时取同一数据根的 `<data>/hidden/<eid>/truth/runs/<run_id>`
+    （`HiddenStore.truth_dir` 与 `seal-truth` 的布局）；其余为 None。"""
+    if getattr(spec, "seed_sink", None) is not None:
+        return Path(spec.seed_sink), True
+    if spec.out_dir is None:
+        return None, False
+    p = Path(spec.out_dir)
+    if p.parent.name == "runs" and p.parent.parent.parent.name == "dataset":
+        return p.parent.parent.parent.parent / "hidden" / p.parent.parent.name / "truth" / "runs" / p.name, False
+    return None, False
+
+
+def _mkdir_hidden(d: Path) -> None:
+    """建目录链，新建的各级设为 0700（隐藏区 `HiddenStore._mkdir` 的同一口径；已有目录不改属主与权限）。"""
+    missing = [x for x in (d, *d.parents) if not x.exists()]
+    d.mkdir(parents=True, exist_ok=True)
+    for x in missing:
+        os.chmod(x, 0o700)
+
+
+def write_run_seed(spec: EnvSpec, rec: EnvRecorder | None = None) -> str | None:
+    """运行种子明文的落点（ADR-161 决策 (3)、M27-FR-005；K18，B21 遗留 8）→ 运行清单 `seed_store`：
+
+    - 不排名运行：写入运行目录真值层 `truth/run_seed.json`（不排名运行的种子本就公开，Rerun 导出与复现取用），记 `run_dir`；
+    - 排名运行：运行目录不留种子明文，只写入隐藏区目录（`seed_sink_for`：显式 `spec.seed_sink`，或数据集布局下同一数据根的
+      `hidden/<eid>/truth/runs/<run_id>/`）的 `run_seed.json`（新建目录 0700、文件 0600，先写临时文件再改名），记 `hidden`；评测
+      catalog 的导出（`rerun_export`）从该处取种子。没有隐藏区目录时不写，种子以 M27 评测库（`EvalStore.seeds`，与 `seed_commit`
+      的 HMAC 承诺对应）为准，记 `evalstore`。由布局推导的隐藏区不可写（例如属主为 Evaluator 服务用户）时同样不写并记 warning
+      （不含种子）；显式给出的目录不可写时抛出。
+    运行目录未给出（`out_dir = None`）且不排名时不写盘，记 None。"""
+    if not spec.ranked:
+        if rec is None or not getattr(rec, "dir", None):
+            return None
+        rec.write_json(f"truth/{SEED_FILE}", {"run_seed": spec.seed})
+        return "run_dir"
+    sink, explicit = seed_sink_for(spec)
+    if sink is None:
+        return "evalstore"
+    import json as _json
+
+    tmp = sink / f".{SEED_FILE}.{os.getpid()}.tmp"
+    try:
+        _mkdir_hidden(sink)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(_json.dumps({"run_seed": int(spec.seed), "run_id": spec.run_id}, sort_keys=True) + "\n")
+        os.replace(tmp, sink / SEED_FILE)
+    except OSError as e:
+        if explicit:
+            raise
+        log.warning("run %s: hidden seed store %s is not writable (%s); the seed stays only in the EvalStore", spec.run_id, sink,
+                    type(e).__name__)
+        return "evalstore"
+    return "hidden"
+
+
+class WorldQueryFallbackRefused(RuntimeError):
+    """正式运行的网格查询打不开时拒绝退回 DSM（K07；A10 遗留 F-78 (c)）：`detail` 含世界目录与网格查询的错误。"""
+
+    def __init__(self, world_dir: Path, why: str, error: BaseException | None = None) -> None:
+        msg = f"formal runs need the mesh world query for {Path(world_dir).name}: {why}"
+        super().__init__(msg + (f" ({type(error).__name__}: {error})" if error is not None else ""))
+        self.detail = {"why": "mesh_query_unavailable", "world": Path(world_dir).name, "reason": why,
+                       **({"error": f"{type(error).__name__}: {str(error)[:300]}"} if error is not None else {})}
+
+
+def world_query_info(world) -> dict:
+    """运行清单的 `world_query`：按查询对象的类型判定 `mesh`（`MeshWorldQuery`）、`dsm`（`DsmWorldQuery`）或 `other`（测试替身）。"""
+    names = [c.__name__ for c in type(world).__mro__]
+    kind = "mesh" if "MeshWorldQuery" in names else "dsm" if "DsmWorldQuery" in names else "other"
+    return {"kind": kind, "class": type(world).__name__}
+
+
+def open_world_query(world_dir: Path, *, formal: bool = False):
+    """→ (世界查询, `world_query` 记录)。网格查询打不开时：`formal` 为真抛 `WorldQueryFallbackRefused`；否则记录 warning，
+    退回 DSM 查询，并在记录的 `fallback` 中给出原因（`no_mesh_layer`：世界包没有 `mesh.raycast` 图层，如 DSM 合成夹具；
+    `mesh_open_failed`：图层存在但打开失败，如派生缓存不可写）。"""
+    world_dir = Path(world_dir)
     try:
         from awr.world.mesh.query import open_mesh_world_query
 
-        return open_mesh_world_query(world_dir)
-    except Exception:
+        w = open_mesh_world_query(world_dir)
+        return w, world_query_info(w)
+    except Exception as e:
+        why = "mesh_open_failed" if _has_mesh_layer(world_dir) else "no_mesh_layer"
+        if formal:
+            raise WorldQueryFallbackRefused(world_dir, why, e) from e
+        log.warning("world %s: mesh query unavailable (%s: %s: %s); falling back to the DSM query (non-formal run)",
+                    world_dir.name, why, type(e).__name__, str(e)[:300])
         from awr.world.geometry.query import open_dsm_world_query
 
-        return open_dsm_world_query(world_dir)
+        w = open_dsm_world_query(world_dir)
+        return w, {**world_query_info(w), "fallback": {"reason": why, "error": f"{type(e).__name__}: {str(e)[:300]}"}}
+
+
+def _has_mesh_layer(world_dir: Path) -> bool:
+    try:
+        import json as _json
+
+        doc = _json.loads((Path(world_dir) / "world.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    layers = doc.get("layers") or []
+    ids = [x.get("id") for x in layers] if isinstance(layers, list) else list(layers)
+    return "mesh.raycast" in ids
+
+
+def _open_world(world_dir: Path, *, formal: bool = False):
+    """世界查询（只要对象时的简写；规则见 `open_world_query`）。"""
+    return open_world_query(Path(world_dir), formal=formal)[0]
 
 
 SPAWN_FOOT = np.array([[dx, dy] for dx in (-0.7, -0.35, 0.0, 0.35, 0.7) for dy in (-0.7, -0.35, 0.0, 0.35, 0.7)])
@@ -396,22 +726,37 @@ SPAWN_LEVEL_M = 0.15
 
 
 class _GzTier:
-    """Realistic 档：每 Run 一个 gz 实例（GzInstance + compose_run + GzSimBackend），关闭时停止实例。"""
+    """Realistic 档：每 Run 一个 gz 实例（GzInstance + compose_run + SupervisedGzBackend：看门狗 632 / 638 时重启实例并从回合起点
+    重放，M24-FR-078、FR-079），关闭时停止实例。机型按 `fleet[].vehicle_ref` 映射（`awr.phys.gz.vehicles`，M24-FR-083）：`p600_bench`
+    在 x500_d4d 几何上换用其质量、惯量与最大转速，派生模型写入 `<run_dir>/models/` 并只读挂载进 gz 实例；其余机型用 x500 原型。
+    映射参数写入运行清单 `tier_info.vehicle`。"""
 
     @staticmethod
     def create(spec: EnvSpec, spawn: dict, grounded: list[str], world):
         from awr.agentsdk.env.geom import surface_z
-        from awr.phys.gz.backend import GzSimBackend
+        from awr.phys.gz.backend import SupervisedGzBackend
         from awr.phys.gz.compose import UavSpawn, compose_run
         from awr.phys.gz.instance import GzInstance
+        from awr.phys.gz.vehicles import apply_vehicle, base_model_sdf, quad_for_fleet, write_model
         from awr.phys.kinematic import GEAR_Z_M
         from awr.world.export.gz import export_world
 
         o = spec.gz
         exp = export_world(Path(spec.world_dir), out_root=o.get("export_root"), check_sdf=o.get("check_sdf"))
         run_dir = Path(o.get("run_dir") or (Path(spec.out_dir) / "phys" if spec.out_dir else Path("/tmp") / f"d4d-{spec.run_id}"))
-        inst = GzInstance(run_dir, o.get("name", f"d3-gz-{spec.run_id}"), image=o.get("image", "d3-gz:dev"), launcher=o.get("launcher", "docker"),
-                          world_export=exp.root)
+        launcher = o.get("launcher", "docker")
+        q = quad_for_fleet(f.vehicle_ref for f in spec.fleet)
+        mounts = {}
+        md = write_model(run_dir / "models", q, base_model_sdf()) if q.mapped else None
+        if md is not None:
+            if launcher == "docker":
+                mounts[str(md)] = f"/opt/d4d/models/{q.model}"
+            else:
+                rp = os.environ.get("GZ_SIM_RESOURCE_PATH", "")
+                if str(md.parent) not in rp.split(":"):
+                    os.environ["GZ_SIM_RESOURCE_PATH"] = ":".join(p for p in (str(md.parent), rp) if p)
+        inst = GzInstance(run_dir, o.get("name", f"d3-gz-{spec.run_id}"), image=o.get("image", "d3-gz:dev"), launcher=launcher,
+                          world_export=exp.root, extra_mounts=mounts)
         spawns = []
         for u, (p, yaw) in spawn.items():
             z = float(p[2])
@@ -422,19 +767,20 @@ class _GzTier:
                     raise ValueError(f"{u}: spawn surface not level ({np.ptp(zs):.2f} m over the airframe footprint)")
                 z = float(zs.max()) + GEAR_Z_M + 0.01
             spawns.append(UavSpawn(u, (float(p[0]), float(p[1]), z), yaw))
-        inst.start(compose_run(spawns, world_static_uri=exp.uri, endpoint=inst.gz_endpoint, spherical=exp.spherical))
+        inst.start(apply_vehicle(compose_run(spawns, world_static_uri=exp.uri, endpoint=inst.gz_endpoint, spherical=exp.spherical), q, len(spawns)))
         try:
             inst.wait_socket(float(o.get("ready_timeout_s", 120)))
-            be = GzSimBackend(list(spawn), inst.endpoint, grounded=grounded, run_id=spec.run_id, timeout_s=float(o.get("step_timeout_s", 30)))
+            be = SupervisedGzBackend(inst, list(spawn), grounded=grounded, run_id=spec.run_id, step_timeout_s=float(o.get("step_timeout_s", 5)),
+                                     reuse_policy=o.get("reuse_policy", "per_run"))
         except Exception:
             inst.stop()
             raise
-        return _GzHandle(be, inst)
+        return _GzHandle(be, inst, q.as_dict())
 
 
 class _GzHandle:
-    def __init__(self, be, inst) -> None:
-        self.be, self.inst = be, inst
+    def __init__(self, be, inst, vehicle: dict | None = None) -> None:
+        self.be, self.inst, self.vehicle = be, inst, vehicle
         self.name = be.name
 
     def __getattr__(self, k):
@@ -442,6 +788,7 @@ class _GzHandle:
 
     def close(self) -> dict:
         try:
-            return self.be.close()
+            info = self.be.close()
+            return {**info, "vehicle": self.vehicle} if self.vehicle is not None and isinstance(info, dict) else info
         finally:
             self.inst.stop()

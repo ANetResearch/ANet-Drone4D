@@ -1,0 +1,26 @@
+# d3-lab-py 镜像（bench-api、lab-gateway、rerun-proxy、catalog-dist、catalog-eval 与 labctl）的运行依赖：版本与 requirements.lock、
+# requirements-d3.lock 一致（构建时只从 dmax 离线 wheel 目录 wheels-d2-*、wheels-rerun、wheels-catalog 安装，不访问网络）。
+fastapi==0.141.1
+starlette==1.7.0
+pydantic==2.13.5
+uvicorn==0.54.0
+uvloop==0.22.1
+websockets==17.1
+httpx==0.28.1
+msgpack==1.2.2
+pyyaml==6.0.3
+jsonschema==4.26.0
+numpy==2.5.3
+pillow==11.3.0
+zstandard==0.25.0
+lz4==4.4.5
+mcap==1.5.0
+mcap-protobuf-support==0.5.3
+foxglove-schemas-protobuf==0.3.0
+protobuf==7.36.2
+rerun-sdk==0.38.1
+pyarrow==26.0.0
+datafusion==54.0.0
+cloudpickle==3.1.2
+av==16.0.1
+psutil==7.2.2

@@ -1,0 +1,22 @@
+{
+ "schema": "awr.anchors.v1",
+ "extends": "world",
+ "world_id": "oryahovo-crop1",
+ "anchors": [
+  {"id": "ev_nw_road_in", "kind": "point", "category": "manual", "profile": "vehicle", "xy": [-54.25, 38.99], "label_zh": "西北路入城车道（车道中心线）"},
+  {"id": "ev_east_road_stop", "kind": "point", "category": "manual", "profile": "vehicle", "xy": [99.15, -62.72], "label_zh": "东路东行临停点（车道中心线）"},
+  {"id": "ev_spur_park", "kind": "point", "category": "manual", "profile": "vehicle", "xy": [141.34, -8.66], "label_zh": "东北支路尽端泊车点（车道中心线）"},
+  {"id": "ev_east_road_in", "kind": "point", "category": "manual", "profile": "vehicle", "xy": [188.9, -86.06], "label_zh": "东路入城车道（车道中心线）"},
+  {"id": "ev_ne_road_out", "kind": "point", "category": "manual", "profile": "vehicle", "xy": [75.48, 59.76], "label_zh": "东北路出城车道（车道中心线）"},
+  {"id": "ev_ne_road_in", "kind": "point", "category": "manual", "profile": "vehicle", "xy": [72.62, 61.2], "label_zh": "东北路入城车道（车道中心线）"},
+  {"id": "ev_south_road_in", "kind": "point", "category": "manual", "profile": "vehicle", "xy": [22.89, -119.36], "label_zh": "南路入城车道（车道中心线）"},
+  {"id": "ev_nw_road_out", "kind": "point", "category": "manual", "profile": "vehicle", "xy": [-102.63, 69.58], "label_zh": "西路出城车道（车道中心线）"},
+  {"id": "ev_plaza_curb_road", "kind": "point", "category": "manual", "profile": "vehicle", "xy": [46.76, -46.24], "label_zh": "广场东侧停车点（车道中心线）"},
+  {"id": "ev_road_east", "kind": "point", "category": "manual", "profile": "vehicle", "xy": [188.0, -89.14], "label_zh": "东路出口（车道中心线）"},
+  {"id": "ev_spur_junction", "kind": "zone", "category": "manual", "profile": "vehicle", "polygon": [[110.0, -80.0], [134.0, -80.0], [134.0, -56.0], [110.0, -56.0]], "label_zh": "东路与东北支路路口"},
+  {"id": "ev_plaza", "kind": "zone", "category": "plaza", "profile": "person", "polygon": [[2.0, -52.0], [24.0, -52.0], [24.0, -30.0], [2.0, -30.0]], "public": true, "seed": true, "label_zh": "中心路口广场"},
+  {"id": "ev_traffic_area", "kind": "zone", "category": "manual", "profile": "vehicle", "polygon": [[-120.0, -130.0], [110.0, -130.0], [110.0, 80.0], [-120.0, 80.0]], "label_zh": "镇中心路网"},
+  {"id": "ev_town_center", "kind": "zone", "category": "manual", "profile": "person", "polygon": [[-90.0, -110.0], [110.0, -110.0], [110.0, 60.0], [-90.0, 60.0]], "label_zh": "镇中心"}
+ ],
+ "remove": []
+}

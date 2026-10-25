@@ -1,0 +1,837 @@
+{
+ "schema": "drone4d.phys.tier_compare.v1",
+ "generated_utc": "2026-10-19T07:59:31Z",
+ "vehicle": "x500",
+ "clock_profile": {
+  "name": "d1_250",
+  "main_hz": 250,
+  "physics_hz": 250,
+  "l1_hz": 250
+ },
+ "tick_ms": 100,
+ "pose_history_hz": 250,
+ "wind_mode": "field",
+ "turbulence_sigma": 0.0,
+ "drag_law": "composite",
+ "collision_source": "box primitives (analytic, identical on both tiers)",
+ "m09_autonomy": "off (Bench composition)",
+ "tolerance_status": "initial (M24 §6.10.6 where defined; others set by P09, frozen by ADR after first measurement)",
+ "kernel": "numpy",
+ "gz": {
+  "gz_sim_version": "8.15.0",
+  "plugin_build": "p09-dev"
+ },
+ "realistic_tracker": "RefTracker (M08 refgen shared with Fast; compose velocity profile px4)",
+ "cases": [
+  {
+   "id": "takeoff_land",
+   "title": "起飞至 20 m 后降落（爬升与下降）",
+   "interface": {
+    "dispatch_equal": true,
+    "status": {
+     "u1": {
+      "fast": [
+       "GROUNDED",
+       "AIRBORNE",
+       "LANDING",
+       "GROUNDED"
+      ],
+      "realistic": [
+       "GROUNDED",
+       "AIRBORNE",
+       "LANDING",
+       "GROUNDED"
+      ],
+      "expected": [
+       "GROUNDED",
+       "AIRBORNE",
+       "LANDING",
+       "GROUNDED"
+      ],
+      "pass": true
+     }
+    },
+    "contacts": {
+     "u1": {
+      "fast": [
+       "LIFTOFF",
+       "TOUCHDOWN"
+      ],
+      "realistic": [
+       "LIFTOFF",
+       "TOUCHDOWN"
+      ],
+      "expected": [
+       "LIFTOFF",
+       "TOUCHDOWN"
+      ],
+      "pass": true
+     }
+    },
+    "pose_history_grid": {
+     "samples": 11251,
+     "t_bitwise": true,
+     "quat_unit": true,
+     "pass": true
+    },
+    "pass": true
+   },
+   "failures": [],
+   "metrics": {
+    "fast": {
+     "t_reach_s": 17.848,
+     "t_touchdown_s": 21.036,
+     "vz_touchdown_mps": 0.3066229284409598,
+     "z_rest_m": 0.227
+    },
+    "realistic": {
+     "t_reach_s": 17.952,
+     "t_touchdown_s": 21.036,
+     "vz_touchdown_mps": 0.30667985126266356,
+     "z_rest_m": 0.22700723174788737
+    }
+   },
+   "pos_rms_m": {
+    "u1": 0.009542190188285001
+   },
+   "diff": {
+    "pos_rms_m": 0.009542190188285001,
+    "t_reach_s": 0.10400000000000276,
+    "t_touchdown_s": 0.0,
+    "vz_touchdown_mps": 5.6922821703775384e-05
+   },
+   "tol": {
+    "t_reach_s": 1.0,
+    "t_touchdown_s": 1.0,
+    "vz_touchdown_mps": 0.3,
+    "pos_rms_m": 1.5
+   },
+   "within": {
+    "pos_rms_m": true,
+    "t_reach_s": true,
+    "t_touchdown_s": true,
+    "vz_touchdown_mps": true
+   },
+   "tol_pass": true,
+   "pass": true,
+   "wall_s": {
+    "fast": 19.097,
+    "realistic": 9.44
+   }
+  },
+  {
+   "id": "hover",
+   "title": "空中悬停 15 s",
+   "interface": {
+    "dispatch_equal": true,
+    "status": {
+     "u1": {
+      "fast": [
+       "AIRBORNE"
+      ],
+      "realistic": [
+       "AIRBORNE"
+      ],
+      "expected": [
+       "AIRBORNE"
+      ],
+      "pass": true
+     }
+    },
+    "contacts": {},
+    "pose_history_grid": {
+     "samples": 3751,
+     "t_bitwise": true,
+     "quat_unit": true,
+     "pass": true
+    },
+    "pass": true
+   },
+   "failures": [],
+   "metrics": {
+    "fast": {
+     "drift_max_m": 2.7770527211146145e-08,
+     "tilt_mean_deg": 0.0
+    },
+    "realistic": {
+     "drift_max_m": 0.043566551319297986,
+     "tilt_mean_deg": 0.0
+    }
+   },
+   "pos_rms_m": {
+    "u1": 0.009475107725667484
+   },
+   "diff": {
+    "pos_rms_m": 0.009475107725667484,
+    "drift_max_m": 0.043566551319297986
+   },
+   "tol": {
+    "pos_rms_m": 0.5,
+    "drift_max_m": 0.5
+   },
+   "within": {
+    "pos_rms_m": true,
+    "drift_max_m": true
+   },
+   "tol_pass": true,
+   "pass": true,
+   "wall_s": {
+    "fast": 6.362,
+    "realistic": 3.574
+   }
+  },
+  {
+   "id": "velocity_step",
+   "title": "悬停 → 5 m/s 水平速度阶跃 → 停止",
+   "interface": {
+    "dispatch_equal": true,
+    "status": {
+     "u1": {
+      "fast": [
+       "AIRBORNE"
+      ],
+      "realistic": [
+       "AIRBORNE"
+      ],
+      "expected": [
+       "AIRBORNE"
+      ],
+      "pass": true
+     }
+    },
+    "contacts": {},
+    "pose_history_grid": {
+     "samples": 2751,
+     "t_bitwise": true,
+     "quat_unit": true,
+     "pass": true
+    },
+    "command_onset": {
+     "fast_s": 0.03600000000000003,
+     "realistic_s": 0.09200000000000008,
+     "max_s": 0.3,
+     "pass": true
+    },
+    "pass": true
+   },
+   "failures": [],
+   "metrics": {
+    "fast": {
+     "rise_s": 1.0599999999999998,
+     "overshoot_pct": 3.857850709821324,
+     "onset_s": 0.03600000000000003
+    },
+    "realistic": {
+     "rise_s": 0.9800000000000002,
+     "overshoot_pct": 4.451855570348027,
+     "onset_s": 0.09200000000000008
+    }
+   },
+   "pos_rms_m": {
+    "u1": 0.37342458690294383
+   },
+   "diff": {
+    "pos_rms_m": 0.37342458690294383,
+    "rise_s": 0.07999999999999963,
+    "overshoot_pct": 0.5940048605267028
+   },
+   "tol": {
+    "rise_s": 0.3,
+    "overshoot_pct": 10.0,
+    "pos_rms_m": 1.5
+   },
+   "within": {
+    "pos_rms_m": true,
+    "rise_s": true,
+    "overshoot_pct": true
+   },
+   "tol_pass": true,
+   "pass": true,
+   "wall_s": {
+    "fast": 5.634,
+    "realistic": 3.931
+   }
+  },
+  {
+   "id": "velocity_limit",
+   "title": "20 m/s 速度指令按 12 m/s 限幅",
+   "interface": {
+    "dispatch_equal": true,
+    "status": {
+     "u1": {
+      "fast": [
+       "AIRBORNE"
+      ],
+      "realistic": [
+       "AIRBORNE"
+      ],
+      "expected": [
+       "AIRBORNE"
+      ],
+      "pass": true
+     }
+    },
+    "contacts": {},
+    "pose_history_grid": {
+     "samples": 2751,
+     "t_bitwise": true,
+     "quat_unit": true,
+     "pass": true
+    },
+    "pass": true,
+    "limit_cap": {
+     "cap_mps": 12.3,
+     "fast_max_mps": 11.86883387176771,
+     "realistic_max_mps": 11.004134701288969,
+     "pass": true
+    }
+   },
+   "failures": [],
+   "metrics": {
+    "fast": {
+     "v_steady_mps": 11.856053184073238,
+     "v_max_mps": 11.86883387176771
+    },
+    "realistic": {
+     "v_steady_mps": 11.001526989606207,
+     "v_max_mps": 11.004134701288969
+    }
+   },
+   "pos_rms_m": {
+    "u1": 1.9790893840145496
+   },
+   "diff": {
+    "v_steady_mps": 0.8545261944670308
+   },
+   "tol": {
+    "v_steady_mps": 1.0
+   },
+   "within": {
+    "v_steady_mps": true
+   },
+   "tol_pass": true,
+   "pass": true,
+   "wall_s": {
+    "fast": 5.829,
+    "realistic": 3.681
+   }
+  },
+  {
+   "id": "yaw_step",
+   "title": "偏航角速度阶跃 0 → 0.5 rad/s",
+   "interface": {
+    "dispatch_equal": true,
+    "status": {
+     "u1": {
+      "fast": [
+       "AIRBORNE"
+      ],
+      "realistic": [
+       "AIRBORNE"
+      ],
+      "expected": [
+       "AIRBORNE"
+      ],
+      "pass": true
+     }
+    },
+    "contacts": {},
+    "pose_history_grid": {
+     "samples": 1501,
+     "t_bitwise": true,
+     "quat_unit": true,
+     "pass": true
+    },
+    "pass": true
+   },
+   "failures": [],
+   "metrics": {
+    "fast": {
+     "t90_s": 0.8200000000000001,
+     "yaw_rate_end_rps": 0.49999775875459934
+    },
+    "realistic": {
+     "t90_s": 0.724,
+     "yaw_rate_end_rps": 0.5000009093488752
+    }
+   },
+   "pos_rms_m": {
+    "u1": 0.019639619962761482
+   },
+   "diff": {
+    "t90_s": 0.09600000000000009
+   },
+   "tol": {
+    "t90_s": 0.2
+   },
+   "within": {
+    "t90_s": true
+   },
+   "tol_pass": true,
+   "pass": true,
+   "wall_s": {
+    "fast": 3.169,
+    "realistic": 2.857
+   }
+  },
+  {
+   "id": "waypoints",
+   "title": "50 m × 50 m 方形航线，6 m/s，30 m",
+   "interface": {
+    "dispatch_equal": true,
+    "status": {
+     "u1": {
+      "fast": [
+       "AIRBORNE"
+      ],
+      "realistic": [
+       "AIRBORNE"
+      ],
+      "expected": [
+       "AIRBORNE"
+      ],
+      "pass": true
+     }
+    },
+    "contacts": {},
+    "pose_history_grid": {
+     "samples": 15001,
+     "t_bitwise": true,
+     "quat_unit": true,
+     "pass": true
+    },
+    "command_onset": {
+     "fast_s": 0.08799999999999997,
+     "realistic_s": 0.12,
+     "max_s": 0.3,
+     "pass": true
+    },
+    "pass": true
+   },
+   "failures": [],
+   "metrics": {
+    "fast": {
+     "arrival_s": [
+      9.884,
+      19.908,
+      29.98,
+      39.836
+     ],
+     "path_m": [
+      50.0,
+      100.0,
+      150.0,
+      200.0
+     ],
+     "onset_s": 0.08799999999999997
+    },
+    "realistic": {
+     "arrival_s": [
+      9.932,
+      20.024,
+      30.156,
+      40.052
+     ],
+     "path_m": [
+      50.0,
+      100.0,
+      150.0,
+      200.0
+     ],
+     "onset_s": 0.12
+    }
+   },
+   "pos_rms_m": {
+    "u1": 0.43603701367345743
+   },
+   "diff": {
+    "pos_rms_m": 0.43603701367345743,
+    "arrival_s_per_100m": 0.11733333333333225
+   },
+   "tol": {
+    "pos_rms_m": 1.5,
+    "arrival_s_per_100m": 1.0
+   },
+   "within": {
+    "pos_rms_m": true,
+    "arrival_s_per_100m": true
+   },
+   "tol_pass": true,
+   "pass": true,
+   "wall_s": {
+    "fast": 26.402,
+    "realistic": 9.842
+   }
+  },
+  {
+   "id": "orbit",
+   "title": "半径 20 m、5 m/s 环绕一圈",
+   "interface": {
+    "dispatch_equal": true,
+    "status": {
+     "u1": {
+      "fast": [
+       "AIRBORNE"
+      ],
+      "realistic": [
+       "AIRBORNE"
+      ],
+      "expected": [
+       "AIRBORNE"
+      ],
+      "pass": true
+     }
+    },
+    "contacts": {},
+    "pose_history_grid": {
+     "samples": 10001,
+     "t_bitwise": true,
+     "quat_unit": true,
+     "pass": true
+    },
+    "command_onset": {
+     "fast_s": 0.236,
+     "realistic_s": 0.05600000000000005,
+     "max_s": 0.3,
+     "pass": true
+    },
+    "pass": true
+   },
+   "failures": [],
+   "metrics": {
+    "fast": {
+     "t_turn_s": 27.184,
+     "radius_rms_m": 0.49090362801969833,
+     "path_m": 125.66370614359172,
+     "onset_s": 0.236
+    },
+    "realistic": {
+     "t_turn_s": 27.652,
+     "radius_rms_m": 0.5110686219822194,
+     "path_m": 125.66370614359172,
+     "onset_s": 0.05600000000000005
+    }
+   },
+   "pos_rms_m": {
+    "u1": 1.1100690169152925
+   },
+   "diff": {
+    "pos_rms_m": 1.1100690169152925,
+    "radius_rms_m": 0.020164993962521027,
+    "arrival_s_per_100m": 0.37242256683503505
+   },
+   "tol": {
+    "pos_rms_m": 1.5,
+    "arrival_s_per_100m": 1.0,
+    "radius_rms_m": 0.5
+   },
+   "within": {
+    "pos_rms_m": true,
+    "radius_rms_m": true,
+    "arrival_s_per_100m": true
+   },
+   "tol_pass": true,
+   "pass": true,
+   "wall_s": {
+    "fast": 17.112,
+    "realistic": 6.838
+   }
+  },
+  {
+   "id": "contact_crash",
+   "title": "侧向撞墙与空中失能坠地",
+   "interface": {
+    "dispatch_equal": true,
+    "status": {
+     "wall": {
+      "fast": [
+       "AIRBORNE",
+       "CRASHED"
+      ],
+      "realistic": [
+       "AIRBORNE",
+       "CRASHED"
+      ],
+      "expected": [
+       "AIRBORNE",
+       "CRASHED"
+      ],
+      "pass": true
+     },
+     "drop": {
+      "fast": [
+       "AIRBORNE",
+       "CRASHED"
+      ],
+      "realistic": [
+       "AIRBORNE",
+       "CRASHED"
+      ],
+      "expected": [
+       "AIRBORNE",
+       "CRASHED"
+      ],
+      "pass": true
+     }
+    },
+    "contacts": {
+     "wall": {
+      "fast": [
+       "COLLISION_WORLD"
+      ],
+      "realistic": [
+       "COLLISION_WORLD"
+      ],
+      "expected": [
+       "COLLISION_WORLD"
+      ],
+      "pass": true
+     },
+     "drop": {
+      "fast": [
+       "IMPACT"
+      ],
+      "realistic": [
+       "IMPACT"
+      ],
+      "expected": [
+       "IMPACT"
+      ],
+      "pass": true
+     }
+    },
+    "pose_history_grid": {
+     "samples": 2001,
+     "t_bitwise": true,
+     "quat_unit": true,
+     "pass": true
+    },
+    "pass": true
+   },
+   "failures": [],
+   "metrics": {
+    "fast": {
+     "wall.t_crash_s": 3.52,
+     "wall.crash_pos_m": [
+      30.0,
+      -40.0,
+      9.960323670257466
+     ],
+     "wall.crash_kind": "COLLISION_WORLD",
+     "drop.t_crash_s": 3.048,
+     "drop.crash_pos_m": [
+      -40.0,
+      40.0,
+      0.0
+     ],
+     "drop.crash_kind": "IMPACT"
+    },
+    "realistic": {
+     "wall.t_crash_s": 3.5,
+     "wall.crash_pos_m": [
+      30.0,
+      -39.75737380981445,
+      10.040311813354492
+     ],
+     "wall.crash_kind": "COLLISION_WORLD",
+     "drop.t_crash_s": 3.036,
+     "drop.crash_pos_m": [
+      -40.11000061035156,
+      40.13199996948242,
+      -0.06219482421875
+     ],
+     "drop.crash_kind": "IMPACT"
+    }
+   },
+   "pos_rms_m": {
+    "wall": 2.851459765793707,
+    "drop": 0.0806891984605166
+   },
+   "diff": {
+    "t_crash_s": 0.020000000000000018,
+    "crash_pos_m": 0.24262619018554688
+   },
+   "tol": {
+    "t_crash_s": 0.5,
+    "crash_pos_m": 0.5
+   },
+   "within": {
+    "t_crash_s": true,
+    "crash_pos_m": true
+   },
+   "tol_pass": true,
+   "pass": true,
+   "wall_s": {
+    "fast": 3.148,
+    "realistic": 3.653
+   }
+  },
+  {
+   "id": "wind_hover",
+   "title": "8 m/s 恒定风（σ_turb = 0）中悬停",
+   "interface": {
+    "dispatch_equal": true,
+    "status": {
+     "u1": {
+      "fast": [
+       "AIRBORNE"
+      ],
+      "realistic": [
+       "AIRBORNE"
+      ],
+      "expected": [
+       "AIRBORNE"
+      ],
+      "pass": true
+     }
+    },
+    "contacts": {},
+    "pose_history_grid": {
+     "samples": 6251,
+     "t_bitwise": true,
+     "quat_unit": true,
+     "pass": true
+    },
+    "pass": true
+   },
+   "failures": [],
+   "metrics": {
+    "fast": {
+     "tilt_deg": 7.850535747880523,
+     "offset_steady_m": 0.050879918501013505,
+     "dev_max_m": 0.6888052238992705
+    },
+    "realistic": {
+     "tilt_deg": 7.850104347341999,
+     "offset_steady_m": 0.030119636435958157,
+     "dev_max_m": 0.6236350707015914
+    }
+   },
+   "pos_rms_m": {
+    "u1": 0.023119815493705516
+   },
+   "diff": {
+    "pos_rms_m": 0.023119815493705516,
+    "tilt_deg": 0.00043140053852397386
+   },
+   "tol": {
+    "tilt_deg": 0.5,
+    "pos_rms_m": 0.5
+   },
+   "within": {
+    "pos_rms_m": true,
+    "tilt_deg": true
+   },
+   "tol_pass": true,
+   "pass": true,
+   "wall_s": {
+    "fast": 10.478,
+    "realistic": 3.888
+   }
+  }
+ ],
+ "summary": {
+  "cases": 9,
+  "interface_pass": 9,
+  "tol_pass": 9,
+  "pass": 9
+ },
+ "sampling_consistency": {
+  "pose_history": {
+   "t_bitwise": true,
+   "n": 7501,
+   "uavs": {
+    "u1": {
+     "pos_max_m": 2.8367051235766993e-07,
+     "att_max_rad": 2.6669284641457244e-15,
+     "vel_bitwise": true,
+     "omega_bitwise": true,
+     "f_b_bitwise": true,
+     "pass": true
+    }
+   },
+   "tol": {
+    "pos_m": 1e-06,
+    "att_rad": 1e-09
+   },
+   "pass": true
+  },
+  "m25": {
+   "lidar": {
+    "origin_max_m": 1.517719948885615e-14,
+    "att_max_rad": 3.0485437128356885e-15,
+    "point_world_max_m": 6.689109846918033e-14,
+    "frames": 300,
+    "points": 4203660,
+    "points_equal_frames": 300,
+    "range_max_diff_m": 0.0,
+    "slot_set_equal_frames": 300,
+    "tol_m": 0.001,
+    "pass": true
+   },
+   "imu": {
+    "acc_max_mps2": 0.0,
+    "gyro_max_rps": 0.0,
+    "samples": 6000,
+    "bitwise_blocks": 300,
+    "blocks": 300,
+    "tol": {
+     "acc_mps2": 1e-05,
+     "gyro_rps": 1e-07
+    },
+    "pass": true
+   },
+   "seed": 7,
+   "noise": "realistic",
+   "pass": true
+  },
+  "pass": true
+ },
+ "m25_bytewise": {
+  "runs": [
+   {
+    "sha256": {
+     "eo": "682c3126047058a364efefdadbbcd9c12e2b33df0f2b61abbd22cb13348d65d8",
+     "lidar0": "ce66deac1369eabf7479fe394b2dcd6d1779164ab8b7f1c5277367e35fffa584",
+     "lidar0_imu": "a50b32c9f394bb1b33ba4d1907fff5b827357c8729679306e9eb11f76f567558",
+     "pose_history": "c8854e5769c66667ddc8e6d2e8ab12210243456c66be0707021843f2315e5d79"
+    },
+    "frames": {
+     "eo": 301,
+     "lidar0": 300,
+     "lidar0_imu": 300,
+     "pose_history": 0
+    },
+    "encoder": "pillow-13.0.0/jpeg/q90/420",
+    "ticks": 300,
+    "renderer": "_FlatRaster",
+    "camera_profile": "rgb720-gs",
+    "noise": "realistic",
+    "seed": 7
+   },
+   {
+    "sha256": {
+     "eo": "682c3126047058a364efefdadbbcd9c12e2b33df0f2b61abbd22cb13348d65d8",
+     "lidar0": "ce66deac1369eabf7479fe394b2dcd6d1779164ab8b7f1c5277367e35fffa584",
+     "lidar0_imu": "a50b32c9f394bb1b33ba4d1907fff5b827357c8729679306e9eb11f76f567558",
+     "pose_history": "c8854e5769c66667ddc8e6d2e8ab12210243456c66be0707021843f2315e5d79"
+    },
+    "frames": {
+     "eo": 301,
+     "lidar0": 300,
+     "lidar0_imu": 300,
+     "pose_history": 0
+    },
+    "encoder": "pillow-13.0.0/jpeg/q90/420",
+    "ticks": 300,
+    "renderer": "_FlatRaster",
+    "camera_profile": "rgb720-gs",
+    "noise": "realistic",
+    "seed": 7
+   }
+  ],
+  "world": "BoxWorld",
+  "pass": true
+ },
+ "pass": true
+}

@@ -1,0 +1,13 @@
+# vehicles/d3/mounts/p600_bench_lwir.yaml：p600_bench 新增槽位 lwir 的挂载文件（AWR-20 §15.16.1；CAT-FR-043）。
+# lwir640 13 mm F1.0 经 0.02 kg 支架与 GX40 同云台共视轴挂载，无独立云台：相对 cam0 光心偏置 xyz [0, 0.045, 0] m（cam0 挂点
+# xyz [0.12, 0, −0.08] m，vehicles/p600/sensors/eo_gx40.yaml），即机体系 [0.12, 0.045, −0.08] m；父帧 base_link（FLU），rpy 按 ZYX。
+# 质量与功率按型号镜头表 13 mm 行（0.09 kg、1.5 W）加支架 0.02 kg 写出整机值（型号 overridable[] 含 mass_kg、power_w）。
+schema: awr.sensor.lwir.v1
+spec_ref: lwir640@1.0.0
+lens_mm: 13
+mount: {xyz_m: [0.12, 0.045, -0.08], rpy_deg: [0, 0, 0]}
+mass_kg: 0.11
+power_w: 1.5
+rate_hz: 10.0
+conf: D
+src: "AWR-20 §15.16.1：lwir640 13 mm（§6.4，B）经 0.02 kg 支架与 GX40 同云台共视轴（挂载为该节设定，D）；输出 10 Hz 与 cam0 同步（§15.16.2）"

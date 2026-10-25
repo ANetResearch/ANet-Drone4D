@@ -15,9 +15,8 @@ from typing import Any
 
 import numpy as np
 from common import PRESETS
-from harness import PaperSim
+from harness import PaperSim, paper_awareness
 
-from awr.sim.core.awareness import DecisionAwareness
 from awr.sim.fleet.stages import registry as R
 
 LEG_M = 800.0
@@ -41,7 +40,7 @@ def grid(worlds=("shenzhen", "newyork", "chicago", "synthcity"), presets=PRESETS
 
 
 def run(task: dict) -> list[dict]:
-    aw = DecisionAwareness(precheck_env=True, shared_energy=bool(task.get("shared", False)))
+    aw = paper_awareness(precheck_env=True, shared_energy=bool(task.get("shared", False)))
     sim = PaperSim(task["world"], awareness=aw, preset=task["preset"],
                    world_seed=int(task["seed"]))
     try:

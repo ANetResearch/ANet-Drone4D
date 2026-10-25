@@ -1,0 +1,26 @@
+{
+ "schema": "drone4d.bench.board_config.v1",
+ "board_version": "v1",
+ "score_version": "d3-score-1",
+ "description": "Internal leaderboard v1 (P0b; AWR-05 §5.6.9, ADR-182 and ADR-191; M27-FR-164, FR-166, FR-177 to FR-182; D3-AC-43, D3-AC-57). Tracks std3-l2 (primary) and std3-l1 share the fleet of 3 x p600_bench; each track carries the four event-type lanes. Every lane holds 2 test events (8 in total), each evaluated with K = 5 secret seeds x R = 2 repeats. This template holds no secret: seal_board draws the seeds and K_board into the server-side EvalStore and returns a lock with HMAC commitments only. Weights are null under d3-score-1: no composite score is computed or shown.",
+ "physics": "realistic",
+ "mode": "exogenous",
+ "seeds_per_event": 5,
+ "repeats": 2,
+ "events_per_lane": 2,
+ "baselines": ["static_guard", "coverage_scan", "track_share"],
+ "tracks": [
+  {"track": "std3-l2", "primary": true, "fleet_ref": "3x-p600_bench", "vehicle_ref": "p600_bench", "n_uav": 3, "obs_level": "L2",
+   "sensors": ["rgb1080-rs", "therm512", "mid360"], "agent_class": "standard", "appearance": "mesh",
+   "run_spec": {"noise": "realistic", "comm": {"enabled": true, "bucket_Bps": 125000, "burst_B": 125000, "msg_max_B": 4096, "model": "fspl-nlos@1"}}},
+  {"track": "std3-l1", "primary": false, "fleet_ref": "3x-p600_bench", "vehicle_ref": "p600_bench", "n_uav": 3, "obs_level": "L1",
+   "sensors": ["rgb1080-rs", "therm512", "mid360"], "agent_class": "standard", "appearance": "mesh",
+   "run_spec": {"noise": "realistic", "comm": {"enabled": true, "bucket_Bps": 125000, "burst_B": 125000, "msg_max_B": 4096, "model": "fspl-nlos@1"}}}
+ ],
+ "lanes": [
+  {"lane": "reid", "kind": "event_type", "event_type": "reid_occlusion"},
+  {"lane": "handoff", "kind": "event_type", "event_type": "rendezvous_handoff"},
+  {"lane": "vehicle", "kind": "event_type", "event_type": "vehicle_track"},
+  {"lane": "search", "kind": "event_type", "event_type": "target_search"}
+ ]
+}

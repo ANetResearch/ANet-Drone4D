@@ -5,9 +5,9 @@
 | 文档编号 | AWR-M22 |
 | 标题 | World 资产导入（World Asset Import）PRD：GLB 到米制 World Package 1.1.0（`profile = d3-glb`）的尺度配准与调平、派生资产、`world.json` 加法式扩展、CLI 与作业、"不完整即未知"标注、MeshWorldQuery 与共享几何服务、浏览器分层，以及三份默认 GLB 的配置与验收 |
 | 编号说明 | 模块号与文件名按 [AWR-05 §1.3、§5.0](../05-D3-设计增补与决策记录.md) 为 **M22**，需求前缀 `M22-`。研究笔记 r2 §5 所称"world.json v2"在本文一律指 `schemaVersion = "1.1.0"` 加 `profile = "d3-glb"`，不存在 2.x 主版本（§13 第 15 条） |
-| 版本 | v1.3 |
-| 日期 | 2026-10-12 |
-| 状态 | 草案 v1.2（v1.1 按 AWR-05 v1.3 修订：P0a 只构建 crop，town 与 ESDF 移至 P0b，OSM 车道图前移到 P0b，`physics` 导出输入前移到 P0a，高斯外观层生成式来源的标注，修订内容汇总见 §14；v1.2 按 AWR-05 v1.4（ADR-187）并入 r11 结论：外观来源分档 `aerial`、`mesh_distilled`、`generative`，网格蒸馏构建阶段 `appearance.gs`，出处清单与按来源分档的入包验收，修订内容汇总见 §15；v1.3 按 AWR-05 v1.4 定稿（ADR-188、ADR-192）：高斯外观层定为结论 C0，`appearance.gs` 与高斯图层全部在 P3，新增高斯发布子阶段（splat-transform）、网页高斯制品与编辑记录入库，新增几何不完整人工标注（质量层覆写，P1），修订内容汇总见 §16） |
+| 版本 | v1.4 |
+| 日期 | 2026-10-18 |
+| 状态 | 草案 v1.4（按 AWR-05 v1.6 并入 D3 封板收尾批次的实现口径：`metric_ok` 的实现位置与证据定义、调平算法与 L3 口径、门禁编号映射、V-GLB 规则的实现口径、geosvc 协议与 `dsm_0p5m` 运行期派生、`walkable_height` 的签名与命中定义，汇总见 §17）；v1.2 状态：草案 v1.2（v1.1 按 AWR-05 v1.3 修订：P0a 只构建 crop，town 与 ESDF 移至 P0b，OSM 车道图前移到 P0b，`physics` 导出输入前移到 P0a，高斯外观层生成式来源的标注，修订内容汇总见 §14；v1.2 按 AWR-05 v1.4（ADR-187）并入 r11 结论：外观来源分档 `aerial`、`mesh_distilled`、`generative`，网格蒸馏构建阶段 `appearance.gs`，出处清单与按来源分档的入包验收，修订内容汇总见 §15；v1.3 按 AWR-05 v1.4 定稿（ADR-188、ADR-192）：高斯外观层定为结论 C0，`appearance.gs` 与高斯图层全部在 P3，新增高斯发布子阶段（splat-transform）、网页高斯制品与编辑记录入库，新增几何不完整人工标注（质量层覆写，P1），修订内容汇总见 §16） |
 | 上游文档 | 用户 D3 需求原文、补充要求与 2026-10-12 决策 [inputs/D3-需求原文-2026-10-11.md](../inputs/D3-需求原文-2026-10-11.md)（R-D3-02、03、07、10、16、19、26、30、34；v1.1 增加 2026-10-12 交互式确认的 R-D3-42、44、48、49、51）；用户设计讨论 design-r1 第四节、第十节；[AWR-05](../05-D3-设计增补与决策记录.md) §1、§2.4、§4.5、§4.8、§5.1、§7.8、§8、§10–§15，ADR-128 至 ADR-132、ADR-136、ADR-141、ADR-151、ADR-154 至 ADR-156、ADR-158；[AWR-03](../03-设计基线与决策记录.md) §5.1、§5.5、§10.2，ADR-001 至 ADR-006、ADR-034、ADR-048；[AWR-04](../04-D2-设计增补与决策记录.md) §4.4；[16 World 数据规范](../16-World数据规范.md) §2–§7、§9、§17；[M03](M03-World模型与Ingest切片PRD.md)、[M04](M04-几何世界查询服务PRD.md)、[M05](M05-Web点云引擎PRD.md)、[M06](M06-Web视口与渲染后端PRD.md)；D3 研究 [00-index](../research/d3/00-index.md) §1.2、§2.1、§3.3、§4.2、§8，[r2](../research/d3/r2-glb-world.md) 全文，[r6](../research/d3/r6-event-runtime-benchmark.md) §3，[r7](../research/d3/r7-d2-code-audit.md) §3.9、§4.4、§8.3，[r3](../research/d3/r3-camera-render.md) §6，[r4](../research/d3/r4-mesh-lidar.md) §3；v1.2 增加 [r11](../research/d3/r11-skyfall-gs.md) §2、§4、§7（D3-SKY）与 AWR-05 §5.4.4、§6.4、ADR-187；v1.3 增加用户第二次交互式讨论确认的 R-D3-52、55、56，[r12](../research/d3/r12-supersplat.md) §2.6、§2.8、§3.1–§3.3、§4.1、§4.3、§4.6 与 AWR-05 §6.4.8、§6.5、ADR-188、ADR-189、ADR-192 |
 | 下游文档 | M23（锚点、NavMesh、`metric_ok` 与 600）、M24（SDF 导出输入、Fast 档接触查询）、M25（`appearance`、`raycast` 瓦片、逐三角形语义与质量位、`sensorHints`）、M26（视线与净空查询）、M27（`world_build` 作业、`world_manifest.json`、`/api/bench/v1/worlds` 数据）、M03 与 M04 的 D3 增补节（扩展点 6、7）、M00（契约 1.3.0 中 world 目录的 schema）、M05 与 M06（Tier S 彩色点云、P1 舞台网格、P2 网格瓦片）、M15（`/lab/worlds`）、17 号文档（原因码 600–609）、`docs/impl/D3-*` |
 | 适用版本范围 | V0.3（本期交付 D3，阶段 P-1 至 P3）至 V1.0 |
@@ -112,7 +112,7 @@ v1.1 按 AWR-05 v1.3（ADR-175、ADR-181、ADR-186）重排；v1.0 的阶段对�
 | M04 | M04 实施扩展点 7：`open_world_query` 在开关打开且世界包有网格几何图层时，以字符串路径加载 M22 的工厂函数；M22 的 `MeshWorldQuery` 继承 `DsmWorldQuery`，2.5D 方法与派生缓存原样复用 |
 | M02 | 经纬度与世界帧换算一律调用 `awr.world.georef.frames`，M22 不含椭球常量（AWR-03 §5.1 第 8 条） |
 | M00 | 合入 world 目录 schema 的加法式修订与新格式 schema、原因码、`d3-world` 依赖组；M22 起草 |
-| M23 | 消费 `nav.person`、`nav.vehicle`、`nav.graph`、`semantic.anchors`、`semantic.quality`、`walkable_height`、`metric_ok`；M23 的 Node 生成器与 M22 锁定同一 recast-navigation 版本（`tools/worldglb/RECAST_VERSION`） |
+| M23 | 消费 `nav.person`、`nav.vehicle`、`nav.graph`、`semantic.anchors`、`semantic.quality`、`walkable_height`、`metric_ok`；M23 的 navsvc 与 M22 锁定同一 recast-navigation 版本（`tools/worldglb/RECAST_VERSION`；v1.4：磁带生成器为 Python 单一实现，AWR-05 ADR-196、ADR-197） |
 | M24 | 消费 `appearance.glb`、`mesh.collision` STL 与 `coordinate.json` 导出 SDF；Fast 档接触 stage 使用 MeshWorldQuery（含本文新增的 `closest_batch`） |
 | M25 | 消费 `appearance`（含逐三角形语义与质量码）、`mesh.raycast` 瓦片、`sensorHints`、质量栅格；GPU 求交使用同一瓦片划分与 float32 局部坐标 |
 | M26 | 经 MeshWorldQuery 做视线与净空；L1 档 `raycast = cpu` 时只经 `geosvc` 的 CPU 路径 |
@@ -166,7 +166,7 @@ v1.1 按 AWR-05 v1.3（ADR-175、ADR-181、ADR-186）重排；v1.0 的阶段对�
 | M22-FR-013 | 调平验收量（与方法无关）：调平后在 ≥ 3 个已知水平面（OSM 水体、广场，面积 ≥ 2,000 m²，自动从 OSM 生成并可在 `horizontal_planes.geojson` 中人工增补）上拟合平面，坡度 ≤ 0.2°；或 ≥ 20 个分散控制点的 AGL 残差 RMS ≤ 2 m；结果写入 qa 与世界摘要 | P0 | P0a | V0.3 | M22-AC-004 | 05 D3-AC-02 |
 | M22-FR-014 | 世界帧合成：`T_world_source = [[R_level·Rz(yaw)·s·R_enu_gltf, t]; [0,0,0,1]]`，`R_enu_gltf = [[1,0,0],[0,0,−1],[0,1,0]]`；矩阵以 Python float 标量合成（复用 M03 `normalize.compose3`），点以 float64 逐元素变换；原点 XY 取变换后包围盒中心，Z 取 DTM 中位数；锚点 `kind = synthetic`、`georeferenced = false`、`label` 以 `illustrative:` 开头并写明配准方法与水平不确定度，`latDeg`、`lonDeg` 由 M02 换算，`hMslM` 取 DEM 在原点的值减世界 DTM 在原点的值，`uncertaintyM = {horizontal: 5, vertical: 5}`；`trueNorth = {0, verified, evidence}` | P0 | P0a | V0.3 | M22-AC-005、006 | r2 §2.1、§2.5；16 §3.3；AWR-03 §5.1 |
 | M22-FR-015 | 证据留存：`coordinate.json` 写 `source.{kind = dataset, crs = LOCAL, upAxis = +y, handedness = right, unitsToMeters, yawDeg, leveledDeg, T_world_source, files[], evidence[]}` 与 `registration{method, T_world_map, rmseM, inliers}`；`qa/report.json` 的 `glb.registration` 段写全部门限量、两法调平估计、水平面与控制点残差；叠加图写入 `.cache/worldglb/<id>/`，不进入世界包 | P0 | P0a | V0.3 | M22-AC-006 | ADR-130；05 §5.1.2 |
-| M22-FR-016 | 米制可用判定：提供 `metric_ok(world) -> MetricStatus{ok, scale_status, ranked_ok, reason}`；`ok = (scaleStatus ≠ relative) ∧ 标定证据完整`，`ranked_ok = ok ∧ scaleStatus ≠ assumed`；M23 在 `ok = false` 时返回 600 `WORLD_UNCALIBRATED`；基线修订前，对 GLB 世界本判定与 AWR-05 §5.1.2 的 `{landmark, assumed}` 口径等价（M22 只产出这两个取值） | P0 | P0a | V0.3 | M22-AC-008 | 05 §5.1.2、D3-AC-02；§13 第 2 条 |
+| M22-FR-016 | 米制可用判定：提供 `metric_ok(world) -> MetricStatus{ok, scale_status, ranked_ok, reason}`；`ok = (scaleStatus ≠ relative) ∧ 标定证据完整`，`ranked_ok = ok ∧ scaleStatus ≠ assumed`；M23 在 `ok = false` 时返回 600 `WORLD_UNCALIBRATED`；基线修订前，对 GLB 世界本判定与 AWR-05 §5.1.2 的 `{landmark, assumed}` 口径等价（M22 只产出这两个取值）。v1.4（W01）：实现位于 `awr.world.geometry.status.metric_ok`（不在 `glb/manifest.py`，D2 世界同样可用）；"标定证据完整"的可执行定义与 `MetricStatus.missing` 见 §17.3.1 | P0 | P0a | V0.3 | M22-AC-008 | 05 §5.1.2、D3-AC-02；§13 第 2 条 |
 
 ### 4.3 构建流水线
 
@@ -186,7 +186,7 @@ v1.1 按 AWR-05 v1.3（ADR-175、ADR-181、ADR-186）重排；v1.0 的阶段对�
 | M22-FR-023 | normalize：展平节点并以 float64 施加 `T_world_source`；识别漂浮碎块（连通分量 < 100 面且与主分量最近距离 > 0.5 m），从外观与求交网格中同时移除并在质量位 bit6 标记；其余碎块保留 | P0 | P0a | V0.3 | M22-AC-018、020 | r2 §4.1、§4.4 第 3 条；本文设定：外观与几何一致 |
 | M22-FR-024 | raycast：按 1 mm 网格哈希焊接位置（首次出现序，确定性）、去除退化面与重复面、统计边界边、非流形边与连通分量；按 512 m 方形瓦片（以世界原点对齐）划分，三角形按质心归属瓦片，瓦片局部原点为瓦片中心（Z 取该瓦片顶点 Z 中位数取整到 1 m），顶点以 float32 局部坐标存储；附逐三角形 `cls.u8`、`q.u8`、`src.u32`（外观三角形序号）；格式 `awr-trimesh@1`（§7.3.1）；加载时建 BVH，不序列化 | P0 | P0a | V0.3 | M22-AC-013、027 | 05 §5.1.3 第 2 行、§5.1.6；r2 §4.1 |
 | M22-FR-025 | grids（D1 兼容）：以确定性竖向栅格化核（§6.6.6）生成 `dsm_2m`（每格 4 × 4 采样取最高命中，空格取格心 DTM 双线性值）、`dtm_10m`（最低命中经 M03 开运算与填补算法）、`dsm_2m_n`（每格有命中的采样数 0–16，uint8）；格式、格距、`originXY` 规则与 D1 完全相同 | P0 | P0a | V0.3 | M22-AC-006、007 | 05 §5.1.3 第 3 行；16 §6.3；F6 |
-| M22-FR-026 | 精细栅格：`dsm_0p5m`（每格 2 × 2 采样取最高命中，`f32-grid@1`，与 `dsm_2m` 同 `originXY`），按 1024 × 1024 格块流式写盘；供 `geosvc` 与会话以只读 memmap 使用 | P0 | P0a | V0.3 | M22-AC-007、013 | 05 §5.1.6；r2 §4.3 第 3 条 |
+| M22-FR-026 | 精细栅格：`dsm_0p5m`（每格 2 × 2 采样取最高命中，`f32-grid@1`，与 `dsm_2m` 同 `originXY`），按 1024 × 1024 格块流式写盘；供 `geosvc` 与会话以只读 memmap 使用。v1.4（W05）：构建流水线产出 `dsm_0p5m` 之前，`geosvc` 在加载时派生到运行期缓存 `<cache_root>/geosvc/<world>-<cv>-<key>/dsm_0p5m.{json,f32}`（每格 2 × 2 条向下网格射线取最高命中，无命中格取 `dsm_2m` 最近格），不是世界包内容文件；crop 为 5024 × 3400 格、68.3 MB，一次派生 65 s | P0 | P0a | V0.3 | M22-AC-007、013 | 05 §5.1.6；r2 §4.3 第 3 条 |
 | M22-FR-027 | quality：输出质量位栅格（城镇级 2 m、小场景 0.5 m，与 DSM 对齐，`grid.kind = quality`）与 `geojson/awr-quality@1` 多边形（扫描覆盖、无数据、洞、拉伸面、低纹素、多层柱、水面、碎块）；位定义与算法见 §6.6.7、§7.3.6；逐三角形质量码写入 `raycast` 与 `appearance` 的 `q.u8` | P0 | P0a | V0.3 | M22-AC-012 | 05 §5.1.3 第 4 行、§5.1.5；r2 §4.9 |
 | M22-FR-028 | zones：以 M22 派生器替代 D2 的包围盒内缩规则写 `semantic/zones.geojson` 的 `border`：覆盖多边形最大连通分量按城镇级 20 m、小场景 5 m 内缩，去洞，Douglas–Peucker 简化到每环 ≤ 1024 顶点；`max_z_m = round(max(dsm_2m) + 50, 2)`；其余 zone 规则不变 | P0 | P0a | V0.3 | M22-AC-012 | 05 §5.1.4；16 §7；r2 §4.9 规则 1 |
 | M22-FR-029 | semantic：逐三角形粗语义（地面、路面、低矮与中等与高植被、屋顶、立面、水面、未分类），以纹理颜色、法线、nDSM 与 OSM 先验（道路缓冲、建筑轮廓、水体）判定，结果按 `anet-classes@1` 索引写 `cls.u8`；规则见 §6.6.8 | P0 | P0a | V0.3 | M22-AC-017 | 05 §5.1.3 第 5 行；r2 §4.6 第 4 条（E13） |
@@ -399,6 +399,8 @@ flowchart LR
   N12 --> N13["13 validate"]
 ```
 
+v1.4 实现（W03）：阶段次序为先 raycast 后 grids；`dsm_2m` 与 `dsm_2m_n` 由 `awr.world.glb.raster` 核按 trimesh 存储坐标生成；`dtm_10m` 仍按 D2 规则由点云生成（"最低命中点集"的变体未实现）；为使 `bounds` 等于网格包围盒，网格的 6 个极值顶点放入点云采样。
+
 增量规则（FR-018）：阶段 k 的输入哈希 = sha256（上游产物哈希 ‖ 本阶段参数的规范 JSON ‖ 工具版本）。`--steps` 未列入的阶段若输入哈希与已发布包记录不一致，构建以退出码 3 结束并列出需追加的阶段。
 
 ### 6.3 构建状态机
@@ -481,7 +483,7 @@ M23 对 `auto` 与 `confirmed` 正常解析，对 `review` 解析但给出编译
 | STARTING | 进程启动 | 世界包 `.status = ready` | 打开 `raycast` memmap | LOADING |
 | LOADING | 全部瓦片场景建成、Detour 工作进程就绪 | — | 创建套接字、写就绪文件 | READY |
 | LOADING | 加载失败 | — | 退出码 3，记录原因 | FAILED |
-| READY | 连接数降为 0 持续 600 s，或 SIGTERM | — | 拒绝新连接，完成在途请求 | DRAINING |
+| READY | 连接数降为 0 持续 600 s，或 SIGTERM | — | 先删除套接字与就绪文件，再在 `SHUT_RD` 后完成在途请求（v1.4，W05） | DRAINING |
 | READY | Detour 工作进程退出 | 60 s 内 ≤ 2 次 | 重启工作进程，在途导航请求返回 604 | READY |
 | DRAINING | 在途请求完成 | — | 删除套接字与共享内存 | STOPPED |
 
@@ -563,6 +565,8 @@ sequenceDiagram
   MQ-->>SIM: 会话内 memmap 查表（不经 IPC）
 ```
 
+v1.4（W06）：`geosvc` 的 `{op: walk}`（`walkable_surface`）可直接使用 `WalkIndex` 求值；Detour `getPolyHeight` 的结果作为 `nav_z` 传入 `walkable_height`。Detour 工作进程挂接前，`walkable` 与 `nav_path` 返回 604（`NAV_UNAVAILABLE`）。
+
 ### 6.6 算法
 
 #### 6.6.1 GLB 读取与展平
@@ -633,19 +637,27 @@ def register_control_points(scene, cps) -> Registration:
 
 ```python
 def level(mesh_osm, dem, world_diag_m) -> Leveling:   # python/awr/world/glb/level.py（← r2 e03c、e03f）
-    W = faces(mesh_osm, abs(n_z) < 0.35, area > 0.5, inside(osm_buildings, buffer=2.0) if osm_buildings else True)
-    gw, ci = huber_irls(y=W.n_z, X=-W.n[:, :2], w=W.area), bootstrap(200, key="lvl")   # n_z ≈ −gE·n_x − gN·n_y
+    # v1.4（W02）：墙面带宽 |n_z| < 0.1（r2 的 0.35 宽带混入陡坡屋面，town 上迭代发散：0.35 带残差 1.83°，0.1 带 0.17°）
+    W = faces(mesh_osm, abs(n_z) < 0.1, area > 0.5, inside(osm_buildings, buffer=2.0) if osm_buildings else True)
+    g = (0.0, 0.0)
+    for it in range(3):                            # 按当前估计重新调平法线后迭代 3 次
+        n = relevel(W.n, g)
+        X = [-n[:, 0], -n[:, 1], 1] if facade_azimuths_separate_intercept(n) else [-n[:, 0], -n[:, 1]]
+        gw_c, ci = huber_irls(y=n[:, 2], X=X, w=W.area), bootstrap(200, key="lvl")   # n_z = c − gE·n_x − gN·n_y；朝向不足时退化为无截距
+        g = compose_tilt(g, gw_c[:2])
+    gw = g
     if world_diag_m >= 1000 and dem is not None:
-        S = stratified_sample(faces(cls in {road, ground}, n_z > 0.9), n=2000, key="dem")
+        S = stratified_sample(faces(cls in {road, ground}, n_z > 0.9) - osm_water_polygons, n=2000, key="dem")   # 排除 OSM 水面多边形
         h = dem.bilinear(lla(S.E, S.N))
         k, gE, gN, c = huber_irls(y=h, X=[S.z, S.E, S.N, 1])
-        gd = (gE / k, gN / k)
+        gd = (gE / k, gN / k)                       # g = (gE, gN) / k
         delta = deg(atan(hypot(*(gd - gw))))
         g, primary = gd, "dem"
         needs_cp = delta > 0.5                       # L1：告警并要求控制点
     else:
         g, primary = gw, "wall"
-        halves = [huber_irls(subset) for subset in split_by_facade_azimuth_parity(W)]
+        # 两子集按调平后立面方位 20° 扇区序号的奇偶划分，使正交街区的四个朝向两两分入不同子集
+        halves = [huber_irls(subset) for subset in split_by_sector_parity(W, sector_deg=20)]
         delta = deg(atan(hypot(*(halves[0] - halves[1]))))
         needs_cp = delta > 0.3 or ci.half_width_deg > 0.3   # L2
     n_up = normalize((g[0], g[1], 1.0))
@@ -653,7 +665,21 @@ def level(mesh_osm, dem, world_diag_m) -> Leveling:   # python/awr/world/glb/lev
     return Leveling(primary, g, gw, delta, ci, needs_cp, R_level, tilt_deg=deg(atan(hypot(*g))))
 ```
 
-调平验收量（FR-013，L3、L4）在世界帧中计算：对 `horizontal_planes.geojson` 每个多边形内 `cls ∈ {water, road_surface, ground}` 的三角形按面积加权拟合平面，坡度 = `acos(n_z)`。
+调平验收量（FR-013，L3、L4）在世界帧中计算：对 `horizontal_planes.geojson` 每个多边形内 `cls ∈ {water, road_surface, ground}` 的三角形按面积加权拟合平面，坡度 = `acos(n_z)`。v1.4 实现口径（W02）：多边形边界内缩 15 m；覆盖内延伸超过 800 m 的多边形沿主轴等分，至少 2 段；通过条件为至少 3 个被评估平面且全部 ≤ 阈值（世界摘要 `planesMaxSlopeDeg` 取最大值）；配方 `qa.planes_exclude` 可人工排除个别平面，须记录原因；语义图层落地前，地面与水面以 `n_z > 0.9` 代替 `cls`。
+
+v1.4 补记（W07、W08，AWR-05 ADR-210，用户 2026-10-19 决定）：公里级世界增加 L5 公开 DEM 交叉核对。配方 `qa.dem` 给出交叉核对 DEM（按 `model` 分组，GeoTIFF 或 SRTM `.hgt`），每组与主 DEM 用同一地面抽样（同一种子）独立回归，与墙面竖直度共三法，在世界帧比较调平后的剩余梯度：
+
+```python
+def dem_cross_check(primary, cross_dems, wall, S) -> CrossCheck:   # python/awr/world/glb/qa.py
+    fits = [fit_dem(primary, S)] + [fit_dem(dem, S) for dem in cross_dems] + [wall]   # 同一抽样 S
+    if any(f is None for f in fits): return CrossCheck(pass_=False, missing=...)    # 任一方法缺失即不成立
+    pairs = [tilt(a.residual_g - b.residual_g) for a, b in combinations(fits, 2)]
+    consensus_g = mean(f.residual_g for f in fits)
+    L5 = (max(pairs) <= 0.5 and all(tilt(f.residual_g) <= 0.5 for f in fits)
+          and tilt(consensus_g) <= 0.2 and all(0.85 <= f.k <= 1.15 for f in fits if f.is_dem))
+```
+
+阈值沿用 L1、G-05、L3 与 R4，不按实测调整；`needs_control_points = not (L1 and (L3 or L4 or L5))`。DEM 读取器为 `read_geotiff_dem`（小端经典 TIFF，分块或分条，无压缩或 Deflate，预测器 1/2/3，PixelIsPoint 与 PixelIsArea，GDAL_NODATA）与 `GridDem`（经纬度格网双线性采样，接口同 `HgtDem`），不引入新依赖。
 
 #### 6.6.5 世界帧、原点与锚点
 
@@ -703,7 +729,7 @@ def raster_block(V, F, x0, y0, cell, k, H, W, top, top_prim, low, cnt, layers, n
 |---|---|---|---|
 | `dsm_2m` | 4（16 采样/格） | 采样最高命中的最大值 | 格心 DTM 双线性值（16 §6.3） |
 | `dsm_2m_n` | 4 | 有命中的采样数（0–16） | 0 |
-| `dtm_10m` | 由 2 m 采样的最低命中作为点集 | M03 `dtm_opening`（10 m 最小、9 × 9 开运算、4 邻域填补） | 填补 |
+| `dtm_10m` | 由 2 m 采样的最低命中作为点集（v1.4 实现：仍按 D2 规则由点云生成，本变体未实现，W03） | M03 `dtm_opening`（10 m 最小、9 × 9 开运算、4 邻域填补） | 填补 |
 | `dsm_0p5m` | 2（4 采样/格） | 最大值 | 格心 DTM 双线性值 |
 | 多层柱 | 2（体素柱） | `layers` 中相隔 ≥ 2 m 的表面数 | — |
 
@@ -727,6 +753,14 @@ Q[rasterize(offmesh_and_manual_nav)] |= BIT7_SYNTHETIC_NAV
 polygons_by_kind = {k: simplify(marching_squares(Q & bit_k)) for k in kinds}       # 写 geojson/awr-quality@1
 border = inset(footprint, 20.0 if city else 5.0)                                    # zones.border
 ```
+
+v1.4 实现口径（W10，`python/awr/world/glb/derive/quality.py`）：
+
+1. 覆盖 `cover = coverage_mask(dsm_2m_n)`，与 V-GLB-07 同一函数。覆盖多边形为 marching squares 轮廓（格边中点，4 连通，对角相接的格分离，偶奇栅格化可逐格还原掩膜），Douglas-Peucker 简化（格 ≥ 1 m 时容差 1.0 m，否则 0.25 m），超过 1024 顶点时容差按 1.5 倍放宽直到 ≤ 1024。
+2. bit1 `hole`：按 1 mm 焊接后的开放边界环，每个连通分量以其最长环为外边界，其余环为洞，因此悬空构件的外轮廓不计为洞。
+3. bit2、bit3 取每个质量格 2×2 采样的最上层三角形的多数；bit4 在任一采样上下表面相距 ≥ 2 m 时置位。
+4. 逐三角形 `q.u8` 置 bit0（重心在覆盖外）、bit2、bit3、bit5。bit5 当前只来自 OSM 水面 ∩ 覆盖，`cls == water` 分支待语义阶段提供；bit6、bit7 本阶段不置位（碎块移除与人工导航连接尚无来源）。
+5. `border` 为覆盖的距离变换内缩，取最大连通分量，≤ 1024 顶点。
 
 #### 6.6.8 逐三角形语义
 
@@ -771,6 +805,8 @@ for brick_column (bx, by):
 esdf = edt(free_mask, sampling=v, block=128, halo=ceil(20 / v)) ; esdf = minimum(esdf, 20.0).astype(f16)
 ```
 
+v1.4 实现口径（W10，`python/awr/world/glb/derive/occupancy.py`）：与任何覆盖格都不重叠的柱为覆盖外，其全部体素（含表面体素）为 unknown；覆盖内无竖向命中或质量位为 nodata、hole 的柱为 unknown，其中表面体素仍为 occupied；已知柱 z 高于柱顶为 free，否则为 below_surface；occupied 优先于 free 与 below_surface。表面体素取重心格点（间距 v/3，含顶点，顶点坐标逐位不变），与 V-GLB-13 的抽样口径一致；柱顶 z 取栅格核 k = 2。
+
 #### 6.6.11 NavMesh、道路图与锚点
 
 ```python
@@ -785,15 +821,20 @@ tiles = bake_tiles_parallel(nav_mesh_yup, area, params, offmesh)  # Node worker_
 nav0 = assemble_in_tile_order(tiles)                              # (ty, tx) 升序
 seeds = snap(osm_junctions_in_cover, nav0, ext=(2, 4, 2)) + recipe.seeds
 nav = flood_fill_prune(nav0, seeds, traverse_offmesh=True)        # 不可达多边形 flags = 0；保留含种子的岛
-graph = osm_highways_in_cover -> split_at_nodes -> drape_z(raster_top) -> navgraph.geojson
+graph = osm_highways -> split_at_nodes -> clip(cover) -> drape_z(dsm_2m) -> lanes(FR-074) -> corridor_check -> nav_snap(vehicle) -> navgraph.geojson   # v1.6（W11）
 cands = junctions + buildings + doors + pois (clip to cover)
 for a in cands:
     d, p = nearest_poly(nav, a.xyz, ext=(15, 10, 15))
     if a.kind in {point} and d > 3.0: d, p, s = relocate_along_osm_ways(a, nav, span=15.0, step=0.5, accept=1.0)
     a.navSnap, a.snapDistM, a.relocatedM = p, d, s
     a.status = "auto" if d <= 3.0 and dist_to_cover_edge(a) > 20.0 else "review"
+    if on_pruned_island(a, nav): a.status = "review"   # v1.6（ADR-212）：15 m 内（含重定位）无保留多边形且 3 m 内有 flags = 0 的多边形
 anchors = apply_overrides(cands, recipe.anchors_overrides) ; diff_against(previous_package)
 ```
+
+v1.6（W11）：道路走廊定义为车辆道路中心线按 max(width_m/2, 5 m) 缓冲，与上文 `ROAD_CORRIDOR` 的 5 m 相同；`corridor_check` 逐段与逐采样点判定车道是否落在走廊内，结果写入车道的 `in_corridor` 与 `corridor_excess_m`；车道图字段见 §7.3.4 的车道扩展；`lanes` 阶段在覆盖内以迭代 Tarjan 求强连通分量，最大分量内的车道记 `routable = true`（crop 上占车道长度的 97.3%），M23 生成车辆路线时只用可路由车道（`LaneGraph.routable()`）。
+
+v1.6（K06，AWR-05 ADR-212）：被裁剪岛上的锚点定义为吸附半宽 15 m 内（含沿 OSM 道路的重定位）没有保留多边形、且 3 m 内有被裁剪（flags = 0）多边形的锚点；这类锚点 `status = review`，不提供给事件路线，在报告中单列，不进入 D3-AC-03"点状锚点 `navSnap` > 3 m 的比例"的分母（该比例只在保留（可寻路）分量上的点状锚点上统计）。crop 配方另带 `offmesh.json` 西侧连接 `osm-w200320976-break`（§7.6.3），把约 55,923 m² 的西侧岛并入主岛；crop contentVersion `7d8c8b895e55` 上 > 3 m 的比例为 6/224 = 2.68%，被裁剪岛上的锚点 7 个，全体口径 13/231 = 5.63%。
 
 #### 6.6.12 `sensorHints`
 
@@ -906,6 +947,9 @@ v1.2：上式只适用于 `appearanceSource = aerial`（外部重建资产）。
 | L2 | 墙面法两子集一致性与 CI95 半宽 | 均 ≤ 0.3° | 小场景 | 本文设定 |
 | L3 | 已知水平面坡度 | ≥ 3 处 ≤ 0.2°（小场景 ≤ 0.5°） | 全部 | 05 D3-AC-02；小场景为本文设定 |
 | L4 | 控制点 AGL 残差 RMS | ≥ 20 点 ≤ 2 m | 有控制点时 | 05 D3-AC-02 |
+| L5（v1.4，W07，ADR-210） | 公开 DEM 交叉核对：主 DEM、交叉核对 DEM 与墙面三法两两之差；各法剩余倾角；三法剩余梯度均值的倾角；各 DEM 竖向尺度比 k | ≤ 0.5°；≤ 0.5°；≤ 0.2°；[0.85, 1.15] | 公里级，配方给出 `qa.dem` 时 | 用户 2026-10-19 决定；AWR-05 ADR-210 |
+
+门禁编号映射（v1.4，W02）：`qa/report.json` 的门禁 G-11 = L1，G-12 = L2，G-13 = L3 或 L4，G-14 = R4，G-15 = 尺度独立复测（OSM 建筑轮廓对墙面的截断 3 m 倒角精配，与 r2 差 ≤ 0.5%）加 R5（20 次重启的尺度相对标准差 ≤ 0.5%）。GLB 世界的 G-04 改为调平后地面残差 MAD（有 DEM 时为 DEM 回归残差），G-05 改为主方法的剩余倾角，两者取不到值均判失败。门禁取值随 `coordinate.json` 发布并取整，全精度结果在 `qa/report.json` 的 `glb.leveling` 与 `glb.scale`。v1.4（W07，ADR-210）：有交叉核对 DEM 时 G-13 = L3 或 L4 或 L5；L5 成立时追加告警门 G-16（L3 水平面判据，告警级），世界 `qa.status = warn`；V-GLB-15 把 L5 成立视同 L3 或 L4 成立。
 
 ### 6.8 默认参数
 
@@ -937,7 +981,10 @@ v1.2：上式只适用于 `appearanceSource = aerial`（外部重建资产）。
 | Detour 区域与代价 | 1 ROAD_CORRIDOR 1.0；2 PAVED 1.5；3 GROUND 3.0；4 VEGETATION 8.0；5 STEEP 6.0；6 OFFMESH 1.0；屋顶、水面、不完整区域为 NULL | — | 代价 ≥ 1 | r2 §4.6 第 4 条 |
 | Detour 标志位 | WALK 1、DRIVE 2、DOOR 4、DISABLED 8 | — | — | 本文设定 |
 | OSM 道路走廊半宽 | 5.0 | m | — | r2 §4.6 第 4 条 |
-| 查询 maxNodes | 65535 | — | — | r2 §4.6 观察 1 |
+| 查询 maxNodes | 65535 | — | — | r2 §4.6 观察 1；v1.4（W09）：节点池耗尽时 `path` 从部分走廊的终点续算，最多 16 段 |
+| 裁剪模式 `build.nav.<profile>.keep`（v1.4） | `seeded`（缺省，保留全部含种子岛）\| `largest-seeded`（只保留面积最大的含种子岛） | — | — | W09 |
+| OSM 走廊判据（v1.4） | 按 0.2 m 加密折线点的最近距离（误差 ≤ 0.1 m） | m | — | W09 |
+| 种子高度（v1.4） | 取竖直线与网格的最低交点 | — | — | W09 |
 | 吸附搜索半宽 | 初次 (2, 4, 2)；锚点 (15, 10, 15) | m（Recast Y 上） | — | r6 §3；本文设定 |
 | 吸附告警阈值 | 3.0 | m | — | 05 V-GLB |
 | 沿道路重定位 | ±15.0，步长 0.5，接受 ≤ 1.0 | m | — | 本文设定 |
@@ -989,7 +1036,7 @@ v1.2：上式只适用于 `appearanceSource = aerial`（外部重建资产）。
 | `texelM` | number | m | > 0 | 面积加权纹素中位数 |
 | `meshEdgeP50M` | number | m | > 0 | 求交网格边长中位数 |
 | `textureLimitedRangeM` | object | m | 键 `720p_hfov60`、`720p_hfov84`、`1080p_hfov84`、`4k_hfov84` | §6.6.12 公式 |
-| `multiLayerColumnFrac` | number | — | [0, 1] | 覆盖内多层柱比例 |
+| `multiLayerColumnFrac` | number | — | [0, 1] | 覆盖内多层柱比例（v1.4，W10：已写出，crop 为 0.18） |
 | `bakedSunAzElDeg` | [number, number] \| null | ° | 方位 [0, 360)（北为 0、顺时针），高度角 (0, 90) | null 表示未解出 |
 | `bakedSunConfidence` | enum | — | `estimated`、`unknown` | — |
 | `captureSeason` | enum \| null | — | `spring`、`summer`、`autumn`、`winter` | 人工登记，可空 |
@@ -1106,9 +1153,12 @@ D1 必需图层按 16 §3.2 原次序写出（`pointcloud.visual`、`pointcloud.
 | `origin_m`、`dims` | vec3、int[3] | m、体素 | 体素网格西南下角与尺寸 |
 | `states` | object | — | `{0: unknown, 1: free, 2: occupied, 3: below_surface}` |
 | `top` | `{href: "top.u16", width, height}` | 砖块 | 每个砖块柱的最高显式砖块序号；`0xFFFF` 表示整柱覆盖外（全部 unknown） |
-| `bricks` | `{index: "bricks.idx", data: "bricks.bin", codec: "zstd"}` | — | `bricks.idx` 为按 Morton 键升序的 `(key u64, offset u64, length u32, flags u8)`；`flags & 1` 为全同值砖块（数据 1 字节） |
+| `bricks` | `{index: "bricks.idx", data: "bricks.bin", codec: "zstd"}` | — | `bricks.idx` 为按 Morton 键升序的 `(key u64, offset u64, length u32, flags u8)`；`flags & 1` 为全同值砖块（数据 1 字节）；v1.4（W03）：键为 `(bx, by, bz)` 的三维 Morton 交织，x 在最低位；砖块内体素按 `(z, y, x)` 行主序；V-GLB-13 按此规则解码 |
 | `trunc_m` | number | m | ESDF 截断（20） |
-| `implicit` | const | — | 砖块序号 > `top` 的砖块：该柱覆盖内为 free，覆盖外为 unknown |
+| `implicit` | const | — | 砖块序号 > `top` 的砖块：该柱覆盖内为 free，覆盖外为 unknown；v1.4（W10）：值为 `free-in-cover`，隐式砖块只用于全部体素柱均已知的砖块柱且为 free，混合砖块柱的每个砖块一律显式写出，读取方解码时不需要覆盖信息 |
+| `world_id`、`coordinate_sha256`、`schema_version`（v1.4） | string | — | W10 补写 |
+| `bricks.count`、`bricks.key`、`bricks.voxel_order`（v1.4） | int、string、string | — | 砖块数、键规则（三维 Morton，x 在最低位）、砖块内体素次序 `(z, y, x)` |
+| `stats`（v1.4） | object | — | 各状态体素计数与砖块统计 |
 
 #### 7.3.3 `detour-navmesh@1`（`<profile>.json` + `<profile>.bin`）
 
@@ -1123,8 +1173,19 @@ D1 必需图层按 16 §3.2 原次序写出（`pointcloud.visual`、`pointcloud.
 | `input` | enum | — | `collision@0.1`、`raycast` |
 | `areas[]` | `{id, name, cost, walkable}` | — | §6.8 |
 | `flags` | object | — | `{walk: 1, drive: 2, door: 4, disabled: 8}` |
-| `seeds[]` | string[] | — | 种子锚点 id |
-| `islands` | `{kept, dropped, walkable_area_m2}` | m² | — |
+| `seeds[]` | string[] | — | 种子锚点 id；v1.4（W09）：为已吸附的种子 id；完全没有种子来源时为 `["auto-largest-island"]`；有候选但全部未吸附时为空（V-GLB-05 报错） |
+| `islands` | `{kept, dropped, walkable_area_m2}` | m² | v1.4（W09）扩展为 `{kept, dropped, total, walkable_area_m2, walkable_area_before_m2, seed_area_m2, largest_m2, kept_areas_m2}` |
+| `wasm_sha256`（v1.4） | string | — | WASM 的 sha256，由 `tools/navsvc/WASM_SHA256` 钉住 |
+| `schema_version`、`world_id`、`coordinate_sha256`（v1.4） | string | — | — |
+| `recast`（v1.4） | object | Recast 格单位 | 原样传入的 Recast 参数 |
+| `poly_flag`（v1.4） | int | — | 本 profile 的多边形标志（person 1、vehicle 2） |
+| `corridor`（v1.4） | `{half_width_m, osm_highways, lines}` | m | OSM 道路走廊 |
+| `area_triangles`（v1.4） | object | — | 各区域类型的三角形数 |
+| `seed_candidates`、`seed_snapped`、`seed_ext_m`（v1.4） | int、int、number[3] | —、—、m | 种子候选数、吸附数与吸附搜索半宽 |
+| `seed_fallback`（v1.4） | `largest-island` \| null | — | 无种子来源时的回退 |
+| `keep`（v1.4） | `seeded` \| `largest-seeded` | — | 裁剪模式（§6.8） |
+| `tiles`（v1.4） | `{x, y, built, tile_m}` | 瓦片、m | — |
+| `polys`（v1.4） | `{total, kept}` | — | — |
 | `offmesh[]` | `{id, a: [E,N,U], b: [E,N,U], radius_m, bidir}` | m | 来自 `offmesh.json` |
 | `bin` | `{href, bytes, sha256}` | — | `exportNavMesh` 字节 |
 
@@ -1142,6 +1203,18 @@ FeatureCollection，坐标为世界帧 (E, N)。顶层 `awr`：`{schema: "awr.na
 | `oneway`、`lanes` | bool、int | — | P1 起增补 `turn_restrictions[]` |
 | `osm_id` | string | — | `way/<id>` |
 | `z_m` | number[] | m | 逐顶点贴地高度（最高命中面） |
+
+v1.6（W11）车道扩展（`schema_version` 1.1.0，只增）：每个要素带 `feature ∈ {edge, lane, connector, junction, conflict_zone, stop_line}`，原有的边要素为 `feature = edge`，字段不变。
+
+| 要素 | id | 字段 |
+|---|---|---|
+| lane | `l-<way>-<seq>[-k]-<f\|b><i>`（`i = 0` 为最左车道） | `dir`、`index`、`lanes`、`from_node`、`to_node`、`width_m`、`speed_mps`、`length_m`、`z_m`、`turns`、`shared`、`successors`、`stop_line`、`junction_rule ∈ {major, minor, equal, null}`、`in_corridor`、`corridor_excess_m`、`routable`、`nav{vertices, snapped, z_source, max_dist_m}` |
+| connector | `t-<node>-<k>` | `from_lane`、`to_lane`、`turn`、`radius_min_m`、`priority`、`conflicts`、`control_scale` |
+| junction | `j-<node>` | `rule ∈ {priority, equal}`、`major_edges`、`approaches`、`connectors`、`conflict_zone` |
+| conflict_zone | `z-<node>` | 该路口全部连接段采样点的凸包 |
+| stop_line | `s-<lane>` | `rule ∈ {yield_major, first_come, stop_sign, give_way}`、`s_m` |
+
+覆盖裁剪产生的节点 id 为 `c-<way>-<seq>-<k>a` 与 `c-<way>-<seq>-<k>b`。顶层 `awr` 增加 `sources[]`、`lanes{...}`、`stats` 与 `content_sha256`；`content_sha256` 为去掉该字段后的顶层与全部要素的规范 JSON 的 sha256。
 
 #### 7.3.5 `awr-anchors@1`（`semantic/anchors.json`；与 `event/anchors.schema.json` 同一 schema）
 
@@ -1174,14 +1247,16 @@ FeatureCollection，坐标为世界帧 (E, N)。顶层 `awr`：`{schema: "awr.na
 |---|---|---|---|
 | 0 | `nodata` | 覆盖外，或覆盖内无竖向命中 | occupancy unknown；NavMesh 不可走；LiDAR `void`；相机 `invalid_mask`；评测剔除 |
 | 1 | `hole` | 开放边界环内部 | 同 bit0 |
-| 2 | `stretched` | 拉伸三角形（插值面） | NavMesh 不可走；LiDAR `void`；相机 `invalid_mask`；UI 标注"此处为插值面" |
+| 2 | `stretched` | 拉伸三角形（插值面） | NavMesh：只在非近水平（n_z < 0.9）时不可走，近水平拉伸面按语义取区域（v1.4，W07，ADR-211）；LiDAR `void`；相机 `invalid_mask`（传感器消费待定，AWR-05 §23.5 C-28）；UI 标注"此处为插值面" |
 | 3 | `low_texture` | 纹素低于中位数 1/8 | UI 标注；数据集分辨率说明 |
 | 4 | `multilayer` | 多层表面柱（屋檐、拱、树冠） | 2.5D 查询保守处理；评测单列 |
 | 5 | `water` | 水面 | NavMesh 不可走 |
 | 6 | `fragment` | 已移除的漂浮碎块位置 | 记录 |
 | 7 | `synthetic_nav` | 人工 off-mesh 连接或人工导航面 | 记录；事件真值报告注明 |
 
-质量栅格 sidecar 为 `grid.schema.json`，`kind = quality`、`dtype = uint8`、`valueFrame = unitless`、`scale = 1`、`offset = 0`，`method` 写位定义。GeoJSON 顶层 `awr = {schema: "awr.quality.v1", world_id, frame, units, coordinate_sha256, cell_m, raster_href, license?, attribution?}`；要素 properties `{kind ∈ scan-footprint|nodata|hole|stretched|low-texture|multilayer|water|fragment|synthetic-nav, reasons_bits, area_m2}`。
+v1.6（S15）：逐三角形质量位（`q.u8` 与 `tri.q.u8`）的 bit1 含义为"与洞的边界环相邻"（洞边），不同于栅格 bit1 的"开放边界环内部"；该位应在构建的 quality 阶段烘焙（后续事项，AWR-05 §26.5 F-39），在此之前由 M25 读取端在加载时从质量栅格的洞单元与焊接后的边界边推导（M25 §6.8.6）。
+
+质量栅格 sidecar 为 `grid.schema.json`，`kind = quality`、`dtype = uint8`、`valueFrame = unitless`、`scale = 1`、`offset = 0`，`method` 写位定义。GeoJSON 顶层 `awr = {schema: "awr.quality.v1", world_id, frame, units, coordinate_sha256, cell_m, raster_href, bits, license?, attribution?}`（v1.4，W10：`bits` 为位定义表；ODbL 头 `license`、`attribution` 只在用到 OSM 水面时写入）；要素 properties `{kind ∈ scan-footprint|nodata|hole|stretched|low-texture|multilayer|water|fragment|synthetic-nav, reasons_bits, area_m2}`。
 
 #### 7.3.7 外观网格目录（`visual/mesh/appearance/`）
 
@@ -1197,16 +1272,20 @@ FeatureCollection，坐标为世界帧 (E, N)。顶层 `awr`：`{schema: "awr.na
 | 字段 | 内容 |
 |---|---|
 | `registration` | 方法、粗搜与细搜峰值、R1–R6 各量、尺度不确定度、交叉校验（frame-of 时） |
-| `leveling` | 主方法、两法梯度与倾角、差值、CI95、水平面逐个坡度、控制点残差、`needs_control_points` |
+| `leveling` | 主方法、两法梯度与倾角、差值、CI95、水平面逐个坡度、控制点残差、`needs_control_points`；v1.4（W07）：增加 `cross_check{methods, missing, fits, pairs, max_pair_delta_deg, residual_tilt_deg, k, consensus_g, consensus_tilt_deg, suggested_applied_g, limits, pass}` 与 `L5` |
 | `topology` | 焊接前后顶点数、重复面、退化面、边界边与总长、非流形边、连通分量、碎块 |
-| `stages[]` | `{name, seconds, peak_rss_mb, input_sha256, output_sha256}` |
+| `stages[]` | `{name, seconds, peak_rss_mb, input_sha256, output_sha256}`；v1.4（W10）：`name` 枚举增加 M22 阶段名 `grids`、`quality`、`semantic`、`collision`、`occupancy`、`navmesh`、`anchors`、`package`（`qa-report.schema.json` 加法式修订）；v1.6（W11）再增加 `navgraph` |
 | `quality` | 覆盖率、各位面积占比、覆盖多边形顶点数 |
 | `semantic` | 各类面积占比 |
 | `collision` | 双向误差 p50、p95、p99（m） |
 | `navmesh` | 每个 profile 的岛统计、裁剪前后可走面积、随机路径可达率与走廊、植被占比 |
+| `navgraph`（v1.6，W11；位于 `glb.navgraph`） | 车道图统计：道路边与车辆边、车道与连接段、路口与冲突区、停止线需要与缺失、走廊内段占比与采样占比、最大超出、最大强连通分量长度占比、`lane_route` 抽样可达率、NavMesh 吸附占比、`content_sha256` |
 | `anchors` | 各类数量、吸附距离分位数、告警数、重定位数、与上一版本的差异 |
 | `sensor_hints` | 纹素与边长分布、太阳估计得分曲面摘要 |
 | `vglb` | V-GLB 每条规则的结果 |
+| `scale`（v1.4，W02 写入） | 尺度独立复测：OSM 建筑轮廓截断倒角精配的尺度、与 r2 的差、R5 重启统计 |
+
+v1.4（W03）：qa-report 的规则编号模式放宽为 `^V-[A-Z]{1,3}-[0-9]{2}$`。
 
 ### 7.4 契约变更清单（M22 起草，M00 合入契约 1.3.0）
 
@@ -1242,8 +1321,11 @@ class MeshWorldQuery(DsmWorldQuery):
     # D3 新增（AWR-05 §5.1.6）
     def raycast_batch(self, o: NDArray[f64, (N, 3)], d: NDArray[f64, (N, 3)], tmax: float
                       ) -> tuple[NDArray[f32, (N,)], NDArray[u32, (N,)], NDArray[u32, (N,)]]: ...   # (t_m, prim_id, inst_id)
-    def walkable_height(self, xy: NDArray[f64, (N, 2)], profile: Literal["person", "vehicle"] = "person"
-                        ) -> NDArray[f32, (N,)]: ...                          # 无导航面时 NaN
+    def walkable_height(self, xy: NDArray[f64, (N, 2)], profile: Literal["person", "vehicle"] = "person",
+                        nav_z: NDArray[f64, (N,)] | None = None) -> NDArray[f32, (N,)]: ...   # 无导航面或无命中时 NaN（v1.4）
+    def walkable_surface(self, xy: NDArray[f64, (N, 2)], z_top: NDArray[f64, (N,)]
+                         ) -> tuple[NDArray[f64, (N,)], NDArray[i64, (N,)]]: ...   # (z, prim_id)，v1.4
+    def attach_nav(self, profile: Literal["person", "vehicle"], fn: Callable) -> None: ...   # 登记导航面函数，v1.4
     def nav_path(self, a: Vec3, b: Vec3, profile: Literal["person", "vehicle"] = "person") -> NavPath: ...
     def semantic_of(self, prim_id: NDArray[u32]) -> NDArray[u8]: ...           # anet-classes@1 索引；无效为 255
     # 本文增补
@@ -1269,6 +1351,10 @@ class NavPath:
 | `tmax`、`max_m` | float | m | (0, 5000] | 与 D2 `MAX_RAY_M` 相同 |
 | `raycast_batch` 的 N | int | — | ≤ 1,048,576 | 超出抛 `GeoError(110)` |
 
+`walkable_height` 的命中定义（v1.4，W06）：显式 float64 运算，平面包围盒取闭区间，`|d| ≥ 1e-12`，重心权重 ≥ −1e-9，取 z ≤ `z_top` 的最高命中，并列时取全局三角形号最小者；不使用 Embree，使前端可逐位复现（Python `awr.world.mesh.query.WalkIndex` 与 TS `apps/web/src/engine/actors/tape/walkable.ts` 以 golden `packages/contracts/golden/event/walkable-small.*` 对拍）。过渡口径：未登记导航面函数时，射线自 +inf（最高表面）起算，`profile` 不起作用。
+
+D2 接口语义保持（v1.4，W04）：命中距离按命中三角形平面以 float64 重算，Embree 只决定命中哪个三角形；`ray_hit` 起点在 2 m 柱体内时返回离开柱体后的首个命中；探针服务的 `ray_hit_iter`、`segment_los_iter` 走同一网格求交；`free_distance` 上限 16 条、错误码 110，大批量用 `raycast_batch`；`ready_event` 保持 D2 `geo.ready` 字段集合，网格概况由 `mesh_info()` 提供。
+
 #### 7.5.2 `Hit` 字段映射
 
 | 字段 | 网格求交下的取值 |
@@ -1285,7 +1371,7 @@ class NavPath:
 
 | 函数 | 签名 | 调用方 |
 |---|---|---|
-| `metric_ok` | `metric_ok(world: Path \| dict) -> MetricStatus{ok: bool, scale_status: str, ranked_ok: bool, reason: str \| None}` | M23（600）、M27（排名运行准入） |
+| `metric_ok` | `metric_ok(world: Path \| dict) -> MetricStatus{ok: bool, scale_status: str, ranked_ok: bool, reason: str \| None, missing: list[str]}`；v1.4：实现位于 `awr.world.geometry.status.metric_ok`，`missing` 为缺失证据的机器码列表，`reason` 另有 `scale_not_rankable`（§17.3.1） | M23（600）、M27（排名运行准入） |
 | `world_summary` | `world_summary(world_dir: Path, *, public: bool = False) -> dict` | bench-api、`/lab/worlds`、公开站只读制品 |
 | `world_manifest` | `world_manifest(world_dir: Path) -> dict` | M27 数据集导出 |
 | `public_files` | `public_files(world_dir: Path) -> list[FileRef]` | M27 公开站同步 |
@@ -1300,8 +1386,12 @@ class NavPath:
 | 套接字 | `${AWR_D3_RUN_ROOT}/geosvc/<world_id>-<contentVersion>.sock`，权限 0600，属主为 D3 服务账户 |
 | 帧格式 | 长度前缀（u32 小端）+ msgpack 映射 |
 | 握手 | 请求 `{op: "hello", proto: 1, world_id, content_version, coordinate_sha256, pid}`；应答 `{ok, shm_name, slots, slot_bytes, tiles, limits}`；绑定不一致返回 `{ok: false, code: 605}` |
-| 数据 | 每连接一段共享内存（`slots × slot_bytes`）；请求在槽内按 `float64` 写起点与方向（48 B/射线），应答在同一槽写 `t (f32)`、`prim (u32)` 或 `bool`、`z (f32)` |
-| 操作 | `raycast{slot, n, tmax}`、`los{slot, n, eps}`、`free{slot, n, max}`、`closest{slot, n, max}`、`walkable{slot, n, profile}`、`nav_path{a, b, profile}`、`ping`、`stats` |
+| 数据 | 每连接一段共享内存（`slots × slot_bytes`）；v1.4（W05）：共享内存段为每连接一个 memfd，描述符随 hello 应答经 `SCM_RIGHTS` 传递 |
+| 操作 | v1.4（W05）：`cast{slot, n}`、`closest{slot, n, max}`、`walk{slot, n}`、`ping`、`stats`（原 `raycast`、`los`、`free`、`walkable`、`nav_path` 操作不再由服务直接提供） |
+| `cast` | 核心求交原语：每条射线输入起点、单位方向与 `tmax`，均为 float64（56 B/射线）；输出 `t` float64、`prim` uint32、`normal` float32×3；槽布局为偏移 0/24/48/56/64/68 乘 n，每项 80 B |
+| `closest`、`walk` | `closest` 每项 28 B；`walk` 即 `walkable_surface`（输入 xy 与 `z_top` float64，输出 z float64 与 `prim` int64），每项 40 B |
+| 客户端计算 | `raycast_batch`、`los_batch`、`free_distance`、`ray_hit` 在客户端由 `cast` 原语计算，与进程内实现逐位相同；`walkable` 与 `nav_path` 在 Detour 工作进程挂接前返回 604（`NAV_UNAVAILABLE`） |
+| 运行目录与退出码 | `AWR_D3_RUN_ROOT` 缺省为 `/dev/shm/awr-d3`；退出码 3 为加载失败，4 为已有存活实例在服务同一套接字 |
 | 顺序 | 同一连接内请求按到达顺序处理；不同连接间公平轮转；结果与批次切分无关（FR-050） |
 | 超时与错误 | 客户端 2 s 超时；错误应答 `{ok: false, code, detail}`；604 服务不可用，605 绑定不一致，110 参数越界（沿用 M04） |
 
@@ -1332,12 +1422,17 @@ build:
   nav:
     person: {cs: 0.30, ch: 0.20, input: collision}
     vehicle: {cs: 0.50, ch: 0.20, input: collision}
+    # v1.4（W07）：person 另设 keep: largest-seeded（只保留含种子的最大岛）；缺省保留全部含种子岛
 anchors: {overrides: anchors.overrides.json, seeds: nav_seeds.json, offmesh: offmesh.json,
           poi_whitelist: [amenity, tourism, shop, public_transport, leisure, historic]}
 levelling: {horizontal_planes: horizontal_planes.geojson, control_points: null}
+qa: {osm_extra: [], reference_m_per_unit: 20.935, planes_exclude: [],   # v1.4：独立复测与人工排除（W02）；顶层 dem、osm 与 W03 共用
+     dem: [{path: dem/Copernicus_DSM_COG_10_N43_00_E023_00_DEM.tif, sha256: 73772d1f…, model: glo30, use: levelling}]}   # v1.4（W07）：交叉核对 DEM（L5）
 stages: [{id: centre, polygon_m: [[…]]}]  # P1 舞台导出
 publish: {public_browser_layer: true}
 ```
+
+v1.4（W02、W03）：配方的 `osm`、`dem` 可为列表；`qa` 段含 `osm_extra`、`reference_m_per_unit`、`planes_exclude`（排除须记录原因）；`qa.osm_extra` 与 `qa.dem` 同样登记到 `derivedFrom[]`，`use` 取值限于契约枚举。v1.4（W07）：`qa.dem` 的含义为交叉核对 DEM，按 `model` 分组（GeoTIFF 或 SRTM `.hgt`，`model` 如 `glo30`、`srtm30m`），每组以与主 DEM 同一地面抽样独立回归，用于 L5；`build.nav.<profile>.keep` 为 NavMesh 岛裁剪方式（`largest-seeded` 只保留含种子的最大岛，缺省保留全部含种子岛）。
 
 #### 7.6.2 `registration.json`
 
@@ -1357,7 +1452,7 @@ publish: {public_browser_layer: true}
 |---|---|
 | `anchors.overrides.json` | `{schema: "awr.anchors.overrides.v1", ops: [{op: add\|move\|confirm\|deprecate\|relabel\|pair, id, fields?, by, reason}]}`，按数组顺序施加 |
 | `nav_seeds.json` | `{seeds: [{id, xy, profile}]}`，补充 OSM 路口之外的裁剪种子 |
-| `offmesh.json` | `{links: [{id, a: [E,N,U], b: [E,N,U], radius_m, bidir, profile}]}`，台阶、窄巷等人工连接 |
+| `offmesh.json` | `{links: [{id, a: [E,N,U], b: [E,N,U], radius_m, bidir, profile}]}`，台阶、窄巷等人工连接；v1.6（K06）：crop 配方带 `configs/worlds.d3/oryahovo-crop1/offmesh.json`（一条连接 `osm-w200320976-break`，OSM way 200320976 的 3 m 断开处，AWR-05 ADR-212） |
 | `horizontal_planes.geojson` | 人工增补的已知水平面多边形（世界帧 E、N） |
 | `control_points.json` | `{points: [{gltf_xyz, lat_deg, lon_deg, h_msl_m?}]}` 或 `{pairs: [{gltf_a, gltf_b, distance_m}]}` |
 
@@ -1389,14 +1484,14 @@ python -m awr.world.mesh.geosvc  --world <id> [--worlds-dir DIR] [--threads N] [
 | 规则 | 内容 | 级别 |
 |---|---|---|
 | V-GLB-01 | `unitsToMeters` 与 `T_world_source` 行列式立方根一致（相对 1e-4），且等于 `registration.T_world_map.s`（相对 1e-9） | E |
-| V-GLB-02 | `scaleStatus ∈ {landmark, assumed, gnss, lidar, rtk, survey}` 时 `source.evidence[]` 非空、`registration.method` 与之相容（`assumed` 与 `manual` 相互对应），`qa.glb.registration` 存在 | E |
+| V-GLB-02 | `scaleStatus ∈ {landmark, assumed, gnss, lidar, rtk, survey}` 时 `source.evidence[]` 非空、`registration.method` 与之相容（`assumed` 与 `manual` 相互对应；v1.4 实现口径：`assumed` 要求 `manual`，OSM、控制点与共帧继承配准不得为 `assumed`，`manual` 配 `landmark` 时告警，证据须指明实测参照），`qa.glb.registration` 存在 | E |
 | V-GLB-03 | `mesh.raycast` 全部顶点（世界坐标）落在 `bounds` 内（容差 1 mm） | E |
 | V-GLB-04 | 随机 10,000 个 2 m 格以 Embree 竖向重算（同一 16 个采样位置），与 `dsm_2m` 差 < 1 cm（全部） | E |
 | V-GLB-05 | 每个 NavMesh 图层的种子所在岛面积 > 0，`islands.kept ≥ 1` | E |
 | V-GLB-06 | 点状锚点 `snap_dist_m.person < 3 m`，否则逐条告警；告警比例 > 5% 时追加汇总告警 | W |
 | V-GLB-07 | 覆盖多边形栅格化结果与 `dsm_2m_n > 0` 的闭运算结果 IoU ≥ 0.98 | E |
-| V-GLB-08 | ODbL 派生层（锚点、道路图、质量多边形中的 OSM 要素）有 `license` 与 `attribution`；`dataset.license`、`citation`、`derivedFrom[]`（含 OSM 与 DEM，带 sha256）齐全；失败归 602 | E |
-| V-GLB-09 | `awr-trimesh@1`：计数、字节数与 `index.json` 一致；局部坐标绝对值 ≤ 瓦片边长；`src` 全部在外观三角形范围内；`tri` 下标在瓦片顶点范围内 | E |
+| V-GLB-08 | ODbL 派生层（锚点、道路图、质量多边形中的 OSM 要素）有 `license` 与 `attribution`；`dataset.license`、`citation`、`derivedFrom[]`（含 OSM 与 DEM，带 sha256）齐全；失败归 602（v1.4 实现口径：配准为 `osm-road-correlation`、`osm-footprint-correlation`、`control-points` 或 `inherit-frame` 之一，或存在 ODbL 图层时要求 OSM 条目；同样的配准要求 DEM 条目） | E |
+| V-GLB-09 | `awr-trimesh@1`：计数、字节数与 `index.json` 一致；局部坐标绝对值 ≤ 瓦片边长（v1.4 实现口径：\|局部 xy − 瓦片 AABB 中心\| ≤ 瓦片边长；`origin_m` 为网格角点，按质心分配到瓦片的三角形可越过网格边）；`src` 全部在外观三角形范围内；`tri` 下标在瓦片顶点范围内 | E |
 | V-GLB-10 | 全部 D3 sidecar 的 `coordinate_sha256` 等于 `world.coordinate.sha256` | E |
 | V-GLB-11 | `appearance.glb` 全部材质 unlit 且双面；三角形数与 `index.json` 一致；变换后包围盒与 `bounds` 差 ≤ 1 cm；图像 sha256 与源 GLB 一致 | E |
 | V-GLB-12 | `zones.border` 位于覆盖多边形内、每环 ≤ 1024 顶点、`max_z_m = round(max(dsm_2m) + 50, 2)` | E |
@@ -1404,6 +1499,8 @@ python -m awr.world.mesh.geosvc  --world <id> [--worlds-dir DIR] [--threads N] [
 | V-GLB-14 | NavMesh `recast_version` 等于 `tools/worldglb/RECAST_VERSION`；`agent` 参数与配方一致 | E |
 | V-GLB-15 | 调平：两法差 ≤ 0.5°（公里级）或子集一致性 ≤ 0.3°（小场景），且水平面或控制点验收量达标；否则告警并写 `needs_control_points` | W |
 | V-GLB-16 | 点云 `col.rgb = srgb`，`render.defaultColorMode = rgb`；`world.json` 为 1.1.0 且 `profile = d3-glb` | E |
+
+v1.4（W03）：V-GLB 规则组以独立规则表登记，只对 `profile = d3-glb` 执行，D2 世界的规则数与结果不变；在 `d3-glb` 世界上 D2 规则 V-G-06 放宽为 `max(dsm_2m) ≤ extent.max.z`，因为 `bounds` 取网格顶点包围盒，而 DSM 取竖向采样的最高命中。包命令行 `validate --deep` 覆盖本规则组（Makefile 无 `make validate` 目标），测试入口为 `tests/d3/world/test_vglb.py`。v1.4（W10）：D2 规则 V-Z-02 的矩形检查对 `d3-glb` 世界跳过，由 V-GLB-12 承担（`zones.border` 为覆盖多边形内缩，不是矩形）；D2 世界不受影响。
 
 ### 7.9 原因码（600–609，M22 子段）
 
@@ -1429,12 +1526,12 @@ python -m awr.world.mesh.geosvc  --world <id> [--worlds-dir DIR] [--threads N] [
 | 源文件 | `oryahovo_-_crop_1_-_metashape_texture_problems.glb`，289,706,900 B，sha256 `2798ed0444712af1df66219dcc79471e57bd55489828800ecba48ae4cb983a63` | `an_entire_small_town_scanned_by_a_drone.glb`，230,581,656 B，sha256 `d1e3effce66add4e4a7b0239d1764bf030fb908b066831f9db75dae79a9085ec` | `anciolina_3d_hilltop_village_scan_snowy.glb`，143,818,396 B，sha256 `c374a461a23d2aa052e6b17c2956714cc9eafd3dbbe3303aa9af72fa5d93946e` |
 | 署名（`asset.extras`） | Mitko（https://sketchfab.com/bg3d），CC-BY-4.0，模型 uid `979b09bd0b7744989d5786c2635f24ba` | Mitko（https://sketchfab.com/bg3d），CC-BY-4.0，uid `ebdd505832c745e081f03d8e29d17f84` | dok11（https://sketchfab.com/dok11），CC-BY-4.0，uid `64ede430838142f5929edfc7eb371efc` |
 | 规模 | 2,879,110 面；16 × 4096² JPEG；`KHR_materials_unlit` | 1,996,759 面；16 × 4096² JPEG；unlit | 2,999,995 面；1 × 8192² JPEG；`KHR_materials_specular`（按 unlit 处理） |
-| 配准方法 | `inherit-frame`（参照 `smalltown-01`），另以 `roads` 交叉校验 | `osm-road-correlation` | `osm-footprint-correlation`（46 栋建筑） |
+| 配准方法 | `inherit-frame`（参照 `smalltown-01`），另以 `roads` 交叉校验 | `osm-road-correlation`（v1.4，W08：`registration.json` 已实际写为该值，此前导入时为 `manual`） | `osm-footprint-correlation`（46 栋建筑） |
 | OSM | Geofabrik `bulgaria` 抽取，按包围盒外扩 2 km 裁剪 | 同左 | Geofabrik `italy/centro` 抽取，同样裁剪 |
-| DEM | SRTM 1″（调平与 `hMslM`） | SRTM 1″ | EU-DEM v1.1 25 m（只用于 `hMslM`；小场景不做 DEM 调平） |
+| DEM | SRTM 1″（调平与 `hMslM`；实际来源为 AWS Terrain Tiles）；v1.4（W07）：Copernicus DEM GLO-30 作 L5 交叉核对（只用于 QA） | SRTM 1″；GLO-30 交叉核对（同一瓦片，W08） | EU-DEM v1.1 25 m（只用于 `hMslM`；小场景不做 DEM 调平） |
 | 预期尺度 | 20.935 m/单位（±0.5%） | 8.374 m/单位（±0.5%） | 2.49–2.53 m/单位（±2%） |
 | 预期真北偏航 | 168.04° | 168.04° | 316° |
-| 预期倾斜 | DEM 约 1.25°；墙面约 0.88° | 同左 | 墙面约 1.12° |
+| 预期倾斜 | DEM 约 1.25°；墙面约 0.88°（v1.4 实测：墙面法改进后 crop 1.27°、DEM 1.61°，W02）。v1.4 重建实测（W07，contentVersion `7d3429a04895`）：两法之差 0.349°、剩余倾角 0.397°；L5 成立（GLO-30 0.084°、墙面 0.113°，三法均值 0.168°）；L3 为告警（G-16）；尺度 +0.23%，R5 0.06%；V-GLB 15 项 pass、V-GLB-06 不适用；行人 NavMesh 主岛 0.727 km²，车辆主岛 0.152 km²，车道吸附率 0.530 | 同左（v1.4 实测：墙面 1.51°、DEM 1.21°）。v1.4 实测（W08，contentVersion `b5103d23ed70`）：两法之差 0.319°、剩余倾角 0.060°；L3 不成立（多瑙河网格水面 0.26°–3.27°），L5 成立（两两之差 ≤ 0.370°，三法均值 0.042°）；尺度 8.3856（+0.14%），R5 8e-8；V-GLB 15 项 pass、V-GLB-06 不适用；`dsm_2m` 最大差 8e-6 m | 墙面约 1.12° |
 | 预期世界包围盒（m） | [−1256, −850, −103] – [1256, 850, 138] | [−2287, −1393, −166] – [2287, 1393, 85] | [−61, −73, −19] – [61, 73, 27] |
 | 预期锚点经纬度、`hMslM` | 43.7352474° N、23.9612838° E，约 115 m | 43.731199° N、23.962713° E，约 165 m | 43.594844° N、11.683000° E，约 896 m |
 | 已知水平面（L3） | 多瑙河水面（OSM 河岸多边形，覆盖内分 ≥ 2 段）、镇中心广场 | 同左 | 人工指定的广场与台阶平台（`horizontal_planes.geojson`），坡度门限 0.5° |
@@ -1497,20 +1594,18 @@ python/awr/world/glb/                     # M22（05 §12.2）
 │   └── web.py（P1、P2）  gaussian.py（P3）
 ├── formats/                              # trimesh、occ、navmesh、navgraph、anchors、quality、appearance 的读写器
 ├── validate.py                           # V-GLB 规则组
-├── manifest.py                           # world.json 1.1.0 补写、world_summary、world_manifest、public_files、notice_text、metric_ok
+├── manifest.py                           # world.json 1.1.0 补写、world_summary、world_manifest、public_files、notice_text（v1.4：metric_ok 移至 awr.world.geometry.status）
 └── jobs.py                               # run_world_build（M27 注册）
 python/awr/world/mesh/                    # M22
 ├── query.py                              # MeshWorldQuery、open_mesh_world_query（← r7 e4_mesh_worldquery.py 垫片）
 ├── scene.py                              # 瓦片化 Open3D 场景与合并（§6.6.15）
-├── client.py  protocol.py  geosvc.py     # IPC 客户端、协议、服务进程
-├── nav.py                                # Detour 工作进程管理与 JSON 行协议
-└── fine.py                               # 0.5 m 栅格、质量栅格与逐三角形数组的只读 memmap
-tools/worldglb/                           # M22（Node 22.12.0，独立 package.json 与锁文件）
-├── RECAST_VERSION                        # 0.43.1（M23 tools/events 读取同一文件）
-├── navmesh_bake.mjs                      # 低层 API 分瓦片烘焙、area 写入、worker_threads（← r2 navmesh_bake.mjs、r6 build_navmesh.mjs）
-├── nav_prune.mjs  anchors_snap.mjs       # 种子洪泛裁剪、吸附与沿道路重定位（← r2 nav_prune_query.mjs、e12_anchors.py）
-├── nav_query_worker.mjs                  # geosvc 的 Detour 查询工作进程
+├── geosvc.py                             # v1.4：IPC 客户端、协议、服务进程与只读 memmap 合并为单文件；入口 open_geosvc_world_query
+├── nav.py                                # Detour 工作进程管理与 JSON 行协议（v1.4 实现：`awr.world.glb.derive.navmesh` 的 `NavSvc` 类）
+tools/worldglb/                           # M22；v1.4 实现：只保留 RECAST_VERSION
+├── RECAST_VERSION                        # 0.43.1（M22 V-GLB-14 与 navsvc 共用）
 └── web/                                  # P1、P2：图集重排、gltfpack、3D Tiles 写出（← r2 e11b_uv_charts.py、web/bench.mjs）
+tools/navsvc/                             # v1.4（W09，ADR-196）：Node 22 包，独立 package.json 与锁文件；WASM_SHA256 钉住 WASM
+└── src/{bake.mjs, bake_worker.mjs, tiles.mjs, navsvc.mjs, core.mjs, recast.mjs}   # 原设计 navmesh_bake.mjs、nav_prune.mjs、nav_query_worker.mjs 的实现
 configs/worldpkg.d3.yaml                  # D3 派生器登记与缺省参数（只由 D3 CLI 读取）
 configs/worlds.d3/<id>/                   # recipe.yaml、registration.json、anchors.overrides.json、nav_seeds.json、offmesh.json、horizontal_planes.geojson
 configs/worlds.d3/raw-manifest.json       # 入库；原始资产在 data/raw/d3-glb/，不入库
@@ -1625,7 +1720,7 @@ tests/d3/world/、tests/d3/quality/        # 本模块测试
 | M22-AC-005 | P0 | P0a | crop、town 各构建两次，并在第二台不同 CPU 型号的机器（同一镜像）各构建一次：`files[]` 逐项 sha256 与 `contentVersion` 全部相同；dmax `--cpus 16` 单世界（不含配准）≤ 10 min、峰值 RSS ≤ 32 GB；本机 crop ≤ 30 min 且 `contentVersion` 与 dmax 相同 | `tests/d3/world/test_build_e2e.py`、`tools/bench/d3/world_build.py` | dmax CPU 池、本机 | 02 |
 | M22-AC-006 | P0 | P0a | `world.json` 与 `coordinate.json` 通过契约 1.3.0 schema；D2 规则与 V-GLB 全部无 error；D1 必需图层齐全；`AWR_D3_ENABLED = 0` 时 D2 `open_world_query` 返回 `DsmWorldQuery` 并加载 DSM、DTM、zones，D2 批处理 sim-core 在该世界运行 60 s 单机起飞、航点与降落无错误；M05 在 Tier S 以 rgb 模式完成首屏 | `make validate`、`tests/d3/world/test_d2_load.py`、Playwright `lab/world-pointcloud` | dmax、本机 Tier S | 02 |
 | M22-AC-007 | P0 | P0a | 随机 10,000 个 2 m 格的 Embree 复算与 `dsm_2m` 差全部 < 1 cm；`dsm_2m_n` 与复算命中数一致；`dsm_0p5m` 随机 10,000 格同口径 < 1 cm；栅格 sidecar 格距、`originXY` 与 D1 规则一致 | V-GLB-04、`tests/d3/world/test_grids.py` | dmax | 02 |
-| M22-AC-008 | P0 | P0a | 把夹具世界的 `scaleStatus` 改为 `relative` 后 `metric_ok.ok = false`，M23 编译返回 600；`assumed` 世界 `ok = true`、`ranked_ok = false`；crop、town 为 `ok = true`、`ranked_ok = true` | `tests/d3/world/test_metric_ok.py`、M23 联调用例 | 本机 | 02 |
+| M22-AC-008 | P0 | P0a | 把夹具世界的 `scaleStatus` 改为 `relative` 后 `metric_ok.ok = false`，M23 编译返回 600；`assumed` 世界 `ok = true`、`ranked_ok = false`；crop、town 为 `ok = true`、`ranked_ok = true` | `tests/d3/events/test_world_gate.py`（v1.4；原登记 `tests/d3/world/test_metric_ok.py`）、M23 联调用例 | 本机 | 02 |
 | M22-AC-009 | P0 | P0a | `dataset.license`、`citation`、`notice`、`sourceFiles`、`derivedFrom[]`（OSM ODbL 与 DEM，均含 sha256 与署名）齐全；逐项删除后 validate 以 602 失败；锚点、道路图文件头含 ODbL 声明；`notice_text` 输出含原作者、来源、许可与修改说明 | `tests/d3/world/test_license.py` | 本机 | 02、24 |
 | M22-AC-010 | P0 | P0a | 行人 NavMesh：裁剪后随机 1,000 对路径 100% 可达；路径长度中落在 OSM 道路走廊（5 m）的比例 ≥ 70%，经过植被 ≤ 5%；两台机器烘焙的 `person.bin` sha256 相同；NavMesh 阶段 16 线程 ≤ 60 s；crop 车辆 NavMesh 存在且只含与车辆锚点连通的岛；道路图要素全部位于覆盖多边形内 | `tests/d3/world/test_navmesh.py` | 本机与 dmax | 03 |
 | M22-AC-011 | P0 | P0a | 点状锚点吸附中位距离 ≤ 1 m，> 3 m 的比例 ≤ 5%；对同一输入重建两次 id 集合与内容逐字节相同；对配准平移扰动 0.5 m 后重建，id 集合不变且差异报告列出全部移动；覆写操作按顺序生效；OSM 元素删除后对应锚点为 `deprecated` | `tests/d3/world/test_anchors.py` | 本机与 dmax | 03 |
@@ -1764,7 +1859,7 @@ tests/d3/world/、tests/d3/quality/        # 本模块测试
 | 编号 | 需求描述 | 优先级 | 阶段 | 目标版本 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
 | M22-FR-074 | OSM 车道图 `geojson/awr-navgraph@1` 的车道扩展（只增）：每条道路按 `lanes`、`oneway`、`turn:lanes` 生成车道中心线（缺省车道宽 3.2 m，缺失标签时按道路等级取 1 或 2 车道）、路口转向连通（冲突区多边形）、限速（`maxspeed` 或按道路等级缺省）与停止线（次路进入主路处）；车道几何吸附到车辆 NavMesh，越出道路走廊的段标记并告警 | P0 | P0b | V0.3 | M22-AC-033 | ADR-181、ADR-132 v1.3 |
-| M22-FR-075 | 车道图查询库：`lane_route(a, b) -> LaneRoute`（最短路，代价为长度除以限速）、`conflict_zones(intersection)`、`stop_line(lane)`；Python 实现为确定性 CPU 路径，M23 生成器的 JS 实现以 golden 逐位对拍 | P0 | P0b | V0.3 | M22-AC-033 | ADR-181 |
+| M22-FR-075 | 车道图查询库：`lane_route(a, b) -> LaneRoute`（最短路，代价为长度除以限速）、`conflict_zones(intersection)`、`stop_line(lane)`；Python 实现为确定性 CPU 路径，M23 生成器的 JS 实现以 golden 逐位对拍；v1.6："M23 生成器的 JS 实现以 golden 逐位对拍"一句由 ADR-196、ADR-197 取代（生成器为 Python 单一实现，不再有 JS 车道图实现） | P0 | P0b | V0.3 | M22-AC-033 | ADR-181 |
 | M22-FR-076 | `gaussian` 阶段的外观来源：图层元数据增加 `appearanceSource ∈ {aerial, mesh_distilled, generative}`（v1.2 增加 `mesh_distilled`）、生成或训练流程版本与参数 sha256；任何来源的图层只登记为外观层，不参与任何几何派生（raycast、grids、occupancy、NavMesh、碰撞）；`world.json` 的 `dataset.derivedFrom[]` 登记源网格、训练器与（生成式时）扩散模型及 Skyfall-GS 组件的版本与许可。v1.2：`generative` 图层只用于研究世界，发布到 dmax 世界目录与分发渠道的世界包遇到该来源时拒绝（601，`detail.why = appearance_generative_forbidden`）（ADR-187） | P0 | P0b（契约）；`mesh_distilled` 自 P1（方案 C1）或 P3；`generative` 只用于研究 | V0.3 | M22-AC-034、037 | ADR-186、ADR-187 |
 | M22-FR-077 | 外观层与网格的对齐验收（v1.2 按来源分档，AWR-05 §6.4.4 G-3DGS v2 的 G1）：`aerial` 残差中位数 ≤ 5 cm（与 FR-073 一致）、边缘 F 值 ≥ 0.80；`mesh_distilled` 与 `generative` 期望深度相对残差中位数中空（AGL 40–150 m）≤ 0.5%、低空（AGL 8–40 m）≤ 1.5%，中空边缘 F 值 ≥ 0.80、低空 ≥ 同瓦片产物 A 的 90%，`generative` 的残差另须 ≤ 同瓦片 `mesh_distilled` 的 1.1 倍；天空方向不透明度 > 0.5 的像素占比 ≤ 0.1%；不通过时不入包（601，`detail.why = appearance_alignment`）。v1.1 的"残差中位数 ≤ 5 cm 适用于全部来源"作废：首轮评估中网格派生外观的残差中位数为 0.18–0.25 m（相对 0.2–1.1%），该门限只对厘米级 GSD 的实拍重建有意义（r11 §7.5） | P0 | P1（方案 C1）或 P3 | V0.3 | M22-AC-034、036、037 | ADR-186、ADR-187 |
 | M22-FR-078 | town 配准独立交付：`register smalltown-01` 的 `registration.json` 在 P0a 发布并作为 `oryahovo-crop1` 的 `--frame-of` 参照；完整 town 世界包在 P0b 构建，构建时复用同一 `registration.json` | P0 | P0a | V0.3 | M22-AC-035 | ADR-175、R-D3-49 |
@@ -1773,7 +1868,7 @@ tests/d3/world/、tests/d3/quality/        # 本模块测试
 
 | 编号 | 优先级 | 阶段 | 度量与阈值 | 方法 | 环境 | D3-AC |
 |---|---|---|---|---|---|---|
-| M22-AC-033 | P0 | P0b | crop 车道图：OSM 道路走廊内车道段占比 ≥ 99%；转向连通与冲突区覆盖全部路口；`lane_route` 随机 500 对可达且 Python 与 JS 结果逐位一致；限速与停止线字段齐全 | `tests/d3/world/test_lanes.py` | 本机 | 33、62 |
+| M22-AC-033 | P0 | P0b | crop 车道图：OSM 道路走廊内车道段占比 ≥ 99%；转向连通与冲突区覆盖全部路口；`lane_route` 随机 500 对可达且 Python 与 JS 结果逐位一致；限速与停止线字段齐全；v1.6："Python 与 JS 结果逐位一致"由 ADR-196、ADR-197 取代（单一 Python 实现）；`lane_route` 随机 500 对从最大强连通分量中抽取（crop 上占车道长度的 97.3%）；W11 实测见 AWR-05 §26.3 第 27 行 | `tests/d3/world/test_lanes.py` | 本机 | 33、62 |
 | M22-AC-034 | P0 | P0b（契约）、P3 | 外观图层登记 `appearanceSource`（`aerial`、`mesh_distilled` 或 `generative`）且不改变 `raycast`、grids、occupancy、NavMesh 与碰撞文件的 sha256；对齐验收按 FR-077（v1.2 按来源分档）；许可登记齐全 | `tests/d3/world/test_gaussian_layer.py` | dmax | 41、64 |
 | M22-AC-035 | P0 | P0a | town `registration.json` 先于 crop 构建发布；crop 以共帧继承得到 20.935 m/单位（M22-AC-003）；P0b 构建 town 世界包时复用同一配准记录，`T_world_source` 逐位一致 | `tests/d3/world/test_frame_of.py` | dmax CPU 池 | 02 |
 
@@ -1908,3 +2003,55 @@ M22 在方案 C1 下的工作量为 WP-D3-22（P1 部分）中的 1.5 人周（F
 | D3-AC-68 | — | P3 | 公开参照集试点与生成器许可拒绝（M22-AC-039） |
 | D3-AC-69 | — | P3 | 高斯发布子阶段与网格蒸馏验证图层（M22-AC-036、039、040） |
 | D3-AC-70 | — | P3 | 编辑记录入库（M22-AC-040） |
+
+## 17. D3-SEAL 修订（v1.4，依据 AWR-05 v1.6）
+
+### 17.1 修订依据与摘要
+
+依据 AWR-05 v1.6 的封板收尾批次（第一批 W01 至 W06，第二批 W09、W10）：本节登记实现与本文原设计的差异与补充定义，阈值不变。逐条落点见 §17.2；实测数字登记在 AWR-05 §24.3 与 §25.3。
+
+### 17.2 条款修订
+
+| 条款 | 修订 | 来源 |
+|---|---|---|
+| FR-016、§7.5.3 | `metric_ok` 实现位于 `awr.world.geometry.status`；证据完整的可执行定义见 §17.3.1；`MetricStatus.missing` 与 `scale_not_rankable` | W01 |
+| M22-AC-008 | 测试路径为 `tests/d3/events/test_world_gate.py` | W01 |
+| §6.6.4、§6.7、§7.3.8、§7.6.1、§8.1 | 墙面带宽 0.1、带截距回归与 3 次迭代、20° 扇区奇偶分组、DEM 排除水面；L3 口径；门禁 G-04、G-05、G-11 至 G-15；`glb.scale`；配方 `qa` 段；实测倾斜 | W02 |
+| §6.2、§6.6.6、§7.3.2、§7.3.8、§7.6.1、§7.8 | 阶段次序与 `dtm_10m` 来源；`awr-occ@1` 的 Morton 键；qa 规则编号模式；配方列表与 `derivedFrom[]`；V-GLB 规则组独立登记与 V-GLB-02、08、09 的实现口径 | W03 |
+| §7.5.1 | D2 接口语义保持；FR-047、AC-022 未引用 `ready_event` 的网格字段，无需修改 | W04 |
+| FR-026、§6.4、§7.5.4、§9.1 | geosvc 协议改为求交原语；`dsm_0p5m` 运行期派生；DRAINING 次序；文件合并为 `geosvc.py` | W05 |
+| §6.5、§7.5.1 | `walkable_height(xy, profile, nav_z)`、`walkable_surface`、`attach_nav`；命中定义与过渡口径；Detour 结果以 `nav_z` 传入 | W06 |
+| §9.1、§7.3.3、§6.8 | NavMesh 烘焙与查询交付在 `tools/navsvc/**`（`tools/worldglb` 只保留 `RECAST_VERSION`）；`nav.py` 现为 `awr.world.glb.derive.navmesh.NavSvc`；`detour-navmesh@1` 已实现字段与 `seeds[]` 规则；裁剪模式 `keep`、走廊判据、种子高度与 `path` 续算 | W09 |
+| §6.6.7、§6.6.10、§7.1.2、§7.3.2、§7.3.6、§7.3.8、§7.8 | 质量位与覆盖多边形、占据体素的实现口径；`multiLayerColumnFrac` 写出；`awr-occ@1` 隐式砖块规则与 `index.json` 增补字段；GeoJSON `bits` 头与 ODbL 头条件；`stages[].name` 枚举增补；V-Z-02 对 `d3-glb` 世界跳过 | W10 |
+
+### 17.3 实现口径
+
+#### 17.3.1 `metric_ok` 与标定证据完整（W01）
+
+"标定证据完整"的可执行定义，全部满足时成立：
+
+1. 坐标绑定：`coordinate.json` 存在且与 `world.json` 的 `coordinate.sha256` 一致；
+2. `source.evidence[]` 非空，`unitsToMeters > 0`；
+3. `trueNorth ≠ unknown`；
+4. `profile = d3-glb` 时：`registration.method ≠ none`，`leveledDeg` 为有限值；
+5. `qa/report.json` 绑定本次构建、状态不为 `fail`，且门禁 G-04、G-05、G-08 存在并通过。
+
+`MetricStatus.missing` 为未满足项的机器码列表；`ranked_ok` 另要求 `scaleStatus ≠ assumed`，不满足时 `reason = scale_not_rankable`。M23 的门 1 以 `E-WORLD` 检查执行（M23-FR-015）。
+
+#### 17.3.2 geosvc 客户端入口（W05）
+
+`python/awr/world/mesh/geosvc.py` 的 `open_geosvc_world_query` 与 `open_mesh_world_query` 签名相同，另加关键字 `geosvc`、`socket_path`、`timeout_s`；进程内模式的类为 `InprocMeshWorldQuery`，服务模式的类为 `GeoSvcMeshWorldQuery`。内存口径（D3-AC-05）：读 `smaps_rollup`，基线为 D2 会话（已加载 numba 与 M04、已打开 DsmWorldQuery），增量为打开 MeshWorldQuery 并执行 10,000 次查询，以 `Pss_Anon` 与 `Pss − Pss_File` 判定；crop 实测 +0.88 MB，进程内对照 +614 MB。
+
+#### 17.3.3 crop 标定实测（W02，供 D3-AC-02 与 RP0a 引用）
+
+两法差 0.349°，剩余倾角 0.397°，尺度相对 r2 +0.23%，R5 0.06%；L3、L4 未通过（多瑙河网格水面约 ±3 m 穹形变形），需控制点或人工决策（AWR-05 §24.5 F-03）。
+
+### 17.4 D3-AC 映射变更
+
+| D3-AC | 变更 |
+|---|---|
+| D3-AC-02 | 验证入口 `tests/d3/world/test_vglb.py`、`tests/d3/events/test_world_gate.py`；`make validate` 由包命令行 `validate --deep` 代替 |
+| D3-AC-05 | 增加 `tests/d3/world/test_world_query_mesh.py` 与夹具 `tests/d3/world/fixtures_mesh.py`；内存口径见 §17.3.2 |
+| D3-AC-07 | `walkable_height` 的 Python 与 TS 实现以 golden 对拍：`tests/d3/world/test_walkable_height.py`、`apps/web/tests/m06/tape.test.ts` |
+| D3-AC-03 | W09：跨机 NavMesh sha256 相同（本机 AVX2 与 dmax AVX-512，8/16 线程；person `6b40e12a…c4e8`、vehicle `bcf63440…dbc7`），navsvc 应答逐字节相同；crop 的 `seeded` 裁剪保留 10 个 person 岛，100% 可达条款取决于 W07、W12 的取舍（`keep` 或 off-mesh 连接） |
+| D3-AC-04 | W10：`tests/d3/quality/test_quality_layer.py`（17 个用例）；crop scratch 重建：footprint 799 顶点、2.649 km²，V-GLB-07 IoU 0.99975，V-GLB-12、13 通过（覆盖外 10,000 抽样全为 unknown，表面 10,000 抽样全为 occupied），见 AWR-05 §25.3 |

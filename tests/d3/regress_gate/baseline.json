@@ -14,5 +14,291 @@
   "commit": "928c57b",
   "recorded_utc": "2026-10-17",
   "note": "relay-b-1h r1 = r2 (determinism PASS); gap quality checks fail identically on d2 and d3-dev"
+ },
+ "resim": {
+  "spec_sha256": "2ece787873262bdf59358a9a490696e1ed6f4df19662dfc6f1cc0be02a74ac47",
+  "frames": "3750",
+  "frames_sha256": "f6d5a3fe6952d0d83c3a7836201c06acf8c9da606ca257d88ce7fd8f3705d4d0",
+  "inputs": "5",
+  "inputs_sha256": "0d979f76aa22ce00b085d96ea2fafc89b9a81879fed49af8157428743a5d49b8",
+  "chunks": [
+   "0f534ed08f92f210",
+   "a8af18b6e9e74a80",
+   "6442fd6e8e31cec3",
+   "10f36738a9ba084e",
+   "a2ca844acc12a245",
+   "f145dc733e60bb5c",
+   "7529724cce44526d",
+   "d0b33df4dd7cf54e"
+  ],
+  "source": {
+   "tree": "d2@928c57b (git archive; worlds/ of the working tree)",
+   "kernel": "numba",
+   "awr_version": "0.1.0",
+   "flags": {
+    "AWR_D3_ENABLED": "0"
+   },
+   "recorded_utc": "2026-10-18T14:14:45Z"
+  }
+ },
+ "public_e2e": {
+  "conditions": {
+   "worlds": [
+    "synthcity",
+    "shenzhen"
+   ],
+   "repeats": 3,
+   "viewport": [
+    1280,
+    720
+   ],
+   "cgroup": {
+    "enabled": true,
+    "cpu_quota_pct": 250,
+    "mem_high": "1.8G",
+    "mem_max": "2G",
+    "cpus": "0-3"
+   },
+   "client_cpus": "4-7"
+  },
+  "tier_s": {
+   "synthcity": {
+    "first_screen_bytes": 490260,
+    "ttfp_ms": 10.775,
+    "programs_at_reveal": 27,
+    "drawn": 20000.0,
+    "ttfp_first_pixel_ms": 268.895,
+    "tti_ms": 16036.725,
+    "n": 3
+   },
+   "shenzhen": {
+    "first_screen_bytes": 321384,
+    "ttfp_ms": 8.91,
+    "programs_at_reveal": 27,
+    "drawn": 20000.0,
+    "ttfp_first_pixel_ms": 362.195,
+    "tti_ms": 18745.58,
+    "n": 3
+   }
+  },
+  "source": {
+   "tree": "d2@928c57b (git archive; worlds/ of the working tree); v0.2.1 demo build",
+   "build_info": {
+    "version": "0.2.0",
+    "channel": "demo",
+    "commit": "928c57bcc3",
+    "dirty": false,
+    "built_at": "2026-10-17T10:53:51Z",
+    "release": "local-928c57bcc3"
+   },
+   "cgroup_mode": "systemd-scope",
+   "load_before": [
+    2.98,
+    3.82,
+    2.63
+   ],
+   "recorded_utc": "2026-10-19T04:55:50Z"
+  }
+ },
+ "relay_checks": {
+  "case": "relay-b-1h-r1",
+  "checks": {
+   "first_capture": {
+    "ok": true,
+    "value": 51.83,
+    "expect": "not null"
+   },
+   "gaps.non_exempt": {
+    "ok": false,
+    "value": [
+     [
+      "other",
+      6.0
+     ],
+     [
+      "other",
+      24.8
+     ],
+     [
+      "other",
+      2.2
+     ],
+     [
+      "other",
+      4.2
+     ],
+     [
+      "other",
+      23.6
+     ],
+     [
+      "other",
+      35.4
+     ],
+     [
+      "other",
+      33.6
+     ]
+    ],
+    "expect": []
+   },
+   "gaps.keepout_priority": {
+    "ok": true,
+    "value": [],
+    "expect": "<= 3 x <= 30.0 s"
+   },
+   "gaps.illum_transition": {
+    "ok": true,
+    "value": [],
+    "expect": "<= 0 (one per day/night switch) x <= 30.0 s"
+   },
+   "discovered": {
+    "ok": true,
+    "value": 0,
+    "expect": 0
+   },
+   "config_entries": {
+    "ok": true,
+    "value": {
+     "count": 0,
+     "total_s": 0.0
+    },
+    "expect": 0
+   },
+   "energy_rtl": {
+    "ok": true,
+    "value": 0,
+    "expect": 0
+   },
+   "collisions": {
+    "ok": true,
+    "value": 0,
+    "expect": 0
+   },
+   "handover.overlap_min": {
+    "ok": true,
+    "value": 15.2,
+    "expect": ">= 15.0 s"
+   },
+   "dispatch_delays.battery": {
+    "ok": true,
+    "value": 0,
+    "expect": 0
+   },
+   "day_night_switches": {
+    "ok": true,
+    "value": 0,
+    "expect": ">= 2 in 24 h"
+   },
+   "stats_vs_events.gaps_by_cause": {
+    "ok": true,
+    "value": {
+     "other": 7
+    },
+    "expect": {
+     "other": 7
+    }
+   },
+   "stats_vs_events.handovers": {
+    "ok": true,
+    "value": 3,
+    "expect": 3
+   },
+   "stats_vs_events.discovered": {
+    "ok": true,
+    "value": 0,
+    "expect": 0
+   }
+  },
+  "source": {
+   "tree": "d2@928c57b (git archive incl. tools/ and scenarios/; worlds/ of the working tree)",
+   "flags": {
+    "AWR_D3_ENABLED": "0"
+   },
+   "host": "Intel(R) Xeon(R) CPU E5-2603 v4 @ 1.70GHz",
+   "digests": {
+    "relay_stats.json": "c7354dc2fa9b07b451ba70a50acd36140d7d9a40fb64a81c98de047578b9370f",
+    "events.jsonl": "88de54fa95083adbf555cd910a9bdb6e1f63ad89c072b355a9a0072042882b9e"
+   },
+   "recorded_utc": "2026-10-19T07:38:35Z"
+  }
+ },
+ "perf": {
+  "pytest": [
+   "tests/targets/test_budget.py",
+   "tests/perception/test_budget.py",
+   "tests/perception/test_field_budget.py"
+  ],
+  "host": {
+   "cpu_model": "Intel(R) Xeon(R) Gold 6326 CPU @ 2.90GHz",
+   "python": "3.12",
+   "numpy": "2.5.3",
+   "numba": "0.67.0"
+  },
+  "tests": {
+   "tests/targets/test_budget.py::test_stage_budget_30x12": {
+    "outcome": "failed",
+    "n": 21,
+    "metrics": {
+     "call_cpu_ms": 1067.292,
+     "call_wall_ms": 1067.396,
+     "stage_cpu_ms_per_sim_s": 8.7256,
+     "step_cpu_p99_ms": 1.2179,
+     "stage_wall_ms_per_sim_s": 8.7371,
+     "step_wall_p99_ms": 1.219,
+     "eff_cache": 8.0
+    },
+    "spread": {
+     "call_cpu_ms": 0.2903,
+     "call_wall_ms": 0.2903,
+     "stage_cpu_ms_per_sim_s": 0.2393,
+     "step_cpu_p99_ms": 0.9413,
+     "stage_wall_ms_per_sim_s": 0.2392,
+     "step_wall_p99_ms": 0.9411,
+     "eff_cache": 0.0
+    }
+   },
+   "tests/perception/test_budget.py::test_stage_cost_12x30": {
+    "outcome": "passed",
+    "n": 21,
+    "metrics": {
+     "call_cpu_ms": 261.994,
+     "call_wall_ms": 262.07
+    },
+    "spread": {
+     "call_cpu_ms": 0.5247,
+     "call_wall_ms": 0.5257
+    }
+   },
+   "tests/perception/test_field_budget.py::test_field_cost_12x30_per_sim_second": {
+    "outcome": "failed",
+    "n": 21,
+    "metrics": {
+     "call_cpu_ms": 4424.172,
+     "call_wall_ms": 4424.214
+    },
+    "spread": {
+     "call_cpu_ms": 0.1749,
+     "call_wall_ms": 0.175
+    }
+   }
+  },
+  "warmup": 1,
+  "repeats": 21,
+  "source": {
+   "tree": "d2@928c57b (git archive; dmax CPU pool container d3-g04-perf, d3-agent-py:dev, D2 lock venv, --cpus 16, d3.slice)",
+   "cpus": 64,
+   "load_before": [
+    19.06,
+    17.48,
+    15.54
+   ],
+   "load_after": [
+    25.59,
+    22.06,
+    17.75
+   ],
+   "recorded_utc": "2026-10-19T07:36:22Z"
+  }
  }
 }

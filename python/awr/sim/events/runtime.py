@@ -20,7 +20,7 @@ from typing import Any
 import numpy as np
 
 from awr.sim.events.errors import EventError
-from awr.sim.events.tape import TapeReader, open_tape
+from awr.sim.events.tape import TICK_NS, TapeReader, open_tape
 
 __all__ = ["EventRuntime", "TapeMotionSource", "target_id"]
 
@@ -145,11 +145,29 @@ class EventRuntime:
                         "fog_top_agl_m": env.fog_top_agl_m, "cloud_cover": env.cloud},
                 "comms_active": [z["id"] for z in r.comm_zones_at(t_ev)]}
 
-    def run_record(self) -> dict:
+    def run_record(self, targets: Any = None) -> dict:
+        """`event_run`（M23 §1120）。`targets` 为 M18 运行时（`timeline_track`、`timeline_discovered`）时：`scripted_track_sha256`
+        取 sim-core 中脚本演员在磁带 tick 上的实现位置（毫米定点，按演员 idx 拼接），`tape_track_sha256` 为同一 tick 由磁带插值
+        直接给出的位置（二者一致即 D3-AC-08 的轨迹条款）；另写被发现记录与按演员的计数。没有 M18 运行时时实现轨迹记 None。"""
         r = self.reader
         if r is None:
             return {"v": 1, "loaded": False}
-        return {"v": 1, "tape_content_sha256": self.spec["tape_content_sha256"], "mode": self.spec["mode"],
-                "event_id": r.header["event_id"], "version": r.header["event_version"], "offset_s": self.offset_ns / 1e9,
-                "targets": dict(self.tids), "scripted_track_sha256": hashlib.sha256(b"".join(self.track)).hexdigest(),
-                "track_ticks": len(self.track), "env_ops_applied": list(self.applied)}
+        tape_sha = hashlib.sha256(b"".join(self.track)).hexdigest()
+        out = {"v": 1, "tape_content_sha256": self.spec["tape_content_sha256"], "mode": self.spec["mode"],
+               "event_id": r.header["event_id"], "version": r.header["event_version"], "offset_s": self.offset_ns / 1e9,
+               "targets": dict(self.tids), "scripted_track_sha256": None, "tape_track_sha256": tape_sha,
+               "track_ticks": len(self.track), "env_ops_applied": list(self.applied)}
+        if targets is None:
+            return out
+        order = [self.tids[a["id"]] for a in r.actors_info(scripted_only=True)]
+        rows = [b for t, b in targets.timeline_track(order) if (self.offset_ns + t) % TICK_NS == 0]
+        actor = {t: a for a, t in self.tids.items()}
+        off_ms = self.offset_ns // 1_000_000
+        disc = [{"actor": actor[d["target"]], "uav": d["uav"], "t_ms": d["t_ms"] + off_ms, "criterion": d["criterion"], "kind": d["kind"]}
+                for d in targets.timeline_discovered() if d["target"] in actor]
+        count = dict.fromkeys(self.tids, 0)
+        for d in disc:
+            count[d["actor"]] += 1
+        out.update(scripted_track_sha256=hashlib.sha256(b"".join(rows)).hexdigest(), realized_ticks=len(rows), discovered=disc,
+                   discovered_count=count)
+        return out

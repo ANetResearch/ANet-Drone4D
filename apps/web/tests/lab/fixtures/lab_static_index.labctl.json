@@ -1,0 +1,79 @@
+{
+ "schema": "drone4d.lab_static_index.v1",
+ "version": "2026.10.19-1",
+ "built_unix_ns": "1792368000000000000",
+ "license": {
+  "files": [
+   "LICENSE",
+   "NOTICE"
+  ],
+  "attribution": [
+   "OpenStreetMap contributors（ODbL-1.0）"
+  ]
+ },
+ "worlds": [
+  {
+   "id": "oryahovo-crop1"
+  }
+ ],
+ "events": [
+  {
+   "id": "crop-handoff-001",
+   "version": 1,
+   "world_id": "oryahovo-crop1",
+   "tape": "events/crop-handoff-001/tape.bin",
+   "tape_json": "events/crop-handoff-001/tape.json",
+   "runs": [
+    {
+     "run_id": "run-abcdefghij",
+     "policy": "track_share",
+     "n_uav": 3,
+     "obs_level": "L2",
+     "videos": [
+      {
+       "uav": "uav-01",
+       "cam": "cam0",
+       "kind": "rgb",
+       "path": "runs/run-abcdefghij/video/uav-01_cam0.mp4",
+       "bytes": 1048576,
+       "sha256": "f9d0e5cf92e9ab818cb7fe75723c8d30c7fb6573f470a045c9dca7b6d3d1fcf3"
+      },
+      {
+       "uav": "uav-01",
+       "cam": "thermal0",
+       "kind": "thermal",
+       "path": "runs/run-abcdefghij/video/uav-01_thermal0.mp4",
+       "bytes": 262144,
+       "sha256": "e5fd54b0b57f3892f5799eeaba30dbceaa788b7e53185f81d678b3ae98f036e8"
+      }
+     ],
+     "tracks_obs": "runs/run-abcdefghij/tracks_obs.bin",
+     "slices": [
+      {
+       "event_id": "encounter_ab",
+       "t_from_s": 17.5,
+       "t_to_s": 27.5,
+       "rrd": "runs/run-abcdefghij/slices/encounter_ab.rrd",
+       "bytes": 524288,
+       "sha256": "646530c0504ff3f02963e74f792099cc927d599abc01aebbde51651f41c3d999"
+      }
+     ],
+     "basemap": "runs/run-abcdefghij/slices/basemap.rrd",
+     "basemap_bytes": 307200,
+     "basemap_sha256": "783b8843e7b7146b90ae80e345a548814fe39f3fc32449c1c2d6aff3b142b61c"
+    }
+   ],
+   "bytes": 65536,
+   "sha256": "7e7922f4c08026a0318f7491fe7481086dd748c024526156eba6d687be743e61"
+  }
+ ],
+ "files_sha256": "SHA256SUMS",
+ "files_bytes_total": 2241472,
+ "features": {
+  "inspect": true,
+  "compare": false,
+  "leaderboard": false,
+  "submit": false
+ },
+ "lab_build": "20261019-060000-2a8f58d555"
+}

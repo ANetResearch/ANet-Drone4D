@@ -9,6 +9,12 @@ tools/bench/d3/refdet/train.py，BN 已折叠；4×4 步长 4 分块 stem，扩�
 - `slant_range_m`：相机到该地面点的距离；`h_px`：框高（交付分辨率）；
 - `appearance`：框高 ≥ 16 px 时取框上部、下部中央区域的 RGB 中位数（上衣、下装）；
 - `det_id`：`sha256(uav | seq | 序号)` 前 16 位十六进制（同一输入逐字节相同）；`l2 = true`，report 证据改用 `bbox_xywh`。
+
+定稿（model_card.json `release`、`parity`、`std_step_wall`；tools/bench/d3/refdet/freeze.py）：随包权重的 sha256 固定为 `WEIGHTS_SHA256`，
+缺省路径载入时校验；torch 与 numpy 推理逐元素最大绝对误差 ≤ 1e-3（parity.py）。`STEP_BUDGET_S` 为正式评测 L2 分轨每步墙钟预算
+（M26-FR-126，`max(0.5 s, τ × wall_ratio)` 中的下限），`STD_STEP_WALL_S` 为 L2 基线在 `std` 资源档容器（2 核、8 GB、无 GPU、
+BLAS 单线程）内回放一次 360 s L2 运行实测的每步墙钟（自 OBS 写完至 ACT 收齐；tools/bench/d3/refdet/step_wall.py，3 次重复取中位，
+`max` 为各次重复的最坏单步）。自定义 Agent 在基线之上增加计算时，应以 `STEP_BUDGET_S − STD_STEP_WALL_S["max"]` 估算余量。
 """
 
 from __future__ import annotations
@@ -20,7 +26,7 @@ from pathlib import Path
 
 import numpy as np
 
-__all__ = ["L2Perception", "RefDet", "decode_full", "decode_small"]
+__all__ = ["STD_STEP_WALL_S", "STEP_BUDGET_S", "VERSION", "WEIGHTS_SHA256", "L2Perception", "RefDet", "decode_full", "decode_small"]
 
 W_IN, H_IN, H_PAD, STRIDE = 960, 540, 544, 4
 HM_W, HM_H = W_IN // STRIDE, H_PAD // STRIDE
@@ -28,6 +34,10 @@ BLOCKS = (("b2", 2, 1), ("b3", 1, 1), ("b4", 1, 2), ("b5", 1, 4), ("b6", 1, 1)) 
 CLASSES = ("person", "vehicle")
 WEIGHTS = Path(__file__).with_name("ref_det_v1.npz")
 IDENT_PX = 16
+VERSION = "1.0.0"
+WEIGHTS_SHA256 = "da68c6cb3e91e51bd389aefd4b25e482301fa5633a0c6ecb6ebf7d5e16b584ce"
+STEP_BUDGET_S = 0.5
+STD_STEP_WALL_S = {"p50": 0.100852, "p95": 0.116106, "p99": 0.131004, "max": 0.18117}
 
 
 def decode_small(data: bytes) -> tuple[np.ndarray, tuple[int, int]]:
@@ -69,7 +79,13 @@ def _pw(x: np.ndarray, w: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 class RefDet:
     def __init__(self, path: Path | str | None = None) -> None:
-        z = np.load(Path(path) if path else WEIGHTS)
+        if path is None:
+            data = WEIGHTS.read_bytes()
+            if hashlib.sha256(data).hexdigest() != WEIGHTS_SHA256:
+                raise ValueError(f"{WEIGHTS.name}: sha256 differs from the frozen ref_det_v1 weights")
+            z = np.load(io.BytesIO(data))
+        else:
+            z = np.load(Path(path))
         self.p = {k: np.asarray(z[k], np.float32) for k in z.files}
 
     def forward(self, img: np.ndarray) -> np.ndarray:

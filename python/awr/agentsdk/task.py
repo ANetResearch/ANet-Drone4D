@@ -5,6 +5,8 @@
 - 任务区：锚点 `ev_town_center` 区域多边形（缺省取全部锚点外接框外扩 50 m）；公开锚点与目标描述来自事件 `brief`；
 - 高度包络 [30, 120] m AGL；安全间距人员与车辆各 10 m；预算每机 10 km、2,000 kB。
 任务契约与简报只含公开信息：不含演员轨迹、事件区间与参与者身份（参与者的外观描述只对 `brief.targets` 列出的目标给出）。
+目标搜索事件（`target_search`）：`scored_event_types` 含 `target_window`，`report_types` 为 `found`，`prior` 引用
+`brief.json#/search/prior`（gmm 为 region_weights、grid 为 heatmap），不含实际位置（M23 §15.3 规则 2）。
 """
 
 from __future__ import annotations
@@ -57,15 +59,21 @@ def task_from_event(event_dir: Path) -> dict:
     targets = [{"appearance_desc": t.get("description_en", ""), "class": actors.get(t["actor"], {}).get("class", "person")}
                for t in brief.get("targets", [])]
     ev_types = sorted({a["type"] for a in plan.get("annotations", [])})
+    rep_types = sorted({REPORT_OF.get(t, t) for t in ev_types})
+    search = plan.get("search") if plan["event_type"] == "target_search" else None
+    if search:                                                    # 目标搜索（M23 §15.3）：计分 target_window、只允许 found，先验引用简报
+        ev_types, rep_types = sorted({*ev_types, "target_window"}), ["found"]
     return {
         "schema": "drone4d.bench.task.v1", "task_id": f"{plan['event_id']}-v{plan['version']}", "event_ref": f"{plan['event_id']}@{plan['version']}",
         "version": 1, "event_type": plan["event_type"],
         "brief": {"anchors_public": list(brief.get("public_anchors", [])), "targets": targets, "region_polygon_enu_m": poly,
                   "duration_s": plan["duration_ms"] / 1000.0},
         "known_targets": bool(targets), "min_obs_level": "L1", "altitude_envelope_agl_m": list(ALT_ENVELOPE_AGL_M),
-        "scored_event_types": ev_types, "report_types": sorted({REPORT_OF.get(t, t) for t in ev_types}),
+        "scored_event_types": ev_types, "report_types": rep_types,
         "safety": {"min_sep_person_m": 10.0, "min_sep_vehicle_m": 10.0, "no_fly": []},
         "budget": {"distance_km_per_uav": 10.0, "comm_kb_per_uav": 2000.0},
+        **({"prior": {"kind": "region_weights" if search["prior"]["type"] == "gmm" else "heatmap", "ref": "brief.json#/search/prior"}}
+           if search else {}),
     }
 
 

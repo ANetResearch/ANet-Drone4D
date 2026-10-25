@@ -1,0 +1,69 @@
+# crop-reid-001：Re-ID 遮挡类 dev 事件（M23 §15.3 第 1 行，D3-AC-62；E10）。目标（person-12）自西侧集市出口出发，先进入西南楼停留 12 s，
+# 出楼后在中心路口广场停留，再进入东楼停留 12 s，出楼后走向东北街口；两处建筑遮挡各 ≥ 5 s，由验证器产出两个 target_reacquire。
+# 三名干扰者取自外观库中与目标属性距离 3–4 的条目（门 1 规则 ≥ 2），在目标出楼前后经过同一门口，构成难负例。
+schema: drone4d.event.v1
+event_id: crop-reid-001
+version: 1
+event_type: reid_occlusion
+world: {id: oryahovo-crop1}
+anchors_ref: event:anchors.json
+seed: 20261021
+duration_s: 240
+mode: exogenous
+time_origin_utc: "2026-06-16T08:30:00Z"
+actors:
+  - id: target_p
+    class: person
+    roles: [target]
+    appearance_ref: person-12
+    route:
+      - {t: 0, at: ev_market_exit, do: spawn}
+      - {t: 45, at: ev_w1_door, do: enter_building}
+      - {t: 57, at: ev_w1_door, do: exit_building}
+      - {t: 100, at: ev_plaza, dwell_s: 8, do: wait}
+      - {t: 125, at: ev_b2_door, do: enter_building}
+      - {t: 137, at: ev_b2_door, do: exit_building}
+      - {t: 170, at: ev_ne_street}
+  - id: distractor_a
+    class: person
+    roles: [distractor]
+    appearance_ref: person-04
+    route:
+      - {t: 0, at: ev_market_west, do: spawn}
+      - {t: 80, at: ev_w1_door}
+      - {t: 150, at: ev_plaza_kiosk, dwell_s: 15, do: wait}
+      - {t: 220, at: ev_south_walk}
+  - id: distractor_b
+    class: person
+    roles: [distractor]
+    appearance_ref: person-13
+    route:
+      - {t: 10, at: ev_w2_door, do: exit_building}
+      - {t: 90, at: ev_plaza, dwell_s: 30, do: wait}
+      - {t: 160, at: ev_b2_door}
+      - {t: 225, at: ev_nw_street}
+  - id: distractor_c
+    class: person
+    roles: [distractor]
+    appearance_ref: person-23
+    route:
+      - {t: 0, at: ev_ne_street, do: spawn}
+      - {t: 40, at: ev_b2_door, dwell_s: 10, do: wait}
+      - {t: 90, at: ev_plaza_kiosk}
+      - {t: 130, at: ev_south_corner}
+background:
+  - {class: person, count: 24, zone: ev_town_center, speed_mps: [0.8, 1.6], pause_s: [0, 20], stream: 1}
+environment:
+  interpolation: smooth
+  keyframes:
+    - {t: 0, wind_mps: 3.0, wind_dir_deg: 250, gust_sigma_mps: 0.6, rain_mm_h: 0, visibility_m: 25000}
+    - {t: 240, wind_mps: 4.5, wind_dir_deg: 260, gust_sigma_mps: 1.0, rain_mm_h: 0, visibility_m: 20000}
+annotations:
+  - {id: enter_w1, type: enter_building, participants: [target_p], window: [35, 55], params: {anchor: ev_w1_door}}
+  - {id: enter_b2, type: enter_building, participants: [target_p], window: [115, 135], params: {anchor: ev_b2_door}}
+relations:
+  - {src: enter_w1, rel: before, dst: enter_b2}
+brief:
+  public_anchors: [ev_market_exit, ev_plaza]
+  targets:
+    - {actor: target_p, description_zh: "身高约 1.86 m，体型中等；上身白色纯色上衣，下身灰色长裤；挎单肩包；步速中等", description_en: "Approx. 1.86 m, medium build; plain white top, grey trousers; shoulder bag; moderate gait"}

@@ -12,6 +12,7 @@ import pytest
 pytest.importorskip("open3d")
 pytest.importorskip("PIL")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "world"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))                     # --import-mode=importlib 下单独运行时引用同目录 test_capture
 
 from awr.sensorsvc.lidar.mesh import INST_NONE, LIDAR_RECORD, MeshLidar
 from awr.sensorsvc.lidar.model import LidarModel, load_lidar_model

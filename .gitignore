@@ -54,6 +54,9 @@ blob-report/
 # Local runtime state (identity lockout and signing keys written by local runs)
 /var/
 /docs-site/_build/
+# 论文数据中超过 5,000,000 字节发布上限的文件（check-release REL-01）：不入库，清单与校验见 research/ccf-tpci/data/external.json，
+# 获取或重新生成用 research/ccf-tpci/data/fetch_external.py
+/research/ccf-tpci/data/m1geo_full.parquet
 # 论文编译中间文件
 /research/ccf-tpci/*.aux
 /research/ccf-tpci/*.log

@@ -1,0 +1,23 @@
+{
+  "name": "@awr/navsvc",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "NavMesh 烘焙与 Detour 查询服务 navsvc（M22 navmesh 阶段、M23 编译器；recast-navigation 0.43.1 WASM，ADR-196）",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.12 <23"
+  },
+  "bin": {
+    "navsvc": "./src/navsvc.mjs",
+    "navmesh-bake": "./src/bake.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@recast-navigation/core": "0.43.1",
+    "@recast-navigation/generators": "0.43.1",
+    "@recast-navigation/wasm": "0.43.1"
+  }
+}

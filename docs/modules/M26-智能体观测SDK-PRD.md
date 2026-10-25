@@ -5,9 +5,9 @@
 | 文档编号 | AWR-M26 |
 | 标题 | 智能体观测 SDK（Agent Observation SDK）PRD：唯一观测出口、L0–L3 观测分级与 `bench/obs.v1` 白名单、lockstep Env 与决策时延、动作空间与动作守卫、通信链路模型、Agent 隔离容器与远程协议、私有地图助手、与 M14 ANet 及 D2 沙盒接口的接合、真值泄漏审计 |
 | 编号说明 | 模块号 M26（[AWR-05](../05-D3-设计增补与决策记录.md) §5.0），需求前缀 `M26-FR-`、`M26-NFR-`，验收前缀 `M26-AC-`，验收要点引用 D3-AC；文件名与 AWR-05 §1.3 登记一致 |
-| 版本 | v1.1 |
-| 日期 | 2026-10-12 |
-| 状态 | 草案 v1.1（P-1，WP-D3-02；按 AWR-05 v1.3 修订：Python SDK 与 3 个基线策略、Realistic 缺省档、`ThermalObs`、内部与受邀提交的隔离、大模型指挥层与推理网关（P1）；修订内容汇总见 §14） |
+| 版本 | v1.2 |
+| 日期 | 2026-10-18 |
+| 状态 | 草案 v1.1（P-1，WP-D3-02；按 AWR-05 v1.3 修订：Python SDK 与 3 个基线策略、Realistic 缺省档、`ThermalObs`、内部与受邀提交的隔离、大模型指挥层与推理网关（P1）；修订内容汇总见 §14）；v1.2：按 AWR-05 v1.6 并入封板收尾批次（S04、S05、A01、A02、A04、A05）的实现口径：Env 的 M25 会话参数、超时沿用规则、在线审计摘要与两级校验、CLOSE 原因取值、参考策略登记与参考检测器实现，汇总见 §15 |
 | 上游文档 | 用户 D3 需求原文、补充要求与 2026-10-12 决策 [inputs/D3-需求原文-2026-10-11.md](../inputs/D3-需求原文-2026-10-11.md)（R-D3-04、05、11、12、14、24、29、32；v1.1 增加 2026-10-12 交互式确认的 R-D3-43、44、45、47、48）；用户设计讨论 design-r1 §七、§九；[AWR-05](../05-D3-设计增补与决策记录.md) §2、§4.1–§4.5、§5.0、§5.4.1、§5.4.2、§5.4.6、§5.5、§5.6.1、§5.6.5–§5.6.7、§7.11、§8、§10–§13，ADR-128、129、136、137、145、146、155、158、159、160、161、162、164；[AWR-04](../04-D2-设计增补与决策记录.md) ADR-093、099、110、123；[AWR-03](../03-设计基线与决策记录.md) ADR-016、027、036、047、049、050；研究 [00-index](../research/d3/00-index.md) §2.7、§3、§4.6、§6，[r6](../research/d3/r6-event-runtime-benchmark.md) §8–§10、§12、§14、§16，[r7](../research/d3/r7-d2-code-audit.md) §0、§3.2、§3.5–§3.7、§3.10、§3.11、§5、§8.5，[r4](../research/d3/r4-mesh-lidar.md) §8，[r8](../research/d3/r8-rerun.md) §10.8；并行模块 [M14](M14-智能体运行时与ANet-PRD.md) §6.2、§6.8、§6.12–§6.14，[M17](M17-沙盒会话与开放接口PRD.md) §7.7，[M18-M19](M18-M19-识别物与感知对抗PRD.md)，[M27](M27-基准运行时与数据集PRD.md)（并行起草） |
 | 下游文档 | M27 PRD（Run 规格中 `policy`、`decision`、`localization`、资源档字段；`EnvRecorderSink` 实现；容器调度）；M24、M25 PRD（PoseHistory 缓冲、路径跟踪器输入、GNSS 误差函数、JPEG 段白名单）；M08、M09 D3 增补节（Bench 注入通道与安全档）；M14 D3 增补节（`AgentNetwork` 链路适配）；17 号说明书 D3 增补节（原因码 660–679、随机流 20、21 的通道）；`docs/impl/D3-*` |
 | 适用版本范围 | V0.3（本期交付 D3）至 V1.0 |
@@ -187,6 +187,8 @@ v1.1 按 AWR-05 v1.3（ADR-175、ADR-176、ADR-183、ADR-185）重排；v1.0 的
 | M26-FR-008 | `close()` 冲刷写入器接口、按 §6.4 停止 Agent、回收预滚与 M25 会话，返回 `RunResult{run_id, env_stats, delivery_digest_sha256, audit}`；本地开发模式另写本地运行目录（`run_manifest.json`、`raw.mcap`），格式与 M27 一致 | P0 | P0a | M26-AC-020 | §5.6.3 |
 | M26-FR-009 | 运行统计 `env_stats`（每 Agent）：调用次数、超时次数、在途最大步数、动作拒绝与限幅次数（按 `why`）、消息发送、投递、丢失、预算丢弃字节数、累积上限丢弃帧数、墙钟阻塞时长（M25 背压与 Agent 等待分列）；写入运行清单（经 M27） | P0 | P0a | M26-AC-020 | §5.5.2 |
 
+实现补充（v1.2，S04）：`BenchEnv` 增加参数 `sensorsvc`（M25 会话与调度器）、`inflight_cap`（缺省为 2 个 tick 的到期帧数）与 `wall_preview`（观测墙预览，由交付帧降采样，不进入 M25 队列）；`manifest.json` 增加 `sensorsvc` 与 `wall_preview` 两段。
+
 ### 4.2 lockstep 与决策时延
 
 | 编号 | 需求描述 | 优先级 | 阶段 | 验收要点 | 依据 |
@@ -206,7 +208,7 @@ v1.1 按 AWR-05 v1.3（ADR-175、ADR-176、ADR-183、ADR-185）重排；v1.0 的
 |---|---|---|---|---|---|
 | M26-FR-020 | 观测档取值 `L0、T0、L1、L2、L2-depth、L3`。排名运行只允许 L1、L2、L2-depth；L3 恒为 `ranked = false`；L0 与 T0 只允许特权运行，其余组合返回 662（组合矩阵见 §7.11） | P0 | P0a | M26-AC-009 | §5.5.3；ADR-159 |
 | M26-FR-021 | 各档观测内容：L1 为 `nav`、`status`、`ground_hint`、`sensors.detections`；L2 为 `nav`、`status`、`ground_hint`、相机 `CameraObs`（RGB）、LiDAR、IMU、GNSS；L2-depth 为 L2 加相机 `depth`（经传感器模型的深度）；L3 同 L2，导航解来自 PX4 EKF（P2） | P0 | P0a（L1、L2 相机、LiDAR、IMU、GNSS）；P0b（热成像）；P2（L3） | M26-AC-006 | §5.5.3 |
-| M26-FR-022 | 白名单序列化：Agent 侧类型与编码器由 `packages/contracts/bench/obs.v1.schema.json` 生成（`additionalProperties: false`）；投影函数逐字段从内部类型构造白名单对象，不复制内部对象、不按字段名剥离。排名运行中每条下发消息在发送前按 schema 校验，失败则不发送并以 644 结束运行（失败即关闭） | P0 | P0a | M26-AC-006 | ADR-161 |
+| M26-FR-022 | 白名单序列化：Agent 侧类型与编码器由 `packages/contracts/bench/obs.v1.schema.json` 生成（`additionalProperties: false`）；投影函数逐字段从内部类型构造白名单对象，不复制内部对象、不按字段名剥离。排名运行中每条下发消息在发送前按 schema 校验，失败则不发送并以 644 结束运行（失败即关闭）。v1.2（A01）：校验分两级，先以由 schema 编译的谓词判定，只在判定失败时运行 jsonschema 给出确切错误与未知字段计数；排名与非排名运行一律失败即关闭；校验对象为四类帧（CONFIG、含 inbox 的 OBS、ERROR、CLOSE），先由线上字节解码再校验 | P0 | P0a | M26-AC-006 | ADR-161 |
 | M26-FR-023 | 唯一出口：Agent 进程能收到的字节只经 `ObsGate.emit()`（CONFIG、OBS、ERROR、CLOSE 四类帧）。`awr.agentsdk.wire` 与 `awr.agentsdk.filter.gate` 只允许 import 生成类型与本模块投影函数，不得 import `awr.sensorsvc` 内部类型以外的路径（import 方向测试） | P0 | P0a | M26-AC-006 | ADR-145 |
 | M26-FR-024 | 观测时间口径：第 k 次调用只包含采集窗口结束时刻 ≤ t_k 的帧；时间戳沿用 M25（相机为中间行曝光中点、LiDAR 为帧首、IMU 为采样时刻）；Env 不做位姿外推，不向 M25 提交位姿尚未推进到的请求 | P0 | P0a | M26-AC-005 | §4.3 规则 4 |
 | M26-FR-025 | 外参与云台：CameraObs、LidarObs、ImuObs 只给 M21 目录的标称挂载 `mount_nominal` 与带噪云台编码器读数 `gimbal_reading`；不得给出 `T_world_cam`、`T_world_sensor`、PoseHistory、SensorRequest、FrameMeta | P0 | P0a | M26-AC-007 | ADR-161 第 (2) 项 |
@@ -275,7 +277,7 @@ v1.1 按 AWR-05 v1.3（ADR-175、ADR-176、ADR-183、ADR-185）重排；v1.0 的
 |---|---|---|---|---|---|
 | M26-FR-070 | 排名运行要求每个 Agent 为 `policy.kind ∈ {image, reference}`（镜像按摘要引用；参考策略以同一 Agent 基础镜像在隔离容器中运行，名称白名单由本模块维护，AWR-05 ADR-170），在独立容器中运行；`sdk`（WS 端点）与进程内模式只允许开发运行，排名请求返回 664 | P0 | P0a | M26-AC-009、010 | §5.5.7；§13 第 16 条 |
 | M26-FR-071 | 容器加固按 §8.1：`--network none`、`--cap-drop ALL`、`no-new-privileges`、只读根文件系统、`/tmp` tmpfs、非 root 用户、`--pids-limit`、资源档配额、无 GPU（`std`）；启动前由启动器自检参数，偏离即 664 | P0 | P0a | M26-AC-010 | §5.5.7；§5.6.7 加固行 |
-| M26-FR-072 | 元数据中性化：主机名固定 `agent`；环境变量只含 `DRONE4D_SOCK`、`DRONE4D_PROTOCOL`；挂载源为 `/run/d3/agents/<随机令牌>/{sock,brief,out}` 的暂存目录，路径不含运行、事件、世界、划分标识；简报文件为复制件 | P0 | P0a | M26-AC-010 | F15 |
+| M26-FR-072 | 元数据中性化：主机名固定 `agent`；环境变量只含 `DRONE4D_SOCK`、`DRONE4D_PROTOCOL`；挂载源为 `/run/d3/agents/<随机令牌>/{sock,brief,out}` 的暂存目录，路径不含运行、事件、世界、划分标识；简报文件为复制件；v1.2（A08）：启动器尚未满足本条（主机名、随机令牌目录、`DRONE4D_SOCK` 与 `DRONE4D_PROTOCOL`），以 strict xfail 跟踪（AWR-05 §26.5 F-37） | P0 | P0a | M26-AC-010 | F15 |
 | M26-FR-073 | 本地套接字线协议 `drone4d.bench.wire.v1`（§7.7）：帧长度上限（OBS 128 MiB、ACT 8 MiB、HELLO 与 READY 64 KiB），msgpack 解码设置长度上限，未知帧类型、超长、解码失败按 666 处理；连续 3 次协议错误终止该 Agent | P0 | P0a | M26-AC-019 | 本文设定 |
 | M26-FR-074 | 开发用 WS：`WS /api/bench/v1/runs/{rid}/agents/{aid}`（bench-api 挂载，M26 提供传输适配），帧与本地套接字相同（去掉 4 字节长度前缀）；以会话派生的 10 min 短期令牌鉴权；断线后 30 s 宽限期内可重连，超时视为崩溃 | P0 | P0a | M26-AC-019 | §8.2；§7.11 |
 | M26-FR-075 | 容器生命周期按 §6.4：HELLO 超时 60 s、READY 超时 30 s；运行中退出视为崩溃（665），机体执行 `hover` 后 `land`，排名运行中不重启；回合结束发送 CLOSE，10 s 后 SIGTERM，再 10 s 后 SIGKILL | P0 | P0a | M26-AC-010 | 本文设定 |
@@ -287,8 +289,8 @@ v1.1 按 AWR-05 v1.3（ADR-175、ADR-176、ADR-183、ADR-185）重排；v1.0 的
 
 | 编号 | 需求描述 | 优先级 | 阶段 | 验收要点 | 依据 |
 |---|---|---|---|---|---|
-| M26-FR-080 | Python SDK `drone4d`（`tools/sdk/drone4d/`，独立 wheel，不依赖 `awr`）：`DroneAgent` 基类、`drone4d.bench.make`、容器内运行器 `drone4d-agent run module:Class`、生成类型、JPEG 解码与点云视图工具、PettingZoo 与 Gymnasium 包装、示例、中英文文档；Python 3.11–3.13 | P0 | P0a | M26-AC-030 | §5.5.8 路径 |
-| M26-FR-081 | （v1.1 增补：另交付 3 个基线策略作为排行榜参考行，见 M26-FR-120 至 FR-123）参考策略：r6 的 6 种机队策略（`hover1_plaza`、`hover3_anchors`、`lawn3_cover`、`track3_nocomm`、`track3_share`、`track5_share`）以 L1 运行与 r6 指标同一量级；另提供基于 M10 `lawnmower` 生成器的覆盖扫描与 M20 特权基线（只在 L0 特权运行） | P0 | P0a | M26-AC-018 | D3-AC-18；r6 §12.3 |
+| M26-FR-080 | Python SDK `drone4d`（`tools/sdk/drone4d/`，独立 wheel，不依赖 `awr`）：`DroneAgent` 基类、`drone4d.bench.make`、容器内运行器 `drone4d-agent run module:Class`（v1.2 实现差异，A03：入口没有 `run` 子命令，写作 `drone4d-agent module:Class`，等价于 `python -m drone4d.serve`；修订本条或补子命令待定，AWR-05 §25.5）、生成类型、JPEG 解码与点云视图工具、PettingZoo 与 Gymnasium 包装、示例、中英文文档；Python 3.11–3.13 | P0 | P0a | M26-AC-030 | §5.5.8 路径 |
+| M26-FR-081 | （v1.1 增补：另交付 3 个基线策略作为排行榜参考行，见 M26-FR-120 至 FR-123）参考策略：r6 的 6 种机队策略（`hover1_plaza`、`hover3_anchors`、`lawn3_cover`、`track3_nocomm`、`track3_share`、`track5_share`）以 L1 运行与 r6 指标同一量级；另提供基于 M10 `lawnmower` 生成器的覆盖扫描与 M20 特权基线（只在 L0 特权运行）。v1.2（A04）：6 个 r6 行名登记为参考策略名（`drone4d.baselines.REFERENCE6`、`BASELINES` 键、`run_spec` 的 `policy.name` 枚举），每行的策略类、机数与 `comm.enabled` 见 §14.3；`REFERENCE6` 另按事件类型保存 `per_event`。v1.6（K10，AWR-05 ADR-217 决策 (1)）：`REFERENCE6[*].params` 绑定 r6 观测设置（hover 60 m 注视锚点、lawnmower 70 m、tracker 岗位 60 m、跟踪时 45 m）与 `hfov_deg = 40`，`BASELINES[<r6 行>]` 以 `functools.partial` 绑定该行 `params`；D3-AC-18 的 r6 对照条款按 AWR-05 ADR-218 判定 | P0 | P0a | M26-AC-018 | D3-AC-18；r6 §12.3 |
 | M26-FR-082 | 私有地图助手（SDK 库，在 Agent 进程内运行）：稀疏 8³ 块哈希 log-odds 占据（体素 0.25 m）、可选 TSDF；`integrate(points, per_point_poses)`、`frontiers(min_cluster)`（聚类与可达性过滤）、`export_delta(since)`、`merge(delta)`（log-odds 相加并截断）；一律按逐点位姿积分；CPU 实现为缺省，GPU（Warp）为可选 | P1 | P1 | M26-AC-017 | §5.5.6；F13 |
 | M26-FR-083 | 定位轨道：`localization = estimated`（缺省）时地图助手使用导航解与逐点时刻插值的位姿；`oracle` 时导航解等于真值，只用于开发运行或单列分组；D3-AC-27 的 ≤ 0.2 m 指标在 `oracle` 下验收，`estimated` 下单独报告 | P1 | P1 | M26-AC-017 | §13 第 4 条 |
 | M26-FR-084 | Frontier 协同探索参考策略：基于地图助手与消息交换增量，供 town 协同探索演示（≥ 5 机） | P1 | P2 | M26-AC-018 | D3-AC-52 |
@@ -516,7 +518,7 @@ stateDiagram-v2
 |---|---|---|---|
 | VALIDATING | 校验 §7.11 组合矩阵、世界与磁带哈希、机型与传感器、资源档、`policy.kind` | 全部通过 | 返回原因码；不启动任何进程 |
 | OPENING | 组装 sim-core、打开物理档（Fast 档注册 `pose_history` 与接触 stage）、`SensorBackendV2.open`、启动 Agent 容器并等待 HELLO | 全部 HELLO 在 60 s 内到达 | 665（容器）、683（资源），M27 按状态机重试 |
-| PREROLL | 推进 `[−t_pre, 0)`，向 M25 提交 SLAM 合同所需的预滚帧（不交付 Agent） | t = 0 | 物理档失败按 630 段处理 |
+| PREROLL | 推进 `[−t_pre, 0)`，向 M25 提交 SLAM 合同所需的预滚帧（不交付 Agent）；v1.2（S14）实现：`python/awr/agentsdk/env/preroll.py`；`EventTimeTier` 的档内时间 = 事件时间 + `t_pre`，PoseHistory 以负时刻保存预滚窗口；`BenchEnv` 接受 `preroll_s`（缺省 2.0，0 为关闭）；窗口报告写入运行清单 `tier_info.preroll`；静止判据暂定为 static 0.05 m/s 与 0.05 rad/s、hover_hold 0.1 m/s 与 0.2 rad/s、平均比力 1 ± 0.01 g，在 P-1 冻结 | t = 0 | 物理档失败按 630 段处理 |
 | CONFIGURING | 下发 CONFIG，等待 READY（30 s） | 全部 READY | 超时 Agent 计 665 `why = ready_timeout`；排名运行整体中止 |
 | STEPPING | §6.6.1 主循环 | 回合结束条件（FR-005） | 644 立即中止；单 Agent 崩溃不中止运行（FR-075） |
 | DRAINING | 发送 CLOSE；停止容器；复制 `/out`；冲刷写入器；输出运行统计与审计摘要 | 完成 | 写入器失败交 M27 |
@@ -680,6 +682,10 @@ def _settle(self, s, act, t_k):
 2. 迟到的 ACT（`k` 小于当前在途 `k_obs`）丢弃，回执 `late`；`k` 大于当前在途值或重复的 ACT 计协议错误（666）。
 3. 动作生效时刻按主时钟 tick 量化；物理步粒度由 `clock_profile` 决定（缺省 `{d1_250, 250, 250, 250}` 每 tick 一步；`l1_hz = 125` 的吞吐档每 2 tick 一步），setpoint 在其后第一个物理步生效，规则与 D2 批处理相同（F16）。
 4. 确定性边界：`fixed` 模式下只要 Agent 不超时，τ 与生效时刻与墙钟无关；`per_step` 模式只有在墙钟耗时超过 `step_budget_s` 时才引入墙钟依赖，此时运行被标记，M27 据此决定排名有效性。
+5. v1.6（K05）磁带核对：BenchEnv 构造时在 `open_tape` 之后、创建录制器之前调用 `awr.agentsdk.env.tapecheck.check_tape_world`。磁带头 `world.content_version` 须等于世界 `world.json` 的 `contentVersion`，否则报 615 `TAPE_WORLD_MISMATCH`，不创建运行目录、不启动 gz；无 `world.json` 的夹具世界只允许用于非正式运行。正式运行（ranked 且 `physics = realistic`，ADR-196 决策 (5)）另以 615 拒绝：栅格生成器磁带（`why = grid_generator`）、来源缺失（`provenance_missing`）、NavMesh 摘要与世界 `detour-navmesh@1` 图层的 `bin.sha256` 不符（`navmesh_mismatch`）、世界缺该图层（`navmesh_layer_missing`）、磁带未记录 NavMesh 摘要（`navmesh_unrecorded`）与缺 `world.json`（`world_manifest_missing`）。核对结果写入运行清单的 `tape_check` 字段。
+6. v1.6（B10）L2 主循环的实现：在上述语义不变的前提下，网格 LiDAR 由工作进程池计算（`awr/agentsdk/env/l2.py` 的 `_LidarPool`，CPU 参考每架机一个工作进程，至多 4 个）；相机先为全部机提交、再统一取回；可见度真值归约与观测记录移到后台线程，观测记录在线程中写出（remote 运行时为 `async_obs_record`）；规范观测摘要 `canonical_sha256` 按增量计算；IMU 偏置随机游走以增量缓存 `BiasWalk` 计算（`awr/sensorsvc/imu.py`）；IMU、GNSS 合成与点云等待重叠。以上改动的输出逐字节不变（与改动前正式 Run 的 `obs.sha256`、`acts.jsonl`、真值文件、`pose_sha256` 与 `evaluation.json` 对拍相同）。剖析结论：共享卡上主循环以 Agent 计算（std 资源档单核，基线每步约 110–125 ms）为下限；B10 第 2 轮 L2 墙钟比由 3.66–4.73 降到 2.12–2.49（[AWR-05 §30.3 第 86 行](../05-D3-设计增补与决策记录.md)，记录见 [impl/D3-P0a-正式口径记录.md](../impl/D3-P0a-正式口径记录.md) §2.1）。
+7. v1.6（B10）L2 网格 LiDAR 后端：由 `L2Config.lidar_backend`（`cpu` | `warp`）给出，未给出时取 `AWR_ENV_LIDAR_BACKEND`，缺省 `cpu`；Env 不读 sensorsvc 的 `AWR_LIDAR_BACKEND`（其缺省 `auto` 会随机器是否有 GPU 改变点云）。正式口径（`mbl_e2e` 配置键 `lidar_backend`，进入配置指纹）取 `warp`，即 M25 GPU 产品路径，与 S20、S21 的标准轨在线测量为同一路径；运行清单记录 `l2.lidar_backend`；与 CPU 参考实现的差异按 D3-AC-12 判定（实测 120 帧点集相同，坐标最大差 5.7e-6 m）。
+8. v1.6（K07）世界查询：Env 经 `awr.agentsdk.env.core.open_world_query(world_dir, formal=)` 打开世界查询，返回（查询, `world_query`）。正式运行（`is_formal`：排名且 `physics = realistic`）打不开网格查询时抛 `WorldQueryFallbackRefused`，不退回 DSM 查询，注入 DSM 查询的正式运行同样拒绝；非正式运行记录 warning 后退回 DSM。运行清单 `manifest.json`（`drone4d.bench.env_run.v1`，非契约）记录 `world_query{kind ∈ {mesh, dsm, other}, class, fallback?{reason ∈ {no_mesh_layer, mesh_open_failed}, error}}`。`runner.run_job`、`proto_board._one` 与 `r6_ec reeval` 按 `is_formal(spec)` 打开世界。正式运行前须预生成世界派生缓存（dmax `geo_cache.sh warm`，19 号说明书 dmax 节），不在线派生；测试 `tests/d3/env/test_world_query.py`（6 个用例）。
 
 #### 6.6.2 观测投影与白名单编码
 
@@ -814,6 +820,8 @@ def truth_target(self, s, nav_int, t_k):                                        
 ```
 
 注入规则：`velocity` 在 `apply_tick` 以 `Setpoint32` 注入，此后每个控制步重发同一设定（保持规则 FR-055）；`goto/orbit/path/rtl` 在 `apply_tick` 以真值系目标启动 M24 路径跟踪器，此后每个控制步以 `truth_target` 更新目标（变化 ≥ 5 cm 时）；`takeoff`、`land`、`gimbal`、`zoom`、`sensor_mode` 以 `CommandEngine.handle` 注入，principal `bench:<run_id>/<uav_id>`，命令参数按 `commands.json` 的 `args_schema` 校验。
+
+v1.6（B10）帧证据登记：`ActionGuard.saw_frames(frames)` 登记 L2 与 L2-depth 交付给该机的全部（传感器, 帧序号），`BenchEnv._observe` 在 L2 时调用（实现 `python/awr/agentsdk/env/guard.py`、`core.py`）；此前只从 L1 检测（`saw(dets)`）登记，L2 的框证据（`sensor`、`frame_seq`、`bbox_xywh`，无 `det_id`）引用的帧从未登记，B10 第 1 轮 L2 的 738 条 report 全部以 663 `evidence_unknown` 被拒。修正后 663 `evidence_unknown` 只针对未交付的帧；测试 `tests/d3/env/test_l2.py::test_l2_frame_evidence_reports_are_accepted`；B10 第 2 轮 L2 的 722 条 report 全部附证据并被接受。
 
 #### 6.6.6 链路模型
 
@@ -1167,6 +1175,7 @@ JPEG 允许段：SOI（FFD8）、APP0 JFIF（FFE0）、DQT（FFDB）、SOF0（FF
 | `window` | object | `t_start_ns`、`t_end_ns` |
 | `position_enu_m` | f64[2] 或 f64[3] | 估计系位置 |
 | `confidence` | f32 | [0, 1] |
+| `event`（可选，v1.2，A09，只增） | string | 模式 `^[a-z][a-z0-9_]{0,47}$`；只用于 `vehicle_event`（`depart`、`turn`、`stop`、`park`、`enter_zone`、`exit_zone`），EU 以其与同类型车辆关键事件匹配 |
 
 ### 7.6 观测空间与动作空间（Gymnasium 映射）
 
@@ -1202,7 +1211,7 @@ JPEG 允许段：SOI（FFD8）、APP0 JFIF（FFE0）、DQT（FFDB）、SOF0（FF
 | READY | 0x03 | A → E | `{}` | 64 KiB |
 | OBS | 0x10 | E → A | `{obs, inbox}` | 128 MiB |
 | ACT | 0x11 | A → E | `act.v1` | 8 MiB |
-| CLOSE | 0x20 | E → A | `{reason}`（枚举） | 4 KiB |
+| CLOSE | 0x20 | E → A | `{reason}`（枚举，以 `bench/wire.v1` 为准；v1.2：宿主侧只使用 `run_ended`（正常结束）与 `shutdown`（中止），此前的 `episode_end`、`run_failed` 不在 schema 内，已修正） | 4 KiB |
 | BYE | 0x21 | A → E | `{}` | 4 KiB |
 | ERROR | 0x30 | E → A | `{code, why}`（不含自由文本） | 4 KiB |
 | PING / PONG | 0x40 / 0x41 | 双向（只 WS） | `{}` | 64 B |
@@ -1227,7 +1236,7 @@ JPEG 允许段：SOI（FFD8）、APP0 JFIF（FFE0）、DQT（FFDB）、SOF0（FF
 
 | 码 | 名称 | 场景 | `why` 枚举（节选） | 状态 |
 |---|---|---|---|---|
-| 661 | `AGENT_TIMEOUT` | 墙钟预算超时（回执与运行统计） | `wall_budget` | 已登记（§8.4） |
+| 661 | `AGENT_TIMEOUT` | 墙钟预算超时（回执与运行统计）；v1.2（S05）：超时回执为 661 `timeout`，沿用上一次被接受的导航与云台指令，一次性条目（`msgs`、`report`、`zoom`）不重放；被拒绝的动作不改变沿用指令 | `wall_budget` | 已登记（§8.4） |
 | 662 | `OBS_LEVEL_FORBIDDEN` | 排名运行或 test 划分请求 L0、T0、训练奖励；L3 排名 | `l0_ranked`、`t0_ranked`、`reward_privileged`、`l3_ranked` | 已登记 |
 | 663 | `ACTION_REJECTED` | 动作项被拒 | `schema`、`non_finite`、`op_forbidden`、`sensor_locked`、`gimbal_range`、`zoom_range`、`keepout_static`、`evidence_missing`、`evidence_unknown_frame`、`report_vocab`、`landed_state` | 已登记 |
 | 664 | `AGENT_ISOLATION_VIOLATION` | 隔离条件不满足 | `inproc_ranked`、`sdk_ranked`、`container_flags`、`mount_leak`、`env_leak`、`resources_class` | 已登记 |
@@ -1289,7 +1298,7 @@ D2 沙盒加载器忽略这两个段（只增可选属性）；SDK `drone4d.flee
 
 | 项 | 规定 | 目的 |
 |---|---|---|
-| 镜像 | 按摘要引用（`image@sha256:…`）；基础镜像 `drone4d-agent-base`（Python 3.11、`drone4d` SDK、运行器入口），研究者镜像 `FROM` 该镜像 | 可复现、可审计 |
+| 镜像 | 按摘要引用（`image@sha256:…`）；基础镜像 `drone4d-agent-base`（Python 3.11、`drone4d` SDK、运行器入口），研究者镜像 `FROM` 该镜像（v1.2 实现差异，A03：现有基础镜像 `d3-agent-py` 为 `python:3.12-slim`） | 可复现、可审计 |
 | 网络 | `--network none` | 无任何网络出口（含 dmax 内网、公网、bench-api、catalog、沙盒 API、lab-gateway） |
 | 权限 | `--cap-drop ALL`、`--security-opt no-new-privileges`、`--user 65534:65534`、不挂载 docker 套接字、无 `--privileged`、无设备 | 最小权限 |
 | 文件系统 | `--read-only`；`/tmp` 为 tmpfs 1 GiB（`nosuid,nodev`）；`/out` 为宿主侧按 Agent 创建的 2 GiB tmpfs（或 XFS 项目配额目录），以绑定挂载提供 | 不可写镜像层；输出有界 |
@@ -1297,9 +1306,11 @@ D2 沙盒加载器忽略这两个段（只增可选属性）；SDK `drone4d.flee
 | 元数据 | `--hostname agent`；环境变量只有 `DRONE4D_SOCK=/run/drone4d/agent.sock`、`DRONE4D_PROTOCOL=drone4d.bench.wire.v1`；不继承宿主环境；容器名 `d3-agent-<run_id>-<aid>` 与标签只在宿主可见 | 元数据中性 |
 | 资源（`std`） | `--cpus 2`、`--memory 8g`、`--memory-swap 8g`、`--pids-limit 256`、`--ulimit nofile=1024:1024`、无 GPU | 排名公平、主机安全 |
 | 资源（`large`，开发运行） | `--cpus 8`、`--memory 32g`、可选 `--gpus '"device=N"'`（按 AWR-05 §4.7 单卡绑定并计入 M27 份额） | 研究开发 |
-| 系统调用 | 开发运行使用 Docker 缺省 seccomp；正式评测（内部与受邀成员，v1.1 起 P0b）使用 gVisor（`--runtime runsc`）或 seccomp 缺省档 | ADR-164、ADR-183 |
+| 系统调用 | 开发运行使用 Docker 缺省 seccomp；正式评测（内部与受邀成员，v1.1 起 P0b）使用 gVisor（`--runtime runsc`）或 seccomp 缺省档；v1.2（B24）：seccomp 配置 `d3-agent-v1` 以 `--security-opt seccomp=<文件>` 显式指定（`awr.agentsdk.env.containers.seccomp_profile`；缺省动作 EPERM，`clone` 只放行不带命名空间标志的调用，`clone3` 返回 ENOSYS，逃逸类系统调用 KILL_PROCESS，退出码 159）；`PIDS_LIMIT = 256`、`TMPFS_MB = 256` | ADR-164、ADR-183 |
 | 日志 | stdout 与 stderr 写入 `/out/agent.log`（上限 64 MiB，超出截断），不进入 Env 日志 | 不形成回流通道 |
 | 停止 | `--stop-timeout 10`；回合结束发送 CLOSE，10 s 后 SIGTERM，再 10 s 后 SIGKILL | 有界回收 |
+| 现状（v1.2，A08） | 启动器尚未满足本表"挂载"与"元数据"两行（主机名、随机令牌目录、`DRONE4D_SOCK` 与 `DRONE4D_PROTOCOL`），以 strict xfail 跟踪；生产配置的元数据标识命中为 0（A08 实测） | 记录差距 |
+| 审计模式（v1.2，B24） | `AWR_AGENT_HARDEN_AUDIT=1` 时：Agent 的 `--network` 为 `container:<agent>-mon`，监视容器 `<agent>-mon` 先于 Agent 启动，为 `--network none`、uid 65534、`--cap-drop ALL`、只读根、`--pids-limit 8`、`--cpus 0.1`、`--memory 32m`，读取 snmp `OutNoRoutes` 计数，Agent 仍只看到 lo；另以只读方式挂载诱饵目录到 `/data/d3/hidden`（内含 `index.json` `{}`，真实隐藏存储从不挂载），宿主侧以 inotify 记录访问；进程数与 shmem 峰值经 Engine API 读取；每个触发的向量写一条 691 拒绝记录（`why = hardening`，`vector`）到 `agents/<uav>/hardening.jsonl`；监视容器不可用时以 664 拒绝启动。局限：被 seccomp 终止的子进程只记录在宿主内核日志（type=1326，读取需要 CAP_SYSLOG），对不存在路径的 open 不可观测（AWR-05 §23.5 C-30）；测试 `tests/d3/submit/test_redteam.py`（26 个用例） | 红队审计（D3-AC-59） |
 | 自检 | 启动器在 `docker create` 后、`start` 前以 `docker inspect` 核对 `NetworkMode`、`CapDrop`、`ReadonlyRootfs`、`User`、`Mounts`（恰为 3 处）、`Env`（恰为白名单）、`Hostname`、`NanoCpus`、`Memory`、`PidsLimit`、`DeviceRequests`，任一不符即 664 `why = container_flags` | 配置漂移防护 |
 
 ### 8.2 泄漏通道登记表
@@ -1307,12 +1318,12 @@ D2 沙盒加载器忽略这两个段（只增可选属性）；SDK `drone4d.flee
 | 编号 | 通道 | 风险 | 措施 | 用例（`tests/d3/leak_redteam/`） | 阶段 |
 |---|---|---|---|---|---|
 | L-01 | 内部帧对象（ObsFrame 内的 SensorRequest 真值位姿窗口、FrameMeta 中的 seed 与磁带哈希） | 真值位姿、种子直接外泄 | 投影白名单；内部对象不出 Env；变异测试 | `test_projection_mutation.py` | P0a |
-| L-02 | 真值外参 `T_world_cam`、`T_world_sensor` | 本机真值位姿 | 只给标称挂载与带噪编码器读数 | `test_extrinsics.py` | P0a |
+| L-02 | 真值外参 `T_world_cam`、`T_world_sensor` | 本机真值位姿 | 只给标称挂载与带噪编码器读数；v1.2 已检出缺陷（A06）：`env/nav.py` 的 `NavModel` 导航解姿态 `q_wb_xyzw` 与角速度取真值（FR-040 的姿态误差未实现，导航位置白噪声 0.05 / 0.10 m 也未实现），L2 运行 R1 72 帧、R2 147 次命中，全部在 `obs/nav/q_wb_xyzw`；以严格 xfail 跟踪，修复前 D3-AC-16 不能判通过；修复归 M26（`python/awr/agentsdk/env/nav.py`，或 M25 `nav_solution`），任务待指派 | `test_extrinsics.py` | P0a |
 | L-03 | 实例、语义、可见度、逐点实例 | 演员身份与位置 | 只进 TruthFrame 与真值文件 | `test_struct_scan.py` | P0a、P0b |
-| L-04 | L1 检测真值 id、`n_in_fov`（D2 M19 C3） | 理想数据关联 | 匿名 `det_id`；无 `n_in_fov`；映射只入评测库 | `test_detid.py` | P0a |
-| L-05 | L1 列表次序 | 次序即演员序号 | 按 `det_id` 排序 | `test_detid.py::order` | P0a |
+| L-04 | L1 检测真值 id、`n_in_fov`（D2 M19 C3） | 理想数据关联 | 匿名 `det_id`；无 `n_in_fov`；映射只入评测库；v1.2（A07）：`det_id` 由"直接下发计数器 RNG 内部派生键 `hex64(seed, 21, ag, seq, 4)`"改为带密钥的 BLAKE2b 单向摘要（密钥 `det_id_key(seed)` 由运行种子以 BLAKE2b 派生，个性化串 `d4d-l1-detid-key`，常量 `DET_ID_PERSON`）；跨帧不可关联、不暴露内部随机键、不能作反演输入；schema 不变（`^[0-9a-f]{16}$`）；实现 `python/awr/agentsdk/env/l1.py`，验证 `tests/d3/leak_redteam/test_inversion.py` | `test_detid.py` | P0a |
+| L-05 | L1 列表次序 | 次序即演员序号 | 按 `det_id` 排序；v1.2（A07）：次序秩相关检验（R4 A4）见 `tests/d3/leak_redteam/test_inversion.py` | `test_detid.py::order` | P0a |
 | L-06 | LiDAR `tag` 的识别物语义（D2 C7） | 逐点演员标记 | Livox 语义、保留位断言、互信息检验 | `test_lidar_tag.py` | P0b |
-| L-07 | 排名运行种子与派生值 | 噪声可反演 | 种子只在 Env 内存；`agent_seed` 经 HMAC；R2、R3 检索与反演 | `test_seed_scan.py`、`test_inversion.py` | P0a |
+| L-07 | 排名运行种子与派生值 | 噪声可反演 | 种子只在 Env 内存；`agent_seed` 经 HMAC；R2、R3 检索与反演（v1.2，A06：导航解姿态取真值的缺陷见 L-02，同时影响 R3 反演的前提） | `test_seed_scan.py`、`test_inversion.py` | P0a |
 | L-08 | 磁带与事件哈希、事件 id、划分 | test 变体识别 | CONFIG 不含；R2 检索 | `test_seed_scan.py` | P0a |
 | L-09 | 航点收敛（真值系跟踪） | 本机真值位姿 | 估计系换算（FR-052） | `test_attack_goto.py` | P0a |
 | L-10 | 天底检测（地面位置以真值为参照） | 本机真值位置 | 以本机导航误差为参照（FR-033） | `test_attack_nadir.py` | P0a |
@@ -1344,11 +1355,25 @@ D2 沙盒加载器忽略这两个段（只增可选属性）；SDK `drone4d.flee
 | R3 种子与噪声反演 | 候选集 = 收到的全部整数字段值、非图像载荷中的全部 4 与 8 字节窗口、`agent_seed`、[0, 2²⁰) 的小整数、`run_id` 的 base32 解码值；对每个候选重算 GNSS GM、导航误差、L1 地面位置噪声，与真实噪声实现比对；并以"导航解减去候选噪声"估计本机位置 | 全部候选的噪声复现相关系数 ≤ 0.5；修正后位置误差 RMS 与标称 σ 之比的 95% 置信下界 ≥ 0.9（样本 ≥ 200） |
 | R4 行为攻击 | 攻击 Agent 库：A1 航点收敛后以指令点估计本机位置；A2 悬停于演员上方以检测地面位置估计本机位置；A3 跨帧比较 `det_id` 与比特统计；A4 列表次序与演员序号的秩相关；A5 逼近演员观察限幅回执；A6 撞向演员观察接触标志；A7 读取链路相关字段；A8 测量观测到达间隔与可见演员数的相关；A9 `tag` 与逐点实例的互信息；A10 反射率分类器；A11 容器内探测网络、挂载信息、主机名、环境变量、`/proc/1/cmdline` | A1、A2 估计误差 RMS / σ_h 下界 ≥ 0.9；A3 跨帧关联率 0、比特与 `actor_no` 卡方 p ≥ 0.01；A4 秩相关绝对值 ≤ 0.05；A5、A6 与演员相关的限幅与接触事件 0；A7 字段不存在；A8 绝对值 ≤ 0.3（应交付）；A9 ≤ 0.01 bit/点；A10 AUC ≤ 0.75（应交付）；A11 连接全部失败、标识 0 |
 
-输出 `leak_audit_report.json`：配置、用例、判据、统计量、置信区间、命中明细（真值值只写在评测库副本中，报告正文只写命中计数与字段路径）。
+输出 `leak_audit_report.json`：配置、用例、判据、统计量、置信区间、命中明细（真值值只写在评测库副本中，报告正文只写命中计数与字段路径）。v1.2（A06）：输出标签为 `drone4d.bench.leak_audit_report.v1`，写入 `run_dir/leak_audit_report.json`，尚无契约 schema；报告按类给出命中帧数（真实泄漏逐帧重复，偶然吻合孤立出现）。
+
+v1.2 检测规则实现口径（A06）：
+
+1. ±1 s 窗口按离散样本取值：10 Hz 网格加该帧自身的时间戳，不做连续扫描；连续扫描会使合法的带噪测量偶然落入 1 mm 管内。
+2. R1 数值匹配为成对匹配：同一容器内两个不同的值须分别匹配同一真值向量的两个分量；坐标恰为 0 等平凡值分量不参与成对匹配。
+3. 4 字节编码按相邻分量对（8 字节窗口）检索；单个 float64 值只在高熵时检索。
+4. 云台角以对编码器噪声的 Poisson 检验判定；演员位置以相对 ±60 s 平移的条件二项检验判定；CONFIG `brief/**` 下的值报告为公开重叠（L-16）。
+5. 孤立命中：1 mm 容差下导航解与本机真值的偶然吻合约 1e-6/帧，正式口径约 5 万帧时期望约 0.05–0.25 次；B10 在正式运行上见到单次孤立的本机位置命中时应复核，不直接判失败。
+
+v1.2 补记（A07，R3、R4）：R3 采用白化增量域口径：以公开标称 σ、τ 白化导航 GM 误差，消除 τ = 60 s 长相关的样本自相关；候选集为整数字段、非图像载荷 4 与 8 字节窗口、`agent_seed`、[0, 2^20) 小整数与 `run_id` base32 解码；判据为候选不含运行种子与派生键、相关系数 ≤ 0.5、修正后 RMS/σ 的 95% 下界 ≥ 0.9。R4 包括 A1 航点收敛、A3 跨帧 `det_id` 关联率为 0 加卡方检验、A4 次序秩相关、A5 与 A7 在线限幅与链路字段缺失；另覆盖特权档 662 与 target_search 简报扫描。导航位置白噪声落地后（L-02），R3 的导航位置反演须把白噪声通道并入候选重算。
+
+v1.2 补记（A08，R2）：毫米定点成对模式须排除整米值与公开起点（整米起点在运动学档下与 LiDAR `offset_time_ns` 的 5 µs 公开时序网格相邻两值逐字节相同，会造成假阳性）；LiDAR `offset_time_ns` 网格属于公开时序。正式规模下带噪导航解与 GNSS 解在 1 mm 内与本机位置或外参的吻合属偶然吻合，推荐按标称噪声以泊松检验判定（与 `r1.gimbal` 同一方法）；实现前按 A08 孤立偶然吻合规则执行：只限导航与 GNSS 字段、每字段每帧至多一次、每运行至多 6 帧（AWR-05 §23.5 C-22，待确认）。
 
 ### 8.4 在线审计摘要
 
 每个运行在运行统计中输出 `audit{schema_checked, schema_violations, jpeg_segment_violations, lidar_tag_violations, privileged_encoder_instances, brief_anchor_overlap[], timeout_ratio, wallclock_dependent, container_selfcheck}`；排名运行中 `schema_violations`、`jpeg_segment_violations`、`lidar_tag_violations`、`privileged_encoder_instances` 必须为 0（否则运行已以 644 或 662 中止）。
+
+实现现状（v1.2，A01）：已实现字段为 `schema_checked`、`schema_valid`、`schema_violations`、`unknown_fields`、`jpeg_segment_violations`、`lidar_tag_violations`、`decode_violations`、`passed`、`by_kind{config, obs, error, close}`、`by_uav`、`timing{obs_check_ms_mean, p99, max}` 与 `samples`（至多 20 条，只含路径与键名）；写入 `<run>/agents/obs_audit.json`，摘要并入 `manifest.json.obs_audit`；范围为四类帧（CONFIG、含 inbox 的 OBS、ERROR、CLOSE），先由线上字节解码再校验。`privileged_encoder_instances`、`brief_anchor_overlap`、`timeout_ratio`、`wallclock_dependent` 与 `container_selfcheck` 尚未实现。D3-AC-16、56 的 `obs.v1` 全量校验计数在本地完成，正式数字由 B10 采集。
 
 ---
 
@@ -1490,7 +1515,7 @@ D2 沙盒加载器忽略这两个段（只增可选属性）；SDK `drone4d.flee
 | M26-AC-019 | P0a | wire.v1 编解码往返；模糊测试 10⁵ 例 Env 不崩溃、内存增量 ≤ 64 MB、按 666 处置、连续 3 次终止该 Agent；开发用 WS：往返、令牌过期拒绝、30 s 内重连恢复、超时视为崩溃；调试写入器产出 `agent.<uav>.rrd` 并注册到 `agent` 层 | `tests/d3/wire/`、`tests/d3/container/test_lifecycle.py` | 本机、dmax | — |
 | M26-AC-020 | P0a | 每个下发帧的交付摘要与 MCAP 存档字节 sha256 一致；ACT 原始字节、消息记录、report 全部入档；注入写入器阻塞时 Env 阻塞且丢帧 0；运行统计与在线审计字段齐全，排名运行特权编码器实例化 0 | `tests/d3/env/test_recording.py`（与 M27） | dmax | 19 |
 | M26-AC-021 | P0a | Env 每步开销 p99 ≤ 1.5 ms + 0.15 ms × N（N = 3、10）；1 MiB OBS 帧 p99 ≤ 3 ms、空 ACT 往返 p99 ≤ 0.5 ms；Env 内存 ≤ 1.5 GB + 64 MB × N；L2 3 机 720p 最坏档 + 参考策略实时因子 ≥ 1.0；schema 校验 ≤ 0.3 ms/条 | `tools/bench/d3/env_overhead.py` | 独占 A40（未到位时按 AWR-05 §4.7 条件通过）、dmax | 11 |
-| M26-AC-022 | P0a、P0b | 地面起飞静止窗口与空中出生悬停窗口均位于 t < 0；预滚期间 Agent 收到帧 0、被请求动作 0；预滚 IMU 与 LiDAR 帧进入 SLAM bag 而不进入 OBS；k = 0 观测时间为 0；悬停窗口末速度 ≤ 0.1 m/s | `tests/d3/env/test_preroll.py` | dmax | 13（静止窗口） |
+| M26-AC-022 | P0a、P0b | 地面起飞静止窗口与空中出生悬停窗口均位于 t < 0；预滚期间 Agent 收到帧 0、被请求动作 0；预滚 IMU 与 LiDAR 帧进入 SLAM bag 而不进入 OBS；k = 0 观测时间为 0；悬停窗口末速度 ≤ 0.1 m/s | `tests/d3/env/test_preroll.py` | `tests/d3/slam/test_rig.py`（v1.2，S14 实际位置；原写 `tests/d3/env/test_preroll.py`） | 13（静止窗口） |
 | M26-AC-023 | P1 | GCS 节点参与链路模型，观测只含 `t_ns`、`comm`、收件箱；GCS 节点装载 `Allocator` 实现只用简报与消息完成分配；计费与投递记录正确 | `tests/d3/link/test_gcs.py` | 本机 | — |
 | M26-AC-024 | P2 | Realistic 档：步数授权与 `step_done` 对齐（帧时间戳与 tick 差 0）；估计系换算经路径跟踪器生效；`pose_history_hz` ≥ 200；两档下观测 schema 与字段集合一致 | `tests/d3/gz/test_env_realistic.py` | 独占 A40 | 34、35 |
 | M26-AC-025 | P2 | L3 运行 `ranked = false`；导航解取自 PX4 EKF；动作映射到 PX4 offboard 速度设定；提交排行榜返回 633 | `tests/d3/gz/test_sitl_obs.py` | dmax（单卡绑定） | 36 |
@@ -1498,7 +1523,7 @@ D2 沙盒加载器忽略这两个段（只增可选属性）；SDK `drone4d.flee
 | M26-AC-027 | P2 | Interactive 模式下 Env 输入日志逐位重放；观测 schema 不变；Interactive 配置下 R1 0 命中 | `tests/d3/events/test_interactive.py`（与 M23） | 本机 | 37 |
 | M26-AC-028 | P0b | 正式评测容器（v1.1：内部与受邀成员，取代公开提交）在 gVisor 或 seccomp 下运行、无 GPU、墙钟上限生效；恶意镜像用例（越权系统调用、联网、fork 炸弹、写满 `/tmp` 与 `/out`）被阻断且 Env 与其他 Agent 不受影响 | `tests/d3/submit/`（与 M27） | dmax | 43、44 |
 | M26-AC-029 | P0a | D3-AC-01 回归门通过；`sim/runtime/batch.py`、`tools/sdk/awr_sandbox.py`、`python/awr/agent/**` 相对 D2 标签零改动；含 `event`、`agents` 段的快照在 D2 加载器下行为不变，缺省快照逐字节不变；快照与 Run 规格双向转换往返一致 | `tests/d3/regress_gate/`、`tests/d3/agentsdk_pkg/test_snapshot.py` | 本机 | 01 |
-| M26-AC-030 | P0a | 干净主机上 Python 3.11、3.12、3.13 `pip install drone4d` 后按 README 15 min 内运行 L1 示例；基础镜像构建示例通过；copy-lint 中英文通过；API 参考与 §7 一致 | `tests/d3/agentsdk_pkg/` | 本机 | 23（文案） |
+| M26-AC-030 | P0a | 干净主机上 Python 3.11、3.12、3.13 `pip install drone4d` 后按 README 15 min 内运行 L1 示例；基础镜像构建示例通过；copy-lint 中英文通过；API 参考与 §7 一致 | `tests/d3/agentsdk_pkg/`（v1.2，A03：`test_package.py`、`test_quickstart.py`） | 本机 | 23（文案） |
 
 ---
 
@@ -1618,9 +1643,21 @@ D2 沙盒加载器忽略这两个段（只增可选属性）；SDK `drone4d.flee
 |---|---|---|---|---|
 | `static_guard` | 以简报公开锚点与任务区为候选，按贪心最大覆盖分配观察位（高度取任务包络中值），到位后云台按扇区扫视 | L1：检测列表；L2：`ref_det_v1`；P0b 起热成像通道 `ref_thermal_blob_v1` | 广播目击 ≤ 1 条/s | 同帧两人检测框中心地面距离 ≤ 2 m 且持续 ≥ 5 s 时报 `meet` |
 | `coverage_scan` | 任务区按机数切分，割草机航线（航带间距按相机地面足迹 70% 重叠）；目标搜索类按先验密度排序航带 | 同上 | 分区固定 | 检测到与简报描述匹配的目标时报 `found`；其余同上 |
+| `hover_plaza`（v1.2，r6 `hover1_plaza`） | 每架机保持在首个公开区域锚点上空，无锚点时退回任务区中心 | `static_guard` 的检测与扫视 | 无通信 | 同 `static_guard` |
+| `track_solo`（v1.2，r6 `track3_nocomm`） | 同 `track_share` 的跟踪与外推搜索 | 同 `track_share` | 不发送也不接收消息 | 同 `track_share` |
 | `track_share` | 检测后转跟踪（保持斜距 60–120 m、俯角 30°–60°），丢失后按最后已知速度外推搜索；按机间距离与空闲状态接力 | 同上；以颜色直方图与外观属性做简单重识别 | 广播目击与跟踪声明，"最近空闲机"接力 | 按跟踪状态报 `reacquire`、`meet`、`handover`、`board`、`alight`、`vehicle_event`、`found`，均附证据 |
 
-参考检测器 `ref_det_v1`：YOLOX-S（Apache-2.0）COCO 权重，ONNX Runtime CPU 推理，输入 640 × 640（由 1080p 帧按长边缩放并填充），类别映射 `person → person`、`car、truck、bus → vehicle`，置信阈值 0.35、NMS 0.5；在 `std` 资源档（2 核）上单帧推理 p95 ≤ 250 ms（暂定，P0a 实测）。`ref_thermal_blob_v1`：以 `temp_ck` 计算相对局部背景（31 × 31 中值）的表观温差，阈值 2 K 的连通域，面积与长宽比按人员与车辆的像素尺寸先验筛选。
+参考检测器 `ref_det_v1`（v1.2 按 A05 实现改写；原登记的 YOLOX-S、COCO 权重、ONNX Runtime、640 × 640 输入、置信阈值 0.35 与 NMS 0.5 未采用）：自研 CenterNet 式网络（步长 4，深度可分离卷积块，膨胀率 2 与 4），输入 960 × 540，由 JPEG DCT 域半尺度解码得到；以 `crop-handoff-001` 的 21,600 帧 `rgb1080-rs` 渲染图（25–125 m AGL）训练，BN 折入权重，numpy CPU 推理；热图阈值 0.3，3 × 3 极大值抑制；类别为人员与车辆。实测（`std` 档，来源 `model_card.json` 的 `std_step_wall`，`tools/bench/d3/refdet/step_wall.py`）：单帧推理 p95 0.095 s，每步墙钟 p95 0.116 s，最差一步 0.181 s，预算 0.5 s；原暂定值"单帧推理 p95 ≤ 250 ms"以此实测替换。
+
+说明（v1.2，A02）：`coverage_scan` 在短事件或稀疏事件上可能不发送 report，这是策略本身的性质；其 report 规则由构造观测用例覆盖（`tests/d3/baselines/test_act_reports.py`）。`ref_thermal_blob_v1`：以 `temp_ck` 计算相对局部背景（31 × 31 中值）的表观温差，阈值 2 K 的连通域，面积与长宽比按人员与车辆的像素尺寸先验筛选。
+
+说明（v1.2，A09，`tests/d3/baselines/test_event_types.py` 20 个用例）：
+
+1. 四类事件的 report 规则（`drone4d.baselines.events`，按 `brief.report_vocab` 启用，三个基线共用）：`handover` 报交汇区间；`disperse` 为交汇后 120 s 内两条轨迹相距 ≥ 10 m；`alight` 为人员在静止车辆 4 m 内出现；`exit_building` 为人员在云台曾注视过的门 4 m 内出现；`reacquire` 与 `identity_link` 在目标观测间断 ≥ 5 s（人员）或 ≥ 3 s（车辆）后报出，窗口为 [t, t]；`vehicle_event` 带 `event` ∈ {`depart`, `turn`, `stop`, `park`}，速度滞回 0.5/2 m/s，`stop` 为静止 3–30 s，`park` 为静止 ≥ 30 s，`turn` 为 6 s 内航向变化 ≥ 45°；`found` 全程只报一次；`relation`、`enter_zone`、`exit_zone` 不报。
+2. `ref_thermal_blob_v1` 实现（`drone4d.baselines.thermal`）：背景为以每个 8 px 格心为中心的 31 × 31 窗口中值；阈值 ΔT ≥ 2 K，只取正差；8 邻接连通域；米制尺寸先验：人员长边 0.25–2.5 m、短边 ≤ 1.2 m、面积 0.05–3 m²，车辆长边 2.5–8 m、短边 1–3.5 m、面积 2.5–24 m²、长宽比 ≤ 4.5；每步只处理最新一帧，640 × 512 单帧约 0.1 s。
+3. 配置热像仪时 L2 的 `thermal` 参数缺省开启。
+4. 搜索先验：`static_guard` 的观察位取先验中心；`coverage_scan` 的航带按先验质量降序分配。
+5. 跟踪器：车辆关联门限 6 m，车辆轨迹在 3 个点且跨度 ≥ 0.2 s 后拟合；分帧键为（时刻、传感器、帧序号）；证据取窗口终点及之前的帧，相机帧优先。
 
 ### 14.4 新增功能需求
 
@@ -1630,7 +1667,7 @@ D2 沙盒加载器忽略这两个段（只增可选属性）；SDK `drone4d.flee
 | M26-FR-121 | 参考检测器 `ref_det_v1` 与感知适配层：L1 直接使用检测列表，L2 对 RGB 推理；只用 CPU；模型权重与许可文件随镜像发布 | P0 | P0a | M26-AC-031 | ADR-185 |
 | M26-FR-122 | 基线 report 生成：按事件类型白名单（M23 `report_types`）生成并附证据；P0b 扩展到四类事件 | P0 | P0a、P0b | M26-AC-031 | ADR-181 |
 | M26-FR-123 | 基线在排行榜上作为参考行：每个榜单版本由 M27 以同一秘密种子集评测基线，基线镜像摘要写入榜单版本 | P0 | P0a | M26-AC-031 | ADR-182 |
-| M26-FR-124 | `ThermalObs{sensor_id, seq, t_mid_ns, width, height, K, dist, mount_nominal, gimbal_reading, temp_ck, codec}`：`temp_ck` 与 M25 交付字节逐字节相同；排名运行只允许 `codec = radiometric_u16`；`netd_mk_nominal` 等标称参数只经 `agent_config.brief.nominal_noise` 给出 | P0 | P0b | M26-AC-032 | ADR-180 |
+| M26-FR-124 | `ThermalObs{sensor_id, seq, t_mid_ns, width, height, K, dist, mount_nominal, gimbal_reading, temp_ck, codec}`：`temp_ck` 与 M25 交付字节逐字节相同；排名运行只允许 `codec = radiometric_u16`；`netd_mk_nominal` 等标称参数只经 `agent_config.brief.nominal_noise` 给出；v1.2（S17）投影定义：`mount_nominal` 为 ZYX rpy 换算的 `q_bs_xyzw`（Rz·Ry·Rx 的四元数，w ≥ 0）；`gimbal_reading` 把 `{az, el}` 映射为 `{roll 0, pitch el, yaw az}`；`temp_ck` 与 M25 载荷块是同一个字节对象；字段按 schema 次序写出；实现为 `awr.agentsdk.schemas.thermal_obs`；排名运行请求 `agc_jpeg` 返回 682 `RUN_SPEC_INVALID`（`detail.why = thermal_codec`） | P0 | P0b | M26-AC-032 | ADR-180 |
 | M26-FR-125 | report 类型白名单：动作守卫按任务契约 `report_types` 校验 `report.type`，不在白名单内的 report 以 663（`why = report_type`）拒绝并回执 | P0 | P0a | M26-AC-031 | ADR-181 |
 | M26-FR-126 | 正式评测的每步墙钟预算：L2 分轨 `max(0.5 s, τ × wall_ratio)`、L1 分轨 `max(0.25 s, τ × wall_ratio)`（`wall_ratio` 缺省 1.0）；超时沿用上一动作并计数；开发运行仍为 2 s | P0 | P0a | M26-AC-033 | ADR-183 |
 | M26-FR-127 | 大模型指挥层 `drone4d.bench.commander`：分层接口（指挥层以 1/5–1/10 Hz 读取汇总观测并输出区域分配、目标指派与接力指令，由 Python 技能策略执行）；指挥层决策时延按 `decision.mode = fixed` 声明 | P1 | P1 | M26-AC-034 | ADR-185 |
@@ -1657,3 +1694,49 @@ D2 沙盒加载器忽略这两个段（只增可选属性）；SDK `drone4d.flee
 | D3-AC-59 | — | P0b | 受邀成员提交与容器加固（与 M27） |
 | D3-AC-65 | — | P1 | 大模型指挥层与 ANet 委派 |
 | D3-AC-44 | P3 | 废止 | 公开提交取消 |
+
+## 15. D3-SEAL 修订（v1.2，依据 AWR-05 v1.6）
+
+依据 AWR-05 v1.6 的封板收尾批次（第一批 S04、S05、A01、A02、A04、A05；第二批 A03、A06、P07）。阈值不变；实测数字登记在 AWR-05 §24.3 与 §25.3。
+
+| 条款 | 修订 | 来源 |
+|---|---|---|
+| §4.1 | `BenchEnv` 的 `sensorsvc`、`inflight_cap`、`wall_preview` 参数与 `manifest.json` 新段 | S04 |
+| §7.9 第 661 行 | 超时沿用规则与一次性条目不重放 | S05 |
+| FR-022、§8.4、§7.7 | 两级校验、四类帧全量校验、审计字段与落点；CLOSE 原因取值 | A01 |
+| §14.3 | `coverage_scan` 的 report 性质；L2 证据登记缺陷（`core.py` 的 `_observe` 未把相机帧登记到 ActionGuard）修复前，D3-AC-58 在 L2 上不计为通过 | A02 |
+| FR-081、§14.3 | `hover_plaza`、`track_solo` 两行与 `REFERENCE6` 登记 | A04 |
+| §14.3 `ref_det_v1` | 自研 CenterNet 式网络与每步墙钟实测 | A05 |
+| §7.2、M26-AC-030 | API 参考与实现的差异：PRD 示例为 `drone4d.Action`/`Velocity` 数据类、`make(world=..., event=..., fleet=...)` 与返回 `RunResult` 的 `env.close()`；实现使用普通 `act.v1`/`obs.v1` 字典、`drone4d.bench.make(run_spec, *, run_id, seed, worlds_root, events_root, out_dir, physics, gz)` 与返回清单字典的 `drone4d.runner.run_episode`。修订 §7.2 前，本差异登记为 AC-030"API 参考与 §7 一致"的未满足项 | A03 |
+| FR-080、§8.1 | 运行器入口无 `run` 子命令（`drone4d-agent module:Class`）；基础镜像 `d3-agent-py` 为 `python:3.12-slim`（§8.1 写 Python 3.11） | A03 |
+| §8.2 L-02、L-07、§8.3 | 导航解姿态与角速度取真值的缺陷及其归属；`leak_audit_report.v1` 输出标签与位置；检测规则实现口径 | A06 |
+| §6.2、§6.6.1、记录器 | Env 在构建档位前对 fast 与 realistic 一律按输出集合（camera、lidar、imu，L1 为 detections）校验时钟档，变体机型使用基础机型的 L1 模板；超时写入 `agents/<uav>/acts.jsonl`，为 `act = null`、`acks = [661 timeout]` 的行；`manifest.json` 对不排名运行与带 `seed_commit` 的排名运行写入 `config_sha256`、`spec_sha256`、`run_hash`、`versions` 与 `clock_profile`；`env/spec.py` 中 `EnvSpec` 的物理档注释应补 `fast`（该文件归 S05） | P07 |
+
+D3-AC 映射：D3-AC-18 的 r6 EC 对照需决定口径（r6 为 4 类事件均值，`crop-handoff-001` 只有 3 类），推荐按事件类型逐类对照，见 AWR-05 §24.5 F-02；D3-AC-58 的证据位置为 `tests/d3/baselines/test_act_reports.py`，参考检测器每步墙钟实测（dmax 2026-10-18 17:09–17:28Z，3 个 `std` 容器并发，3 次取中位，最差一步 0.181 s ≤ 0.5 s，p99 0.131 s，超时 0，ACT 不一致 0；局限：录制使用 kinematic 物理）记入 RP0a。
+
+v1.6 第七批（B10，AWR-05 §30）：
+
+| 条款 | 修订 | 来源 |
+|---|---|---|
+| §6.6.1 说明第 6、7 项 | L2 主循环提速的实现（LiDAR 工作进程池、相机先提交后取回、后台真值归约与观测记录、增量观测摘要、`BiasWalk`、IMU 与 GNSS 与点云等待重叠，输出逐字节不变）与剖析结论；L2 网格 LiDAR 后端 `L2Config.lidar_backend`，正式口径取 `warp` | B10 |
+| §6.6.5 | `ActionGuard.saw_frames` 登记 L2 帧证据；§14.3 所列"L2 证据登记缺陷"已修复，D3-AC-58 在 L2 上的 report 条款由 B10 第 2 轮正式运行判定通过 | B10 |
+| §6.2 机型 | `p600_bench` 的 gz 机型映射由 `awr.phys.gz.vehicles` 提供，Env 的 `_GzTier` 写入并挂载派生模型、改写 `run.sdf`，运行清单 `tier_info.vehicle` 记录映射参数（AWR-05 §24.5 F-09 已解决） | B10 |
+
+v1.6 第八批（K07，AWR-05 §31）：
+
+| 条款 | 修订 | 来源 |
+|---|---|---|
+| §6.6.1 说明第 8 项 | 世界查询 `open_world_query`：正式运行拒绝 DSM 回退（`WorldQueryFallbackRefused`），非正式运行告警后回退，运行清单记录 `world_query{kind, class, fallback?}` | K07 |
+| 基线运行环境 | dmax 上的基线与 SDK 在 `d3-gz` 宿主上以按锁文件重建的共享 pylib-gz 运行（含 `mcap`），不再需要私有 pylib；起飞点注释按实测更正（三维最小距离 16.74–20.72 m，起飞点不移动） | K07 |
+
+D3-AC 映射（第七批）：D3-AC-18 的 r6 EC 对照口径已按 A10 确定（`crop-handoff-001` 含 `cross_C`，计分事件正好是 r6 的 4 类，AWR-05 §24.5 F-02 已关闭），对照结果与条款处置见 AWR-05 §23.5 C-42；D3-AC-17、56、58 的正式运行证据见 [impl/D3-P0a-正式口径记录.md](../impl/D3-P0a-正式口径记录.md)。
+
+v1.6 第九批（K10，AWR-05 §32）：
+
+| 条款 | 修订 | 来源 |
+|---|---|---|
+| run_spec 与 `EnvSpec`（FR-081、§6.2） | L1 标称相机水平视场覆盖：run_spec `fleet[].sensors[sensor_id = eo].overrides.hfov_deg`（[10, 120]，各机须一致）；只用于非排名运行与 r6 参考行，排名运行中的提交镜像与基础基线由 `EnvSpec.from_run_spec` 拒绝；覆盖后型号命名为 `<型号>+hfov<度>`（例如 `d4d_eo1080@1+hfov40`），只改水平视场，分辨率、云台与挂载不变；覆盖随 run_spec 进入 `config_sha256` 与运行哈希；L1 检测、云台、动作守卫、agent_config 内参与 L2 视场随之改变；相机非标称时运行清单写入 `camera` | K10 |
+| SDK 基线（FR-081、FR-120 至 FR-123） | 构造参数：`BaselineAgent(alt_agl_m=)`（机队中心巡航高度，缺省为包络中值，按机分层 8 m 并限制在包络内，新增 `layered_alt()`、`goal_alt()` 钩子）、`StaticGuard(gaze = sweep 或 fixed)`（`fixed` 到位后固定注视候选点，`HoverPlaza` 继承）、`TrackShare(track_alt_agl_m=)`（有跟踪对象时改用跟踪高度，`TrackSolo` 继承）；缺省行为不变 | K10 |
+| `REFERENCE6` | 绑定 r6 观测设置（`params` 与 `hfov_deg = 40`）；`reference_run_spec` 为各机写入相机覆盖（保留其他传感器项）并把 `params` 记入 `policy.params.baseline`，`check_reference_spec` 核对两者；以容器方式运行参考行前须重建 `d3-agent-py`（AWR-05 §32.5 F-109） | K10 |
+
+D3-AC 映射（第九批）：D3-AC-18 的证据增加 `tests/d3/env/test_camera_override.py`、`tests/d3/baselines/test_reference6.py` 与 `tests/d3/bench/test_r6_ec.py`；r6 对照条款按 AWR-05 ADR-218 判定通过（AWR-05 §32.3 第 100 行）。

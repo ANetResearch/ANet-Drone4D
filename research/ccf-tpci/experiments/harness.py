@@ -3,6 +3,10 @@
 `PaperSim(world_id, ...)` loads a built world, sets a weather preset, adds vehicles at chosen homes and exposes command,
 event and state helpers. The ground truth (dynamics, wind field, contact, battery) is always fully coupled; only what the
 decision layer can see is changed, through `awr.sim.core.awareness` (set before the core starts).
+
+The production defaults of `DecisionAwareness` reproduce D2 byte for byte (D3-AC-01). The paper's decision layer reads the
+runtime M07 mean wind at the simulation time, which is the explicit switch `env_wind`; every experiment builds its switches
+with `paper_awareness(...)` (`PAPER_AWARENESS` plus the policy's own switches), and `PaperSim` uses it when none is given.
 """
 
 from __future__ import annotations
@@ -31,13 +35,20 @@ from awr.sim.runtime.main import SimCore  # noqa: E402
 from awr.sim.runtime.warm import DEFAULT_PLUGINS  # noqa: E402
 
 OP = {"principal_id": "p-op", "role": "operator", "entry": "api", "seat": True}
+# switches every paper run turns on explicitly (the production defaults keep the D2 behaviour)
+PAPER_AWARENESS: dict[str, Any] = {"env_wind": True}
+
+
+def paper_awareness(**switches: Any) -> AW.DecisionAwareness:
+    """Decision awareness of a paper run: `PAPER_AWARENESS` overridden by the policy's `switches`."""
+    return AW.DecisionAwareness(**{**PAPER_AWARENESS, **switches})
 
 
 class PaperSim:
     def __init__(self, world_id: str, *, awareness: AW.DecisionAwareness | None = None, preset: str | None = None,
                  world_seed: int = 0, profile_id: str = "p600_mid360", plugins: tuple[str, ...] = DEFAULT_PLUGINS,
                  rate: float = 1.0) -> None:
-        AW.set_awareness(awareness or AW.DecisionAwareness())
+        AW.set_awareness(awareness or paper_awareness())
         os.environ.setdefault("AWR_PLAN_POOL", "inline")
         self.profile_id = profile_id
         self.W = [1_000_000_000]

@@ -1,0 +1,28 @@
+# vehicles/d3/sensor_models/imu_icm40609_livox.yaml：MID-360 内置 IMU 型号（awr.sensor.imu_mems.v1；AWR-20 §15.6.5、§15.7.5；
+# ADR-160）。只由 D3 目录覆盖层加载器读取（vehicles/d3/catalog.d3.json），D2 型号库与 M13 装配不读取本文件。
+# 本文件只给 realistic 档；clean 档全部为 0，harsh 档在 realistic 之上叠加振动（频率取机型 acoustic.bpf_hz，幅值 1.5 m/s²，
+# 三轴；AWR-05 v1.2 裁决、ADR-171），三档取值由 awr.sim.catalog.loader.imu_noise_tier 统一给出（§15.6.5 单一真源）。
+# 单位：加速度白噪声为每样本 σ（g，200 Hz），陀螺白噪声为每样本 σ（rad/s），偏置随机游走 g/√s 与 rad/s/√s，上电偏置 σ 加速度
+# m/s²、陀螺 °/s（每运行抽一次）。/livox/imu 导出单位为 g（FAST-LIVO2 合同），Agent 侧 ImuObs 一律 m/s²。
+schema: awr.sensor.imu_mems.v1
+model_id: imu_icm40609_livox
+model_version: 1.0.0
+display_name: "MID-360 built-in IMU (ICM-40609)"
+display_name_zh: "MID-360 内置 IMU（ICM-40609）"
+reference: false
+chip: icm40609
+host_ref: mid360@2.0.0
+rate_hz: 200
+acc_unit_export: g
+gyro_unit_export: rad_s
+range: {acc_g: 32, gyro_dps: 2000}
+noise:
+  acc_sigma_sample_g: 1.0e-3
+  gyro_sigma_sample_rps: 7.0e-4
+  bias_rw: {acc_g_rts: 1.0e-5, gyro_rps_rts: 1.0e-5}
+  turn_on_sigma: {acc_mps2: 0.196, gyro_dps: 0.5}
+vibration_harsh: {amp_mps2: 1.5, axes: 3, freq_from: acoustic.bpf_hz}
+aa_cutoff_hz: 80
+noise_table_version: d3-noise-1
+conf: B
+src: "芯片型号与量程取 ICM-40609 规格（±32 g、±2000 °/s，C）；噪声档取值为 AWR-05 §5.4.6 冻结口径（D，P-1 复测后以 ADR 冻结）；AWR-20 §15.6.5"

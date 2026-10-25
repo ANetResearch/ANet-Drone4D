@@ -1,0 +1,29 @@
+# vehicles/d3/variants/p600_bench.yaml：排行榜标准轨机型变体（awr.vehicle_variant.v1；AWR-20 §15.16.1；ADR-182、ADR-191；CAT-FR-043、FR-047）。
+# 有效文档 = apply_mounts(deep_merge(p600_mid360@2.0.0, set), mounts, remove)，随后按 §5.5 重算质量与功率派生值并重跑 VH、MT、
+# SN 与 OV、RG 规则（awr.sim.catalog.loader.Overlay）。基机型 vehicles/p600/params.yaml 不变。
+# 挂载：cam0 为 GX40（`rgb1080-rs` 交付档，L2 由 Env 按相机档给出分辨率与卷帘读出）；新增槽位 lwir 为 lwir640 13 mm，与 GX40 同云台
+# 共视轴（vehicles/d3/mounts/p600_bench_lwir.yaml，+0.11 kg、+1.5 W；P0b 启用热成像观测）；MID-360 倒装（预设 inverted_mapping，
+# 与 p600_mid360_inv 相同），内置 IMU 随 LiDAR 倒装；无 slam_cam。sensor_no 按 rig_order：cam0 0、therm0 1、lidar0 2、lidar0_imu 3、
+# imu0 4、gnss0 5、nav 6（CAT-FR-047）。移除可选槽位 nir_ill（缺省不挂，补光灯 0.18 kg）：MNT-1 按"整机质量 + 可选挂载 ≤ MTOW"
+# 核对，3.935 + 0.18 = 4.115 kg 超过 4.1 kg，标准轨机队不带补光灯。物理档映射（Realistic 档 x500_d4d 几何 + 本机型质量、惯量与最大转速）见 awr.phys.gz.vehicles。
+# derived 为 §15.16.1 表值，加载器按 ≤ 1% 核对（OV-3）。
+schema: awr.vehicle_variant.v1
+id: p600_bench
+base: p600_mid360@2.0.0
+profile_version: 1.0.0
+display_name: "P600 (benchmark standard track)"
+display_name_zh: "P600（排行榜标准轨）"
+reference: false
+mounts:
+  eo: {d3_sensor_id: cam0}
+  lwir: {file: ../mounts/p600_bench_lwir.yaml, default: true, removable: false, d3_sensor_id: therm0}
+  mid360: {spec_ref: mid360@2.0.0, mount_preset: inverted_mapping, default: true, removable: false, d3_sensor_id: lidar0}
+  gnss: {d3_sensor_id: gnss0}
+  imu: {d3_sensor_id: imu0}
+remove: [nir_ill]
+d3:
+  tags: [bench_standard, thermal]
+  rig_order: [cam0, therm0, lidar0, lidar0_imu, imu0, gnss0, nav]
+derived: {mass_kg: 3.935, p_hover_w: 419.9, hover_endurance_s: 1661.4, hover_thrust: 0.502, twr: 1.99, mtow_margin_kg: 0.165}
+conf: D
+src: "AWR-20 §15.16.1（ADR-182、ADR-191）；挂载 §15.16.1、§15.5.1；派生值 §5.5"

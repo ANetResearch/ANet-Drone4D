@@ -13,6 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
+ * Drone4D modifications (M24 §6.5.4): copied from gz-sim 8.15.0
+ * src/systems/multicopter_control/LeeVelocityController.hh; the namespace multicopter_control is renamed to
+ * d4d_multicopter_control so that this copy does not clash with the gz-sim system library, and the include guard is
+ * renamed. No other change.
  */
 
 #ifndef D4D_MC_LEEVELOCITYCONTROLLER_HH_

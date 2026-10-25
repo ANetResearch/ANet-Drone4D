@@ -8,7 +8,7 @@
    "sha256": "d1e3effce66add4e4a7b0239d1764bf030fb908b066831f9db75dae79a9085ec"
   }
  },
- "method": "manual",
+ "method": "osm-road-correlation",
  "result": {
   "m_per_unit": 8.373987138020217,
   "yaw_deg": 168.03644038133228,
@@ -86,6 +86,6 @@
   "levelling dem srtm30m (r2 E03c): 1.25 deg; wall 0.88 deg",
   "hMsl at origin from srtm30m (r2 E16), spread 4.1 m"
  ],
- "accepted_by": "M22 (r2 measurement import)",
- "accepted_at": "2026-10-17T12:51:35Z"
+ "accepted_by": "M22 (r2 measurement import; method set to osm-road-correlation per M22 §8.1, W08)",
+ "accepted_at": "2026-10-19T11:24:10Z"
 }

@@ -1,0 +1,104 @@
+# appearance_lib@1 生成规格（AWR-05 §5.2.8、ADR-181；M23 §15.2、M23-FR-072；M25 §15.7）。
+# 外观库为项目自制的程序化资产：属性取值、调色板与几何参数均在本文件定义，由 `python -m awr.sim.events.appearance build`
+# 确定性生成 appearance_lib.v1.json（同一规格两次生成逐字节一致），不含任何第三方模型、纹理或扫描数据，无外部许可义务。
+# 修改本文件后须重新生成并复核 `python -m awr.sim.events.appearance check`；已登记的外观 id 一经发布不得改义（改义须升 appearance_lib@2）。
+schema: drone4d.appearance_spec.v1
+lib_id: appearance_lib@1
+seed: 20261018
+license:
+  kind: original
+  spdx: LicenseRef-ANet-OSL
+  holder: Agent Network Research
+  attribution: ANet-Drone4D appearance_lib@1 (procedurally generated, project-original)
+  third_party: []
+
+# 调色板：sRGB 0–255；同一颜色属性的任意两种取值 CIEDE2000 色差须 ≥ min_delta_e00（库自检）
+palette:
+  red:     {rgb: [190, 40, 40],   zh: 红色,   en: red}
+  orange:  {rgb: [230, 120, 30],  zh: 橙色,   en: orange}
+  yellow:  {rgb: [232, 200, 52],  zh: 黄色,   en: yellow}
+  green:   {rgb: [40, 140, 70],   zh: 绿色,   en: green}
+  blue:    {rgb: [40, 90, 180],   zh: 蓝色,   en: blue}
+  purple:  {rgb: [120, 60, 150],  zh: 紫色,   en: purple}
+  white:   {rgb: [236, 236, 232], zh: 白色,   en: white}
+  black:   {rgb: [30, 30, 32],    zh: 黑色,   en: black}
+  gray:    {rgb: [128, 128, 128], zh: 灰色,   en: grey}
+  navy:    {rgb: [32, 44, 100],   zh: 藏青色, en: navy}
+  khaki:   {rgb: [190, 170, 120], zh: 卡其色, en: khaki}
+  brown:   {rgb: [112, 72, 40],   zh: 棕色,   en: brown}
+  silver:  {rgb: [168, 171, 176], zh: 银色,   en: silver}
+  carmine: {rgb: [160, 22, 32],   zh: 暗红色, en: dark red}
+  cobalt:  {rgb: [28, 70, 150],   zh: 深蓝色, en: dark blue}
+  olive:   {rgb: [86, 100, 50],   zh: 橄榄绿, en: olive green}
+min_delta_e00: 15.0
+
+classes:
+  person:
+    count: 24
+    min_pair_distance: 3          # 库内任意两人属性距离下限（门 1 规则为 ≥ 2，库内留 1 的余量）
+    balance_slack: 1              # 每个取值至多出现 ⌈count / 取值数⌉ + balance_slack 次
+    distinct: [[top_color, bottom_color]]
+    exclude: []
+    asset: person-proxy@1          # M25 程序化代理几何（腿、躯干、头；FR-034），外观参数取 render 段
+    attributes:
+      - {name: top_color,    kind: color, values: [red, orange, yellow, green, blue, purple, white, black, gray]}
+      - {name: bottom_color, kind: color, values: [black, navy, gray, khaki, brown]}
+      - {name: top_pattern,  kind: enum,  values: [solid, striped, checked]}
+      - {name: accessory,    kind: enum,  values: [none, backpack, cap, shoulder_bag]}
+      - {name: height_class, kind: enum,  values: [short, medium, tall]}
+      - {name: build,        kind: enum,  values: [slim, average, sturdy]}
+      - {name: gait,         kind: enum,  values: [slow, normal, brisk]}
+    params:
+      height_m: {short: 1.62, medium: 1.74, tall: 1.86}
+      build_scale: {slim: 0.88, average: 1.0, sturdy: 1.15}
+      base_size_m: [0.5, 0.3]      # l、w（与 M23 §6.2.3 类别模板一致），按 build_scale 缩放
+      gait: {slow: {speed_mps: [0.8, 1.4], median_mps: 1.1}, normal: {speed_mps: [0.9, 1.8], median_mps: 1.35},
+             brisk: {speed_mps: [1.1, 2.0], median_mps: 1.6}}
+      skin_rgb: [205, 168, 140]
+      pattern_period_m: {striped: 0.08, checked: 0.12}
+      accessory_rgb: {backpack: [36, 38, 44], cap: [200, 200, 196], shoulder_bag: [96, 62, 36]}
+    anim_clips:
+      - {id: 0, name: stand,    loop: true,  period_s: 4.0}
+      - {id: 1, name: walk,     loop: true,  period_s: 1.1}
+      - {id: 2, name: handover, loop: false, period_s: 2.0}
+      - {id: 3, name: board,    loop: false, period_s: 2.5}
+      - {id: 4, name: alight,   loop: false, period_s: 2.5}
+    rig: awr-proxy-rig-person@1
+    thermal_zones:
+      - {zone: clothing, emissivity: 0.97, temp_model: person_clothed, parts: [torso, legs, accessory]}
+      - {zone: skin,     emissivity: 0.98, temp_model: skin_33c,       parts: [head, neck]}
+  vehicle:
+    count: 16
+    min_pair_distance: 2
+    balance_slack: 0              # 车型与车身颜色严格均衡：保证每辆车都有 ≥ 3 辆同车型或同色的合格干扰车辆
+    distinct: []
+    exclude:                      # 外观上不可见的属性差异不计入距离：黑车配黑色车顶、白车配白色饰条不生成
+      - {body_color: black, roof: black}
+      - {body_color: white, marking: side_stripe}
+    asset: vehicle-proxy@1
+    attributes:
+      - {name: body_type,  kind: enum,  values: [sedan, hatchback, suv, van, pickup]}
+      - {name: body_color, kind: color, values: [white, black, silver, carmine, cobalt, olive]}
+      - {name: roof,       kind: enum,  values: [body, black, rack]}
+      - {name: marking,    kind: enum,  values: [none, side_stripe, door_panel]}
+    params:
+      size_m: {sedan: [4.6, 1.8, 1.45], hatchback: [4.0, 1.75, 1.5], suv: [4.7, 1.9, 1.75], van: [5.0, 1.95, 2.0],
+               pickup: [5.3, 1.9, 1.8]}
+      roof_rgb: {black: [24, 24, 26]}
+      rack_rgb: [50, 52, 56]
+      glass_rgb: [40, 52, 60]
+      marking_rgb: {side_stripe: [236, 236, 232], door_panel: [232, 200, 52]}
+    anim_clips:
+      - {id: 0, name: idle,  loop: true, period_s: 1.0}
+      - {id: 1, name: drive, loop: true, period_s: 1.0}
+    rig: awr-proxy-rig-vehicle@1
+    thermal_zones:
+      - {zone: body,    emissivity: 0.90, temp_model: vehicle_body,    parts: [body, roof]}
+      - {zone: engine,  emissivity: 0.90, temp_model: vehicle_engine,  parts: [hood]}
+      - {zone: exhaust, emissivity: 0.90, temp_model: vehicle_exhaust, parts: [exhaust]}
+
+# 门 1 可区分性规则（M23 §15.3、FR-072）：按 event_type 对 roles 含 target 与 distractor 的演员逐对校验
+rules:
+  reid_occlusion: {class: person, min_distance: 2, min_shared: 1}
+  vehicle_track:  {class: vehicle, min_distance: 2, min_shared: 1, shared_any_of: [body_type, body_color]}
+min_hard_negatives: 3             # 库自检：每个外观在其类别规则下至少有 3 个合格干扰外观（Re-ID 要求 ≥ 3 名干扰者）

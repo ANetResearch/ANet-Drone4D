@@ -1,7 +1,7 @@
 {
  "schema": "drone4d.bench.run_spec.v1",
  "experiment": {"name": "proto-board crop-handoff-001 L1 3-UAV", "project": "d3-p0a",
-                "note": "P0a prototype board: reference baselines, L1 detection observations, gz-sim lockstep physics. Spawn pads on the paved strip south-east of the plaza: mesh surface level within 3 cm over +-0.7 m, >= 15 m from every actor path over the 360 s tape."},
+                "note": "P0a prototype board: reference baselines, L1 detection observations, gz-sim lockstep physics. Spawn pads on the flat roof south-east of the plaza (mesh surface 31.1 m, about 16.6 m above the street): surface spread over +-0.7 m 1.6 / 3.1 / 3.2 cm (Env spawn check 15 cm); minimum distance to actor paths over the 360 s Detour tape (content b1285649, all 3600 ticks, background crowd included) 5.2 / 9.2 / 13.2 m horizontal and 16.7 / 18.4 / 20.7 m 3D, scripted actors 21.5 / 25.3 / 29.2 m horizontal (K07 measurement, 2026-10-21)."},
  "world": {"id": "oryahovo-crop1"},
  "event": {"id": "crop-handoff-001", "version": 1},
  "fleet": [

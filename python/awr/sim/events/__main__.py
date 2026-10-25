@@ -1,6 +1,8 @@
 """`python -m awr.sim.events compile|preflight|verify|inspect`（M23 §7.2）。
 
-compile、preflight 的退出码：0 通过，2 门 1 失败，3 门 2 不可行，4 其他编译错误；verify、inspect 失败为 2。
+compile、preflight 的退出码：0 通过，2 门 1 失败（含输入安全拒绝与限额 618、阶段不支持 619），3 门 2 不可行（612），
+4 其他编译错误（门 2 的非不可行错误、编译中抛出的 EventError）；verify、inspect 失败为 2。编译报告写到标准输出，
+EventError 以 JSON 写到标准错误。
 """
 
 from __future__ import annotations
@@ -21,6 +23,15 @@ def _reader(p: Path) -> tuple[TapeReader, str | None]:
     return TapeReader(p), None
 
 
+def exit_code(status: str, gates: list[dict]) -> int:
+    """compile、preflight 的退出码（§7.2）：门 1 失败为 2，与其余门的状态无关。"""
+    if status in ("compiled", "preflight"):
+        return 0
+    if gates and gates[0]["gate"] == 1 and gates[0]["status"] == "fail":
+        return 2
+    return 3 if status == "infeasible" else 4
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m awr.sim.events")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -39,10 +50,15 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd in ("compile", "preflight"):
         from awr.sim.events.compile import CompileOptions, compile_event
 
-        r = compile_event(a.event, a.world, opts=CompileOptions(strict=not a.lenient, retime_mode=a.retime, anchors_overlay=a.anchors,
-                                                                out=a.out, cache_dir=a.cache, preflight_only=a.cmd == "preflight"))
+        try:
+            r = compile_event(a.event, a.world, opts=CompileOptions(strict=not a.lenient, retime_mode=a.retime, anchors_overlay=a.anchors,
+                                                                    out=a.out, cache_dir=a.cache, preflight_only=a.cmd == "preflight"))
+        except EventError as e:
+            print(json.dumps({"ok": False, "code": e.code, "reason": e.reason, "message": str(e), "detail": e.detail}, ensure_ascii=False),
+                  file=sys.stderr)
+            return 4
         print(json.dumps(r.as_dict(), ensure_ascii=False, indent=2))
-        return {"compiled": 0, "preflight": 0, "infeasible": 3}.get(r.status, 2 if r.gates and r.gates[0]["status"] == "fail" else 4)
+        return exit_code(r.status, r.gates)
     try:
         r, expect = _reader(a.path)
         if a.cmd == "verify":

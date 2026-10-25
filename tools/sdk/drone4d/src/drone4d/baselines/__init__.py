@@ -1,12 +1,23 @@
-"""基线策略（M26 §14.3，`policy.kind = reference`）：`static_guard`、`coverage_scan`、`track_share`（L1 检测级观测）。
+"""基线策略（M26 §14.3，`policy.kind = reference`）：`static_guard`、`coverage_scan`、`track_share`（L1 检测级观测），以及 r6 §12.3
+参考行补充的 `hover_plaza`、`track_solo`；6 种参考策略（M26-FR-081）以 r6 行名登记在 `REFERENCE6`（`drone4d.baselines.reference`），
+行名同时是 `BASELINES` 的键，指向绑定该行 r6 观测设置（巡航高度、注视方式；ADR-217）的策略工厂。
 
 同一种子两次运行的动作流逐字节一致：策略内无随机数、无墙钟依赖，集合按确定次序遍历。
+
+P0b：四类事件（Re-ID、交汇与交接、车辆追踪、目标搜索）的 report 规则在 `drone4d.baselines.events`，目标搜索先验在
+`drone4d.baselines.prior`，热成像通道 `ref_thermal_blob_v1` 在 `drone4d.baselines.thermal`（构造参数 `thermal`，见 `common`）。
 """
 
 from drone4d.baselines.coverage_scan import CoverageScan
+from drone4d.baselines.hover_plaza import HoverPlaza
+from drone4d.baselines.reference import REFERENCE6, Reference, check_reference_spec, reference_run_spec
 from drone4d.baselines.static_guard import StaticGuard
 from drone4d.baselines.track_share import TrackShare
+from drone4d.baselines.track_solo import TrackSolo
 
-BASELINES = {"static_guard": StaticGuard, "coverage_scan": CoverageScan, "track_share": TrackShare}
+POLICIES = {"static_guard": StaticGuard, "coverage_scan": CoverageScan, "track_share": TrackShare, "hover_plaza": HoverPlaza,
+            "track_solo": TrackSolo}
+BASELINES = {**POLICIES, **{r.name: r.factory() for r in REFERENCE6.values()}}
 
-__all__ = ["BASELINES", "CoverageScan", "StaticGuard", "TrackShare"]
+__all__ = ["BASELINES", "POLICIES", "REFERENCE6", "CoverageScan", "HoverPlaza", "Reference", "StaticGuard", "TrackShare", "TrackSolo",
+           "check_reference_spec", "reference_run_spec"]

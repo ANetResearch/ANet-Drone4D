@@ -191,13 +191,13 @@ procs:
     liveness: {heartbeat: hb.geosvc, stale_s: 10.0, startup_grace_s: 60}
   - name: lab-gateway
     layer: d3
-    cmd: [python, -m, awr.bench.rt_main]
+    cmd: [python, -m, awr.bench.api.gateway]
     run_scoped: false
     start_after: [bench-api]
     liveness: {heartbeat: hb.lab-gateway, stale_s: 5.0, startup_grace_s: 30}
   - name: rerun-proxy
     layer: d3
-    cmd: [python, -m, awr.bench.rerun_proxy]
+    cmd: [python, -m, awr.bench.api.rerun_proxy]
     run_scoped: false
     restart: {policy: on-failure}
     liveness: {heartbeat: hb.rerun-proxy, stale_s: 10.0, startup_grace_s: 30}

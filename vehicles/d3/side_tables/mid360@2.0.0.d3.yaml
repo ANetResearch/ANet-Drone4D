@@ -1,0 +1,28 @@
+# vehicles/d3/side_tables/mid360@2.0.0.d3.yaml：mid360@2.0.0 的 D3 侧表（awr.sensor.lidar_d3.v1；AWR-20 §15.7.3；ADR-142、ADR-143）。
+# D2 型号文件 vehicles/sensor_models/mid360.yaml 不变；本表只补 D3 所需的槽位时刻、花样 id、内置 IMU 引用、FAST-LIVO2 参数档与
+# SLAM 资源参数。fov、range、noise 与 D2 型号逐项一致（加载器 SD-1 核对）。
+# 槽位时刻 offset_time(i) = floor(i·10^8/N) ns，N = slots_per_frame = 20,000，即 i·5000 ns（D3-AC-13）；每帧槽位全部输出，
+# 无回波槽位为零点占位。lidar_in_imu 为 LiDAR 在内置 IMU 系中的位置与姿态（FAST-LIO / FAST-LIVO2 的 extrinsic_T / extrinsic_R
+# 语义，R 按行展开），与 D2 型号 imu.lidar_in_imu 一致。
+schema: awr.sensor.lidar_d3.v1
+for: mid360@2.0.0
+pattern:
+  mode: non_repetitive_table
+  table_ref: mid360_pattern@r04
+  beams: 4
+  point_rate_hz: 200000
+  frame_rate_hz: 10
+  slots_per_frame: 20000
+  offset_time_rule: "floor(i*1e8/N)"
+fov: {h_deg: 360, v_min_deg: -7.2, v_max_deg: 52.2}
+range: {blind_m: 0.1, r_at_rho10_m: 40, r_at_rho80_m: 70, exponent: 0.269, hard_max_m: 100}
+noise: {range_sigma_far_m: 0.02, range_sigma_near_m: 0.03, angle_sigma_deg: 0.1, false_alarm: 1.0e-4}
+return_mode: first
+imu_ref: imu_icm40609_livox@1.0.0
+lidar_in_imu:
+  t: [-0.011, -0.02329, 0.04412]
+  R: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+livo_profile: mid360_r1_v1
+slam_eval: {cpus: 2, r_map_pts_s: 50000}
+conf: C
+src: "AWR-20 §15.7.3；花样与量程拟合 r04 §3.1；lidar_in_imu 取 Livox MID-360 用户手册与 FAST-LIVO2 mid360.yaml（与 r1 闭环一致）；slam_eval 待 P-1 标定后冻结"

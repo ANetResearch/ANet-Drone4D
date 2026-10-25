@@ -1,0 +1,6 @@
+{
+ "$comment": "copy-lint 基线例外登记（docs/05 §7.10，ADR-153；D3-AC-46、D3-AC-23）。exceptions 为 P-1 基线，逐条登记现行发布面中的违规项，P0b 出口前清零（--strict 在仍有条目时失败）；allow 为经评审的永久放行项，须填写 reason 与 reviewed。条目以 file、rule、match 与 anchor（i18n 键或所在行文本）匹配，文案改写后条目不再匹配时 COPY-BL-01 提示删除。",
+ "updated": "2026-10-18",
+ "exceptions": [],
+ "allow": []
+}

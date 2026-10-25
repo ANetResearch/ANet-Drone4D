@@ -1,0 +1,41 @@
+# D3-AC-18 r6 EC 对照（A10）：crop-handoff-001 上 6 种参考策略 × 12 种子（L1）与 r6 §12.3 实测表对照。
+# 运行与报告：tools/bench/d3/r6_ec.py（specs / pads / run / report）；断言：tests/d3/bench/test_r6_ec.py。
+# 参考行登记（策略类、机数、链路、r6 值）在 drone4d.baselines.REFERENCE6，本文件只给出对照口径与运行参数。
+schema: drone4d.bench.r6_ec_config.v1
+ac: D3-AC-18
+base_run_spec: configs/bench.d3/crop-handoff-001.l1-3uav.run_spec.json   # 世界、事件、L1、realistic、链路参数与 3 个起飞点
+event: {id: crop-handoff-001, version: 1}
+# 对照所用磁带与世界（K06 发布的 Detour 磁带，crop contentVersion 7d8c8b895e55）；报告核对运行目录的实际值，不一致时判不通过
+expect:
+  tape_content_sha256: b1285649605e08efe8445da1e73f23a1a22f8eafaac310210e220706f6a08e54
+  world_content_version: 7d8c8b895e55
+obs_level: L1
+physics: realistic                  # gz 锁步档（正式成绩的唯一来源）；kinematic 只作开发参考，报告标注 dev
+seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+rows: [hover1_plaza, hover3_anchors, lawn3_cover, track3_nocomm, track3_share, track5_share]
+# 起飞点：缺省沿用基础机队（截取或沿末两点间隔延长）。track5_share 沿间隔延长的 (76,-90)、(76,-94) 跨在平台边缘（机体投影内
+# 高差 0.15 m、18.6 m），改用东侧平台 (80,-92)、(80,-96)：投影 ±0.7 m 内高差 0.017 m，离全部演员路径（360 s 磁带，含背景人群）
+# 19.7 m、23.6 m（r6_ec.py pads 复核，判据见 pad_check）
+pads:
+  track5_share: [[76.0, -78.0, 0.0], [76.0, -82.0, 0.0], [76.0, -86.0, 0.0], [80.0, -92.0, 0.0], [80.0, -96.0, 0.0]]
+pad_check: {level_m: 0.03, clear_m: 15.0}   # 只核对相对基础机队新增的起飞点
+# 观测设置（ADR-217 决策 (1)；r6 §12.3 与原型 bench.py 的 fleets）：L1 相机 HFOV 40°（run_spec fleet[].sensors[eo].overrides.hfov_deg，
+# 只用于参考行与不排名运行，不进入排名赛道），巡航高度 hover 与跟踪行 60 m、跟踪时 45 m、覆盖扫描行 70 m（机队中心高度，按机 8 m 分层），
+# hover 行固定注视；须与 drone4d.baselines.REFERENCE6 登记一致（load_config 核对），report 逐运行核对运行清单与评测的相机
+observation:
+  camera_hfov_deg: 40.0
+  params:
+    hover1_plaza: {alt_agl_m: 60.0, gaze: fixed}
+    hover3_anchors: {alt_agl_m: 60.0, gaze: fixed}
+    lawn3_cover: {alt_agl_m: 70.0}
+    track3_nocomm: {alt_agl_m: 60.0, track_alt_agl_m: 45.0}
+    track3_share: {alt_agl_m: 60.0, track_alt_agl_m: 45.0}
+    track5_share: {alt_agl_m: 60.0, track_alt_agl_m: 45.0}
+# r6 逐事件表的类型名：crop-handoff-001 的 cross_C（zone_pass，车辆 C 经过广场 25 m 缓冲区）即 r6 的"车辆经过"
+event_type_map: {zone_pass: vehicle_pass}
+criteria:
+  ec_mean_abs_diff_max: 0.1         # 每个参考行 12 种子 EC 均值与 r6 §12.3 之差
+  coverage_row: lawn3_cover         # 覆盖扫描策略
+  ao_real_max: 0.05                 # AO_real v0（ao-oracle-v0-grid@1）
+  ao_pos_min: 0.85
+run: {jobs: 6, agents: inproc, gz_launcher: local}

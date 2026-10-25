@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN" class="dark" data-motion="lite" data-tier="">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="robots" content="index, follow" />
+    <title>事件沙盘 · ANet Drone4D 公开站</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="%BASE_URL%brand/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="%BASE_URL%brand/favicon-16.png" />
+    <style>
+      /* /lab/ 公开只读构建（ADR-129；AWR-14 §21.14）：静态启动遮罩，颜色同应用 index.html 的 g950 / g300 原色（OKLCH） */
+      html, body { margin: 0; height: 100%; background: oklch(0.149 0.005 264.5); }
+      #boot-mask { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 1rem; background: oklch(0.149 0.005 264.5); color: oklch(0.740 0.012 264.5);
+        font: 500 12px/18px "Inter Variable", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+      /* 完整徽章：宽 480 px，视口宽 < 1280 时 320 px（AWR-15 §4.2 加载遮罩；同应用 index.html 与 styles/boot.css） */
+      #boot-mask .boot-badge { width: 480px; max-width: calc(100vw - 2rem); height: auto; }
+      @media (max-width: 1279px) { #boot-mask .boot-badge { width: 320px; } }
+      #boot-mask .boot-version { min-height: 16px; font-size: 11px; line-height: 16px; font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+    </style>
+  </head>
+  <body>
+    <div id="boot-mask" role="status" aria-live="polite">
+      <img class="boot-badge" src="%BASE_URL%brand/anet-logo.svg" width="480" height="83" alt="ANet" />
+      <div class="boot-version"></div>
+      <div class="boot-phase">ANet Drone4D · Event Lab</div>
+    </div>
+    <div id="root"></div>
+    <noscript>ANet Drone4D · 事件沙盘公开站需要启用 JavaScript。The Event Lab public site requires JavaScript.</noscript>
+    <script type="module" src="/src/app/lab-public/entry.tsx"></script>
+  </body>
+</html>

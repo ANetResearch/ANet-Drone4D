@@ -17,6 +17,10 @@ the data into figures. The experiment drivers live in `experiments/`.
 Needs Python 3.12 with `pandas`, `pyarrow`, `matplotlib` and `numpy`, and a TeX engine (we use
 [Tectonic](https://tectonic-typesetting.github.io)).
 
+`data/m1geo_full.parquet` (12.9 MB, Fig. 2) exceeds the 5 MB per-file limit of the repository and is not committed.
+`python research/ccf-tpci/data/fetch_external.py` downloads it from the ModelScope dataset channel and verifies its
+SHA-256 against `data/external.json`; until it is published there, regenerate it with the `m1geo_full` command below.
+
 ```bash
 make -C research/ccf-tpci/figures all            # all figures and sections/numbers.tex
 cd research/ccf-tpci && tectonic -X compile main.tex

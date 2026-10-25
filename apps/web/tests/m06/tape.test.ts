@@ -1,7 +1,8 @@
-// Front-end tape decoder against the Python golden (M23 §6.17 cross-language checklist; tools/contracts/gen_tape_golden.py).
+// Front-end tape decoder and walkable surface height against the Python golden (M23 §6.17 cross-language checklist;
+// D3-AC-07; tools/contracts/gen_tape_golden.py).
 import { describe, expect, it } from 'vitest'
-import { TapeError, TapeReader, FIELDS } from '../../src/engine/actors/tape'
-import { readBytes, readJson, sha256Hex } from '../contracts/util'
+import { TapeError, TapeReader, FIELDS, WALK_ABOVE_M, WalkMesh, walkableHeight, type WalkTile } from '../../src/engine/actors/tape'
+import { readBytes, readJson, sameRaw, sha256Hex } from '../contracts/util'
 
 interface Sample { t_ns: number; ids: number[] | null; pos_enu_m: number[][]; yaw_rad: number[]; vel_enu_mps: number[][]; state: number[]; container: number[] }
 interface Golden { n_ticks: number; n_actors: number; n_scripted: number; hashes: Record<string, string>; records: Record<string, number[][]>; actor_states: Sample[] }
@@ -54,3 +55,59 @@ describe('tape decoder', () => {
     expect(() => new TapeReader(bad).value('x_mm', 0, 150)).toThrow(TapeError)
   })
 })
+
+type Raw = number | 'NaN' | 'Infinity'
+interface WalkGolden {
+  above_m: number
+  xyz_bytes: number
+  tri_bytes: number
+  tiles: WalkTile[]
+  counts: { vertices: number; triangles: number }
+  queries: { x: number[]; y: number[]; nav_z: Raw[]; z: Raw[]; z32: Raw[]; prim: number[] }
+}
+
+const num = (v: Raw): number => (v === 'NaN' ? NaN : v === 'Infinity' ? Infinity : v)
+
+describe('walkable height (MeshWorldQuery.walkable_height)', () => {
+  const w = readJson<WalkGolden>('golden/event/walkable-small.json')
+  const raw = readBytes('golden/event/walkable-small.bin')
+  const buf = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)
+  const mesh = new WalkMesh(new Float32Array(buf, 0, w.xyz_bytes / 4), new Uint32Array(buf, w.xyz_bytes, w.tri_bytes / 4), w.tiles)
+  const q = w.queries
+  const n = q.x.length
+  const xy = Float64Array.from({ length: 2 * n }, (_, i) => (i % 2 === 0 ? q.x[i >> 1] : q.y[i >> 1]))
+  const top = Float64Array.from(q.nav_z, (v) => num(v) + WALK_ABOVE_M)
+
+  it('reads the golden mesh', () => {
+    expect(WALK_ABOVE_M).toBe(w.above_m)
+    expect([mesh.xyz.length / 3, mesh.tri.length / 3]).toEqual([w.counts.vertices, w.counts.triangles])
+    expect(raw.byteLength).toBe(w.xyz_bytes + w.tri_bytes)
+  })
+
+  it('float64 heights and triangle numbers match Python bit for bit', () => {
+    const { z, prim } = mesh.surfaceBatch(xy, top)
+    const bad = Array.from(z).flatMap((v, i) => (sameRaw(v, q.z[i]) && prim[i] === q.prim[i] ? [] : [i]))
+    expect(bad).toEqual([])
+    expect(Array.from(z).filter(Number.isFinite).length).toBeGreaterThan(0.6 * n)
+  })
+
+  it('float32 walkable heights match Python bit for bit', () => {
+    const got = walkableHeight(mesh, xy, Float64Array.from(q.nav_z, num))
+    const bad = Array.from(got).flatMap((v, i) => (sameRaw(v, q.z32[i]) ? [] : [i]))
+    expect(bad).toEqual([])
+    const ix = q.nav_z.flatMap((v, i) => (v === 'Infinity' ? [i] : []))
+    const topOnly = mesh.walkableHeight(Float64Array.from(ix.flatMap((i) => [q.x[i], q.y[i]])))
+    expect(Array.from(topOnly).every((v, j) => sameRaw(v, q.z32[ix[j]]))).toBe(true)
+    expect(ix.length).toBeGreaterThan(100)
+  })
+
+  it('does not depend on query order', () => {
+    const order = Array.from({ length: n }, (_, i) => (i * 7919) % n)
+    const rev = new WalkMesh(mesh.xyz, mesh.tri, [...w.tiles].reverse())
+    for (const i of order) {
+      const h = rev.surface(q.x[i], q.y[i], top[i])
+      expect(sameRaw(h.z, q.z[i]) && h.prim === q.prim[i]).toBe(true)
+    }
+  })
+})
+

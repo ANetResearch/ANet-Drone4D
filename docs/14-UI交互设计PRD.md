@@ -4206,7 +4206,7 @@ viewer 界面（共享展示、静态浏览）不出现以上任何写入口；D
 
 | 项 | 内容 |
 |---|---|
-| 增补版本 | v1.3-D3（2026-10-12），追加在 §20.26 之后；§0 至 §20 原文不改，D3 范围内与之冲突处以本节为准；同日按 AWR-05 v1.2 §18 裁决同步（§21.4.4 锚点交互、§21.20 第 44 行、§21.27 裁决说明）；同日按 AWR-05 v1.3（用户 2026-10-12 交互式确认的设计决定）修订：内部排行榜与提交前移、受邀成员角色、公开站只读样例、热成像显示、数据检视面板前移，见 §21.29；同日按 AWR-05 v1.4 定稿修订：多赛道排行榜、事件编辑器的网格选择交互与几何不完整标注、P3 高斯检视视图与内部高斯编辑工具，见 §21.30 |
+| 增补版本 | v1.3-D3（2026-10-12），追加在 §20.26 之后；§0 至 §20 原文不改，D3 范围内与之冲突处以本节为准；同日按 AWR-05 v1.2 §18 裁决同步（§21.4.4 锚点交互、§21.20 第 44 行、§21.27 裁决说明）；同日按 AWR-05 v1.3（用户 2026-10-12 交互式确认的设计决定）修订：内部排行榜与提交前移、受邀成员角色、公开站只读样例、热成像显示、数据检视面板前移，见 §21.29；同日按 AWR-05 v1.4 定稿修订：多赛道排行榜、事件编辑器的网格选择交互与几何不完整标注、P3 高斯检视视图与内部高斯编辑工具，见 §21.30；2026-10-18 按 AWR-05 v1.6（ADR-194）修订 §21.15 的交付称谓（D1 至 D4）与 copy-lint 规则，见 §21.31 |
 | 基线 | [AWR-05](05-D3-设计增补与决策记录.md) v1.1（D3 唯一基线）；直接上游为 AWR-05 §7（前端：D3 工作区）、§6.1.6（数据检视面板）、§5.6.7（公开提交边界）、§7.9（公开站只读范围）、§7.10（企业级文案规范）、§7.11（部署形态与角色），ADR-149、ADR-152、ADR-153、ADR-164、ADR-166；冲突以 AWR-05 为准，基线问题列在 §21.27 |
 | 需求来源 | [D3 需求原文](inputs/D3-需求原文-2026-10-11.md)：R-D3-01 至 R-D3-40（AWR-05 §3）；本节主要承接 R-D3-05、R-D3-11、R-D3-12、R-D3-19、R-D3-21、R-D3-22、R-D3-27、R-D3-29、R-D3-36 |
 | 下游 | M15（`ui/lab/**`、`stores/lab/**`、`app/routes/lab*.tsx`；WP-D3-10、WP-D3-17、WP-D3-26、WP-D3-23 前端部分、WP-D3-13）；M06（`engine/actors/**`、`engine/droneview/**`、`viewport/layers/{actors,worldMesh}.tsx`）；M12（`engine/time` 库被 lab 播放头复用）；M23（编辑器后端）；M27（静态制品与工作区服务）；M16（Playwright 用例） |
@@ -4219,7 +4219,7 @@ viewer 界面（共享展示、静态浏览）不出现以上任何写入口；D
 2. **页面**：工作区首页与世界（P0a）、事件列表与只读时间线（P0a）、事件编辑器（P1）、机队与策略配置（P1，P0 经 SDK 与 REST）、运行列表与状态（P0a）、多机观测墙（P0a）、LiDAR 与重建对比（P0b）、运行回放 · 数据检视（P1，Rerun 面板）、数据集与评测浏览（P0b）、Fast 与 Realistic 对照（P2）、内部排行榜与提交（v1.3：P0a 原型、P0b v1，不对外）。每页给出线框、数据来源、交互规则与状态。
 3. **时间权威**：工作区内由 lab 播放头 `stores/lab/playhead.ts` 统一驱动三维场景视图、观测墙、时间线与 Rerun 面板。内部工作区的回放经 lab-gateway 的回放会话取得 TIME，播放头委托 M12 Timeline store（AWR-05 ADR-149 的"唯一时间权威"在 RT 会话内成立）；公开站无 RT 连接，播放头以本地时钟驱动，复用 `engine/time` 库；`stores/timeline.ts` 不修改（§21.13，§21.27 第 2 条）。
 4. **每机私有视角**：观测墙每格只显示该机实际收到的观测（`agent_view`）；真值叠加（实例、分割、可见比例、遮挡物类别）只对评测员与管理员开放，并以"评测视图"标签区分；公开站不提供真值叠加。实时运行使用 2 Hz 低分辨率预览流，回放使用 `raw.mcap` 中的存档帧（内部）或预渲染视角视频（公开站）。
-5. **LiDAR 与重建对比**（P0b，R-D3-29）：GLB 真值、L0 已知位姿地图与 FAST-LIVO2 地图三方叠加，使用 `ui/lab/lidar/` 专用画布（不经 M06 图层注册表）；Tier B/A 显示裁剪碰撞网格，Tier S 以网格采样点云降级；误差以灰阶顺序色阶着色并预计算；RPE100、ATE、漂移与"种子 × 重复运行"分布以箱线图呈现。
+5. **LiDAR 与重建对比**（P0b，R-D3-29）：GLB 真值、L0 已知位姿地图与 FAST-LIVO2 地图三方叠加，使用 `ui/lab/lidar-compare/`（v1.6，F06：原写 `ui/lab/lidar/`） 专用画布（不经 M06 图层注册表）；Tier B/A 显示裁剪碰撞网格，Tier S 以网格采样点云降级；误差以灰阶顺序色阶着色并预计算；RPE100、ATE、漂移与"种子 × 重复运行"分布以箱线图呈现。
 6. **数据检视**（v1.3：P0b，R-D3-22、R-D3-36、R-D3-46）：Rerun Web Viewer 按需加载，右侧分栏嵌入；播放头与 Viewer 双向同步，带防重入标记与节流；选择联动按实体路径映射；面板外壳、空状态与错误文案由宿主提供，Rerun 内部界面不承载业务操作；只在 Tier B/A 启用。
 7. **公开站只读样例**（v1.3：R-D3-46 取代 R-D3-27）：自 P0b 起只读展示样例：事件回放、多机私有视角（RGB 与热成像伪彩视频同步）、样例数据检视（Rerun 面板，Tier B/A）、世界浏览与 LiDAR 对比样例；不展示排行榜与任何得分比较，不提供提交；全部页面只发起静态 GET（§21.14、§21.29）。
 8. **企业级文案**（R-D3-21）：§21.15 把 AWR-05 §7.10 落到界面：中英文原则、术语与称谓、状态名、按钮动词、消息模板、原因码 600–699 文案、copy-lint 规则编号与白名单、README 与仓库元数据结构、D2 发布面复核清单（P-1，D3-AC-46）。
@@ -4279,6 +4279,7 @@ flowchart TB
   RW["/lab/runs/:rid 多机观测墙"]
   RLD["/lab/runs/:rid/lidar LiDAR 与重建对比（P0b）"]
   RI["/lab/runs/:rid/inspect 运行回放 · 数据检视（P1）"]
+  RP["/lab/replay 双 Run 同步回放与样例包（P0a，仅内部）"]
   CMP["/lab/compare Fast 与 Realistic 对照（P2）"]
   DS["/lab/datasets 数据集与评测浏览（P0b）"]
   LB["/lab/leaderboard 内部排行榜与提交（v1.3：P0a 起，只在内部构建）"]
@@ -4288,6 +4289,7 @@ flowchart TB
   ED -->|"新建实验"| XN
   XN -->|"提交运行"| RL
   RL --> RW
+  RL --> RP
   RW --> RLD
   RW --> RI
   HOME --> DS
@@ -4297,7 +4299,7 @@ flowchart TB
   WD -->|"在此世界上的事件"| EL
 ```
 
-公开只读构建只包含 `HOME`、`WL`、`WD`、`EL`、`ED`（只读回放）、`RW`（观测浏览）、`RLD`（预计算）、`RI`（v1.3：P0b 起，Tier B/A）、`CMP`（P2）、`DS`（v1.3：公开构建不含 `LB`，改为样例页 `/lab/samples`，§21.29）；不包含登录页、运行列表与机队配置页。
+公开只读构建只包含 `HOME`、`WL`、`WD`、`EL`、`ED`（只读回放）、`RW`（观测浏览）、`RLD`（预计算）、`RI`（v1.3：P0b 起，Tier B/A）、`CMP`（P2）、`DS`（v1.3：公开构建不含 `LB`，改为样例页 `/lab/samples`，§21.29）；不包含登录页、运行列表、双 Run 同步回放（`RP`，v1.6，F04）与机队配置页。
 
 #### 21.2.2 路由表（D3）
 
@@ -4305,21 +4307,22 @@ flowchart TB
 |---|---|---|---|---|---|
 | `/lab/login` | 工作区登录 | P0a | 无 | 不提供 | `next`（登录后跳转，只接受 `/lab` 前缀的相对路径） |
 | `/lab` | 工作区首页 | P0a | 研究者 | 只读（无队列与资源卡片） | — |
-| `/lab/worlds`、`/lab/worlds/:wid` | 世界列表与详情 | P0a | 研究者 | 只读 | `tab ∈ {overview, calibration, quality, layers, license}` |
-| `/lab/events`、`/lab/events/:eid` | 事件列表、事件时间线与编辑器 | P0a 只读；P1 编辑与新建 | 研究者（编辑：研究者，本人及所属项目） | 只读回放（只显示脚本演员） | `v`（版本）、`draft`（草稿 id，P1）、`t`（仿真秒）、`actor` |
+| `/lab/worlds`、`/lab/worlds/:wid` | 世界列表与详情 | P0a | 研究者 | 只读 | `tab ∈ {overview, calibration, quality, layers, license, sensors}`（v1.6，F02：`sensors` 为传感器提示，与 §21.3.2 表第 5 行一致） |
+| `/lab/events`、`/lab/events/:eid` | 事件列表、事件时间线与编辑器 | P0a 只读；P1 编辑与新建 | 研究者（编辑：研究者，本人及所属项目） | 只读回放（只显示脚本演员） | `v`（版本）、`draft`（草稿 id，P1）、`t`（仿真秒）、`actor`；v1.6（F02）：列表页另有 `eid`、`v`，打开编译详情侧栏 |
 | `/lab/experiments/new` | 机队与策略配置 | P1 | 研究者 | 不提供 | `event`、`v`、`from`（复制已有 Run 规格） |
-| `/lab/runs` | 运行列表与状态 | P0a | 研究者 | 不提供 | `event`、`xp`、`policy`、`state`、`ranked`、`cursor` |
+| `/lab/runs` | 运行列表与状态 | P0a | 研究者 | 不提供 | `event`、`xp`、`policy`、`state`、`ranked`、`cursor`；v1.6（F02）：`run`，打开运行状态侧栏 |
 | `/lab/runs/:rid` | 多机观测墙 | P0a | 研究者 | 只读（观测层，无真值叠加） | `t`、`uav`、`grid ∈ {1, 4, 9, 16}`、`page`、`view ∈ {obs, eval}`、`cam` |
-| `/lab/runs/:rid/lidar` | LiDAR 与重建对比 | P0b | 研究者 | 只读（预计算；Tier S 点云降级） | `uav`、`src`（`gt,l0,livo` 的子集）、`rep`、`mode ∈ {livo, lio}` |
-| `/lab/runs/:rid/inspect` | 运行回放 · 数据检视 | P0b（v1.3 由 P1 前移） | 研究者（评测 catalog：评测员） | 公开样例使用 `/lab/samples/:sid` 内的同一面板（Tier B/A，`public` 档切片） | `t`、`slice`、`catalog ∈ {dist, eval}` |
-| `/lab/compare` | Fast 与 Realistic 对照 | P2 | 研究者 | 只读 | `a`、`b`（两个运行 id）、`t` |
+| `/lab/replay` | 两个 Run 同步回放（含样例包浏览，v1.6，F04） | P0a | 研究者 | 不提供 | `a`、`b`（运行 id）、`t`（统一时间轴上的仿真秒，即 Run A 的仿真时间）、`cam`、`align ∈ {sim, event}`、`rate ∈ {0.25, 0.5, 1, 2, 4, 8}` |
+| `/lab/runs/:rid/lidar` | LiDAR 与重建对比 | P0b | 研究者 | 只读（预计算；Tier S 点云降级） | `uav`、`src`（`gt,l0,livo` 的子集）、`rep`、`mode ∈ {livo, lio}`；v1.6（F06）：另有 `tier ∈ {S, B}`（覆盖设备检测；软件光栅化为 Tier S）、`color ∈ {err, rgb}`、`size ∈ {1, 2, 3, 4, 6}`（px）、`crop=0`（隐藏裁剪框）；`src=none` 关闭全部图层 |
+| `/lab/runs/:rid/inspect` | 运行回放 · 数据检视 | P0b（v1.3 由 P1 前移） | 研究者（评测 catalog：评测员） | 公开样例使用 `/lab/samples/:sid` 内的同一面板（Tier B/A，`public` 档切片） | `t`、`slice`、`catalog ∈ {dist, eval}`；v1.6（R06）：`slice` 为 `<from>,<to>`（仿真秒），作为 BN-57 的 `t_from`、`t_to` 传入；测试构建（`TEST_SWITCHES`）接受 `?inspect=force` 以跳过设备检查，供软件渲染下的 Playwright 使用 |
+| `/lab/compare` | Fast 与 Realistic 对照 | P2 | 研究者 | v1.6（F13）：只在内部构建提供；公开站部分随 P2 移出 | v1.6（F13）：`run`（持有 `tier_compare/` 产物的运行；缺省取 `b`）、`case`、`uav`、`t`；原定义 `a`、`b`（两个运行 id）、`t` 的两运行模式随 P2 移出 |
 | `/lab/datasets` | 数据集与评测浏览 | P0b | 研究者 | 只读（dev 集） | `event`、`xp`、`group`、`metric` |
 | `/lab/leaderboard` | 内部排行榜（v1.3） | P0a（原型）、P0b（v1） | 受邀成员 | 不提供（构建期剔除） | `track`、`bv`（榜单版本）、`entry` |
 | `/lab/submissions`、`/lab/submissions/:sid` | 内部提交（v1.3） | P0a（内部成员）、P0b（受邀成员） | 受邀成员（本团队） | 不提供（构建期剔除） | `track`、`state` |
 | `/lab/samples`、`/lab/samples/:sid` | 样例目录与样例运行（公开站，v1.3） | P0b | —（内部构建重定向到 `/lab/runs/:rid`） | 只读：事件回放、多机私有视角、样例数据检视 | `t`、`uav`、`grid` |
 | 其他 `/lab/*` | — | — | — | — | 重定向 `/lab` 并 Toast"页面不存在，已打开事件沙盘首页" |
 
-1. 路由 id 一律以 `lab` 前缀登记在 `app/router/table.ts`（扩展点 15 只负责演示构建的路由集合与导航入口，路由本身在 `app/routes/lab*.tsx`，属 M15 新增路径）；`/lab/runs/:rid` 中 `:rid` 满足 `^run-[a-z2-7]{10}$`，`/lab/events/:eid` 中 `:eid` 满足 `^[a-z][a-z0-9-]{2,63}$`，不满足时回到对应列表页。
+1. 路由 id 一律以 `lab` 前缀登记在 `app/router/table.ts`（扩展点 15 只负责演示构建的路由集合与导航入口，路由本身在 `app/routes/lab*.tsx`，属 M15 新增路径；v1.6，F02：路由不再只在 `app/routes/lab*.tsx`。lab 路由分片：每个 lab 功能新增 `app/routes/lab/<feature>.route.ts`（导出 `route`，经 `routes/lab/lab.ts` 的 `labRoute()` 定义，id 以 `lab-` 为前缀），由 `app/router/table.ts` 的第二个 glob 收集；`VITE_AWR_EXT_ROUTES` 写组名 `lab` 时交付全部分片，旧式 `lab*.tsx` 仍按 id 交付；演示构建以 `labStripPlugin` 清空该 glob 并常量折叠，产物与 D2 逐字节一致）；`/lab/runs/:rid` 中 `:rid` 满足 `^run-[a-z2-7]{10}$`，`/lab/events/:eid` 中 `:eid` 满足 `^[a-z][a-z0-9-]{2,63}$`，不满足时回到对应列表页。
 2. `t` 以仿真秒表示（`t = 37.25`），打开后 seek 到该时刻；`view = eval` 在角色不足时静默改为 `obs` 并 Toast"当前角色无权查看评测视图（115 ROLE_FORBIDDEN）"。
 3. URL 写入沿用 §2.2：播放头与选择以 `history.replaceState` 节流 1 Hz 写入；路由切换用 `pushState`。
 4. 页面标题：`<页面> · 事件沙盘 · ANet Drone4D`；运行页为 `<运行 id> · 观测墙 · 事件沙盘 · ANet Drone4D`；公开只读构建在产品名后加"公开站"（例如"数据集 · 事件沙盘 · ANet Drone4D 公开站"）。
@@ -4327,7 +4330,7 @@ flowchart TB
 #### 21.2.3 两种构建与界面解析
 
 ```ts
-// 伪代码：app/lab/surface.ts（M15）。只决定呈现；服务端按 x-d3-role 独立执行同样的策略（AWR-05 ADR-166）
+// 伪代码：app/lab-public/flags.ts（M15，v1.6 实际文件；构建常量 LAB_BUILD，原写 app/lab/surface.ts）。只决定呈现；服务端按 x-d3-role 独立执行同样的策略（AWR-05 ADR-166）
 type LabBuild = 'internal' | 'public'                       // VITE_AWR_LAB_ONLY = 1 时为 public
 type LabRole = 'visitor' | 'invited' | 'researcher' | 'evaluator' | 'admin'      // v1.3：public_submitter 废止，invited 新增
 interface LabSurface { build: LabBuild; role: LabRole; projects: string[]; canEdit: boolean; canEval: boolean;
@@ -4346,7 +4349,7 @@ async function resolveLabSurface(build: LabBuild, route: Route): Promise<LabSurf
 ```
 
 规则：
-1. 公开只读构建的代码分块不包含写入口：`ui/lab/editor/**`、`ui/lab/fleet/**`、`ui/lab/runs/RunsTable.tsx` 的操作列与 `ui/lab/eval/**` 在 `VITE_AWR_LAB_ONLY = 1` 时以构建期常量剔除（与 ADR-111 的运行期切换不同：公开只读构建没有任何可写角色，P3 的提交 Sheet 单独懒加载）；`prod-bundle-scan` 增加检查项"公开只读构建的分块中不含 `/api/bench/v1/runs`、`/events`、`/session` 字符串"（§21.26 K15）。
+1. 公开只读构建的代码分块不包含写入口（v1.6：禁用模块表为 `vite.config.ts` 中的 `LAB_PUBLIC_FORBIDDEN_RE`，组合根为 `apps/web/src/app/lab-public/`）：`ui/lab/editor/**`、`ui/lab/fleet/**`、`ui/lab/runs/RunsTable.tsx` 的操作列与 `ui/lab/eval/**` 在 `VITE_AWR_LAB_ONLY = 1` 时以构建期常量剔除（与 ADR-111 的运行期切换不同：公开只读构建没有任何可写角色，P3 的提交 Sheet 单独懒加载）；`prod-bundle-scan` 增加检查项"公开只读构建的分块中不含 `/api/bench/v1/runs`、`/events`、`/session` 字符串"（§21.26 K15）。
 2. 内部构建登录态以会话 Cookie 维持；前端不持有 bench token，也不把短期令牌写入任何存储（只在内存中，用于 lab-gateway 的 WS 子协议），页面刷新时重新换取。
 3. 会话剩余 ≤ 10 min 时顶栏右侧出现"会话将于 {m} 分钟后到期 · [重新登录]"（`Badge` + `Button size="sm"`）；到期后任一请求得到 401 时跳转登录页并保留 `next`。
 4. 角色变化（管理员撤销令牌）时下一次请求得到 401 或 403，前端统一进入登录页或在原页显示"当前角色无权执行（115 ROLE_FORBIDDEN）"。
@@ -4434,7 +4437,7 @@ async function resolveLabSurface(build: LabBuild, route: Route): Promise<LabSurf
 
 #### 21.4.1 事件列表（`/lab/events`，P0a）
 
-`LfTable`（table.log 皮肤）列：事件 id、名称、世界、最新版本、状态、strict、时长、脚本演员、背景演员、磁带 `content_sha256` 前 12 位（等宽）、被引用运行数、更新于。筛选：世界、状态、所有者（本人、项目、全部）、关键字。行点击进入时间线；"新建事件"（P1，研究者）创建草稿并进入编辑器。状态显示名见 §21.15.4。
+`LfTable`（table.log 皮肤）列：事件 id、名称、世界、最新版本、状态、strict、时长、脚本演员、背景演员、磁带 `content_sha256` 前 12 位（等宽）、被引用运行数、更新于。筛选：世界、状态、所有者（本人、项目、全部）、关键字。行点击进入时间线；"新建事件"（P1，研究者）创建草稿并进入编辑器。状态显示名见 §21.15.4。v1.6 实现口径（F02）："所有者"筛选与"被引用运行数"列待 BN-20 增加 `owner` 与 `runs_count` 字段后提供（AWR-17 §18.5 同步）；P0a 中事件行点击打开编译详情侧栏，时间线页 `/lab/events/:eid` 另行交付。
 
 #### 21.4.2 事件时间线与编辑器线框（`/lab/events/:eid`，1920 × 1080，P1 编辑态）
 
@@ -4647,6 +4650,8 @@ const RULES: ((s: RunSpecDraft, ctx: Ctx) => Issue | null)[] = [
 | 原因 | 原因码与短文案（§21.15.6），悬停显示 `remedy` | FAILED、CANCELLED |
 | 操作 | `DropdownMenu`：打开、复制规格、取消（非终态）、重试（FAILED、CANCELLED）、导出（COMPLETED） | 取消与重试需 `AlertDialog` 确认；按钮文案"取消运行""重试运行" |
 
+v1.6 实现口径（F02，P0a）：进度列为"排队第 {n} 位 · 等待：{blocked_by}"，取消请求后为"取消中 · {s} s 内终止"（超时提示等待调度器）；20 格刻度条、`T+mm:ss`、预计开始时刻、资源列、"复制规格"与"导出"待 BN-42 提供仿真进度与资源字段及导出接口后补齐（D3.x）；列表整页轮询，有未结束运行且页面可见时 5 s，否则 30 s；行点击时有帧数据进入观测墙，否则打开状态侧栏。
+
 批量操作：多选后"取消所选运行（{n}）"；确认对话框标题"取消 {n} 个运行？"，正文"已开始的运行将在 10 s 内终止，已写入的录制保留 14 天。"。列表页不订阅逐运行 topic（避免订阅数随行数增长），只有可视区内运行中的行每 5 s 以 `GET /runs?ids=` 刷新。
 
 ### 21.7 多机观测墙（`/lab/runs/:rid`，P0a；R-D3-09、R-D3-11）
@@ -4740,7 +4745,7 @@ function onPlayhead(t: number, rate: number, tiles: Tile[]) {
 ```text
 ┌ 顶栏 · 面包屑：… › 运行 run-k2m4q7xz3a › LiDAR 与重建对比                        机型 p600_mid360_inv · LIVO │
 ├────────┬──────────────────────────────────────────────────────────┬─────────────────────────────────────────┤
-│ 导航栏 │ 专用画布（ui/lab/lidar/CompareCanvas）                     │ 数据源                                   │
+│ 导航栏 │ 专用画布（ui/lab/lidar-compare/CompareCanvas）             │ 数据源                                   │
 │        │  [GLB 真值 开] [L0 已知位姿地图 开] [FAST-LIVO2 地图 开]     │ 机 [uav-01 v]  模式 [LIVO|LIO]  重复 [r1 v] │
 │        │  误差着色 [到网格距离 v]  点大小 [2 px]  裁剪框 [舞台 v]      │ ──────────────────────────────────────  │
 │        │                                                          │ RPE100 中位数 0.21%   对齐 ATE 0.14 m     │
@@ -4760,12 +4765,14 @@ function onPlayhead(t: number, rate: number, tiles: Tile[]) {
 
 | 项 | Tier B/A | Tier S |
 |---|---|---|
-| 画布 | `ui/lab/lidar/` 专用画布（three.js，不经 M06 图层注册表，P0 不依赖扩展点 14）；预算检查沿用 `m06.gpu-limits` 阈值 | 同一画布，降级档 |
+| 画布 | `ui/lab/lidar-compare/` 专用画布（v1.6，F06：实现为 `apps/web/src/ui/lab/lidar-compare/`（`CompareCanvas.tsx` 等），原写 `ui/lab/lidar/`；three.js，不经 M06 图层注册表，P0 不依赖扩展点 14）；预算检查沿用 `m06.gpu-limits` 阈值 | 同一画布，降级档 |
 | GLB 真值 | 裁剪后的局部碰撞网格（10% 减面，≤ 300,000 面）半透明（不透明度 0.25，g400） | 世界包阶段 11 的网格采样彩色点云（裁剪到同一区域） |
 | L0 地图与 FAST-LIVO2 地图 | 点云，各 ≤ 2,000,000 点；两路以点形区分（实心圆、空心方） | 预先抽稀到 D2 点预算阶梯以内（Tier S 档上限），误差着色在 dmax 预计算并随点下发 |
 | 误差着色 | 每点到网格距离量化为 u8（0–0.5 m，步长 2 mm），着色为灰阶顺序色阶：0 m 为 g400，0.5 m 及以上为 g50（高亮显示偏差）；不使用色相与红色（§21.27 第 4 条） | 同左 |
 | 轨迹 | 真值轨迹（g300 实线）与估计轨迹（g50 虚线）；按逐点位姿积分的地图 | 同左 |
 | 交互 | 环绕、平移、缩放；点击点显示坐标与误差；框选区域统计误差分布 | 同左（帧率目标见 UX-NFR-041） |
+
+v1.6（F06）绘制规则：空心方点在绘制缓冲区中至少 3 像素（Tier S 像素比 0.5 时即 6 CSS 像素）；无误差值的点以 g600 绘制；Tier S 中真值采样点保持原色（实心方点）；Tier S 预算为 gt、l0、livo 合计 ≤ 150,000 点（D2 点预算阶梯的 Tier S 上限）；制品契约为 `drone4d.bench.lidar_compare.v1`（M27-FR-109）。
 
 数据来自 M27 派生物 `derived/compare/{tier_b, tier_s, metrics.json}`（内部经 `GET /runs/{rid}/artifacts/compare/...`；公开站为静态制品）；页面不在浏览器中计算误差（预计算口径与 `eval_sim` 一致，D3-AC-15）。
 
@@ -4796,16 +4803,18 @@ function onPlayhead(t: number, rate: number, tiles: Tile[]) {
 
 | 状态 | 进入条件 | 呈现 | 退出 |
 |---|---|---|---|
-| UNSUPPORTED | 设备档为 Tier S，或 WebGL2 与 WebGPU 均不可用 | `Empty`："当前设备不支持数据检视面板。可下载时间窗切片，在 Rerun 原生 Viewer 中打开。"按钮"下载切片"（公开站）或"在原生 Viewer 中打开"（内部） | — |
+| UNSUPPORTED | 设备档为 Tier S，或 WebGL2 与 WebGPU 均不可用；v1.6（R06）实现的四类原因：软件渲染（Tier S）、WebGL2 与 WebGPU 均不可用、不支持 Wasm SIMD、手机或平板布局（宽度 < 1024 px 或粗指针） | `Empty`："当前设备不支持数据检视面板。可下载时间窗切片，在 Rerun 原生 Viewer 中打开。"按钮"下载切片"（公开站）或"在原生 Viewer 中打开"（内部） | — |
 | IDLE | 页面进入、设备档允许 | 外壳与"加载数据检视"按钮（首次进入自动开始，用户关闭后不再自动） | 开始加载 |
-| LOADING | `React.lazy` 加载 `@rerun-io/web-viewer-react` 分块与 Wasm（自托管，49 MB，传输约 16 MB） | `Progress`（按已收字节）与"正在加载数据检视组件 · {mb} / {total} MB" | 成功 → OPENING；失败 → ERROR |
-| OPENING | 内部：`GET /runs/{rid}/viewer_url`（设置 `d3_rr` Cookie，17 §18.10.2）后 `viewer.open(url)`；公开站：`open(slice.rrd)` 与 `open(basemap.rrd)`（同一 `recording_id`） | `Skeleton` 覆盖 Viewer 区；"正在打开录制" | `recording_open` 事件 → READY；10 s 无事件 → ERROR |
+| LOADING | `React.lazy` 加载 `@rerun-io/web-viewer-react` 分块与 Wasm（自托管，49 MB，传输约 16 MB） | `Progress`（按已收字节）与"正在加载数据检视组件 · {mb} / {total} MB"；v1.6（R06）：加载入口为 `ui/lab/inspect/viewerLoader.ts`（核心包 `@rerun-io/web-viewer` 0.38.1，原写 `@rerun-io/web-viewer-react`）；进度为 `re_viewer_bg*.wasm` 已收到的解压后字节（start 期间包装 fetch），分母为锁定大小 51,225,405 B；宿主覆盖层遮住 Viewer 自带的英文加载画面 | 成功 → OPENING；失败 → ERROR |
+| OPENING | 内部：`GET /runs/{rid}/viewer_url`（设置 `d3_rr` Cookie，17 §18.10.2）后 `viewer.open(url)`；公开站：`open(slice.rrd)` 与 `open(basemap.rrd)`（同一 `recording_id`）；v1.6（R05）：内部构建在取得 `viewer_url` 后以同源 `viewer.open(url)` 打开；在 `cookie_exp_unix_ns` 前约 60 s、或收到 401 或 `grpc-status 16` 时重新调用 BN-57；v1.6（R07）：catalog 来源的 `recording_open` 可不带写入器版本（Viewer 0.38.1 发出 `version = null`），此时不判 694，版本只由 BN-57 的 `rerun_version` 检查；`version` 非 null 时仍比较次版本 | `Skeleton` 覆盖 Viewer 区；"正在打开录制" | `recording_open` 事件 → READY；10 s 无事件 → ERROR |
 | READY | 录制已打开 | Viewer 可交互；时间与选择同步生效 | 卸载、切换运行 |
 | ERROR | 加载、打开或运行期错误（含 694 版本不一致） | `Alert`："数据检视未能打开录制（694 RERUN_VERSION_MISMATCH）。该录制需要迁移后查看。"按钮"重试" | 重试 → LOADING |
 
 Viewer 未加载时三维场景视图的帧率与内存不受影响（D1-AC-03b 不回退，D3-AC-25）；`memory_limit` 设为 1.5 GB；路由离开时调用 `viewer.stop()` 并释放 Wasm 内存。
 
 #### 21.9.3 时间与选择同步
+
+v1.6（R06）实现口径（`ui/lab/inspect/rerunSync.ts`）：回声按精确值识别（每次推送登记一个待回声值，保留 10 s），同时保留下文的 50 ms 窗口规则；挂接时先暂停 Viewer 并把活动时间轴设为 `sim_time`，挂接推送的回声到达之前丢弃 Viewer 的时间与时间轴事件（实测原因：0.38 打开 `.rrd` 即开始播放且不发 play 事件，缺省时间轴为 `tick`）；与已同步时刻相差一帧以内的 Viewer 更新合并，100 ms 后写入精确值，拖动结束后静止误差为 0；真实 Viewer 实测（本机 SwiftShader，开发参考）100 次往返最大误差 0 ns，推送数 = 回声数 = 384，lab 拖动期间无回写。
 
 ```ts
 // 伪代码：ui/lab/inspect/rerunSync.ts（M15）。lab 播放头为时间权威（§21.13），Viewer 为跟随方
@@ -4831,13 +4840,13 @@ viewer.on('selection_change', (ev) => {
 
 1. 同步误差：任一方向拖动后另一方的时间差 ≤ 1 帧（≤ 100 ms 仿真时间）；100 次往复拖动后双方事件计数一致、无回环震荡（D3-AC-25）。
 2. Viewer 播放时（`play` 事件）lab 播放头切换为跟随 Viewer 的时间（`source = rerun`），用户在三维场景视图或时间线上操作即收回权威；切换在时间线上以"由数据检视驱动"标签提示。
-3. 三维场景视图中的选择经 Viewer 的 URL 片段定位到实体（`#/fleet/uav-02`）；评测员会话中真值实体 `/truth/actors/<id>` 可选中并在场景视图中高亮。
+3. 三维场景视图中的选择经 Viewer 的 URL 片段定位到实体（`#/fleet/uav-02`）；评测员会话中真值实体 `/truth/actors/<id>` 可选中并在场景视图中高亮。v1.6（R06）：场景到 Viewer 的选择只对 catalog 来源执行（URL 片段 `#selection=<entity>`，保留已有的 `when` 与 `time_selection`）；静态切片只执行 Viewer 到场景的方向，因为重新打开静态文件会再次下载；左侧窗格当前为正北朝上的平面总览（机队航迹，评测员另有真值演员），代替三维场景视图。
 
 #### 21.9.4 数据来源与权限
 
 | 构建与角色 | 数据 | 说明 |
 |---|---|---|
-| 内部 · 研究者 | 分发 catalog（`obs.*`、`agent.*`） | 经 rerun-proxy，Cookie `d3_rr`（10 min，Path=/rerun/）；查询真值返回 0 行 |
+| 内部 · 研究者 | 分发 catalog（`obs.*`、`agent.*`） | 经 rerun-proxy，Cookie `d3_rr`（10 min，Path=/rerun/ 与 Path=/rerun.cloud.v1alpha1.RerunCloudService，v1.6，R05）；查询真值返回 0 行 |
 | 内部 · 评测员、管理员 | 评测 catalog（全部层） | 外壳按钮"打开评测 catalog"，外壳标签"评测视图" |
 | 公开站（P1 起，Tier B/A） | 静态制品中的 `public` 档时间窗切片与 `basemap.rrd` | 切片列表来自静态制品索引；每片 ≤ 64 MB；不允许整段运行直链下载 |
 
@@ -4846,6 +4855,8 @@ viewer.on('selection_change', (ev) => {
 ### 21.10 Fast 与 Realistic 对照（`/lab/compare`，P2；R-D3-20）
 
 两个运行（同一磁带与 Run 规格，物理档分别为 Fast 与 Realistic）并排：上部两个观测墙（各 1–4 格）共用 lab 播放头；中部三维场景视图同时显示两档轨迹（Fast 实线 g50、Realistic 虚线 g300）；下部差异图表：位置差 RMS 随时间（`LfLine`）、到达时刻差、观测差（同一 `(uav, sensor, seq)` 的帧摘要相同比例）与指标差（`LfTable`）。进入页面时校验两运行的 `tape_content_sha256` 与 `config_sha256`（除物理档字段外）一致，不一致时 `Alert`"两个运行的事件或规格不同，对照结果不可比。"
+
+v1.6（F13）：实现为单运行模式。页面经 BN-54 读取运行 `/runs/{run}/artifacts/tier_compare/` 下的 `tier_compare.json` 与各用例的 `<case>.<tier>.npz`（`np.savez` 文件，含 numpy 写出的 zip64 头与压缩归档，由 `npz.ts` 解码）。左栏为用例表（接口判定、容差判定与余量）与报告摘要；主区为两档平面轨迹（Fast 实线 `--lf-data`、Realistic 虚线 `--lf-data2`）、高度曲线、逐样本位置差（以报告的位置 RMS 为参考线）、指标差带（相对各自容差），以及指标、接口检查、采样一致性与 M25 逐字节输出的表格（`LfTable`）。全部图表与位置读数共用一个 lab 播放头。规格检查：两档的机体集合或样本数不同、或样本时刻不逐位相同时，`Alert`"两档的采样网格或机体集合不同，对照结果不可比。"并给出原因。一致性检查：由轨迹重算的位置 RMS 须与报告的 `pos_rms_m` 相差 ≤ 1e-9 m，`within` 须与 diff ≤ tol 一致，不一致时标注；采样一致性各项按各自上限由页面自行判定，不取报告的通过标志。两运行模式（两个观测墙）与 `tape_content_sha256`、`config_sha256` 核对随 P2 移出 D3。BN-54 实现前页面在生产环境中无法加载数据（AWR-05 §29.5 F-70）。
 
 ### 21.11 数据集与评测浏览（`/lab/datasets`，P0b；R-D3-06、R-D3-10）
 
@@ -4948,7 +4959,7 @@ function bufferingGate(req: FrameNeeds[]): boolean {                  // 播放�
 #### 21.14.2 数据加载
 
 ```ts
-// 伪代码：app/lab/staticData.ts（M15）。公开只读构建的唯一数据入口
+// 伪代码：app/lab-public/staticIndex.ts（M15，v1.6 实际文件，导出 loadStaticIndex、labGet；原写 app/lab/staticData.ts）。公开只读构建的唯一数据入口
 async function loadStaticIndex(): Promise<LabStaticIndex> {
   const r = await fetch('/lab-static/index.json', { cache: 'no-cache' })     // ETag 校验；版本目录内文件为 immutable
   const idx = await r.json() as LabStaticIndex                                  // drone4d.lab_static_index.v1
@@ -4984,7 +4995,7 @@ async function loadStaticIndex(): Promise<LabStaticIndex> {
 4. 不作无法验证的比较（"首创""唯一""最强""业界领先"；"first-ever""best-in-class"）；与外部工作的比较只在有系统对照报告时给出（D3-AC-53）。
 5. 状态一律以文字与 morphicons 图标表达；严禁 emoji 与状态字形（勾号、叉号、星号等）。
 6. 空状态、加载与错误提示说明"发生了什么"与"可以做什么"；错误附原因码（"码 名称"格式）。
-7. 用户可见称谓统一：D1 视图称"三维场景视图（Scene View）"，D2 称"交互沙盒（Interactive Sandbox）"，D3 称"事件沙盘（Event Lab）"；"沙盘"只用于 D3。
+7. 用户可见称谓统一：D1 视图称"三维场景视图（Scene View）"，D2 称"交互沙盒（Interactive Sandbox）"，D3 与 D3.x 称"事件沙盘（Event Lab）"；"沙盘"只用于 D3。交付称谓与版本号按 AWR-05 §7.10 交付称谓表（D1 = V0.1、D2 = V0.2、D3 = V0.3、D3.x = V0.3.x、D4 为下一大版本，处于调研与概念设计阶段）；界面、README 与 release notes 以版本号与产品称谓表述，不使用"Drone4D 2.0"一类以主版本号 2 指代下一大版本的称谓（v1.6，ADR-194）。
 
 #### 21.15.2 术语与称谓（D3）
 
@@ -4993,6 +5004,9 @@ async function loadStaticIndex(): Promise<LabStaticIndex> {
 | 产品 | ANet Drone4D（首次）、Drone4D | ANet Drone4D, Drone4D | 正文中的 ANet-Drone4D；仿真神器 |
 | 基准全称 | 面向协同空中智能体的真实世界事件仿真与主动观测基准 | A World-Grounded Event Simulation and Active Observation Benchmark for Collaborative Aerial Agents | 口号式标语 |
 | D3 工作区 | 事件沙盘 | Event Lab | 数字沙盘、沙盒 |
+| D1 视图 | 三维场景视图 | Scene View | 数字沙盘、沙盘 |
+| D2 | 交互沙盒 | Interactive Sandbox | 沙盘 |
+| 交付称谓与版本（v1.6） | D1（V0.1）、D2（V0.2）、D3（V0.3）、D3.x（V0.3.x）、D4（下一大版本，调研与概念设计阶段）；对外文案称"V0.3 发布" | D1, D2, D3, D3.x, D4; "V0.3 release" | Drone4D 2.0、Drone4D v2、2.0 版、二代、新一代 Drone4D、D3.5、D3 Plus；对外文案中的"封板" |
 | 世界 | 世界、世界包 | world, world package | 地图包 |
 | 事件 | 事件、事件版本、事件磁带 | event, event version, event tape | 剧情、关卡 |
 | 实验、运行 | 实验、运行 | experiment, run | 任务（与 D2 任务混淆）、跑一次 |
@@ -5077,19 +5091,40 @@ async function loadStaticIndex(): Promise<LabStaticIndex> {
 | CL-ZH-03 | 中文 | 无条件性能数字：出现"帧/s""点/s""倍""ms""fps"而同句无硬件或条件词（A40、单卡、Tier、分辨率、档、在…上） | warning（对外页面为 error） | 术语表与参数表中的单位列 |
 | CL-ZH-04 | 中文 | 称谓：D1 视图以"沙盘"称呼、"沙盘"与"沙盒"混用 | error | `ui/lab/**` 的"事件沙盘" |
 | CL-EN-01 | 英文 | 禁用词：awesome、amazing、blazing、lightning-fast、super、magic、revolutionary、game-changing、cutting-edge、world-class、best-in-class、first-ever、seamless、effortless、insanely、!（句末） | error | 引用的外部专有名词 |
-| CL-EN-02 | 英文 | 标题与按钮 sentence case（首词首字母大写，其余小写，专有名词除外） | warning | 专有名词词表 `tools/lint/copy-proper-nouns.txt` |
+| CL-EN-02 | 英文 | 标题与按钮 sentence case（首词首字母大写，其余小写，专有名词除外） | warning | 专有名词词表 `tools/lint/copy-proper-nouns.txt`（v1.6，L05 更正：该文件不存在，专有名词表为 `tools/lint/copy-lint.mjs` 中的 `PROPER_PHRASES` 与 `PROPER_WORDS`，已加入 'Sandbox API'） |
 | CL-EN-03 | 英文 | 无条件性能数字（与 CL-ZH-03 同口径） | warning（对外页面为 error） | 同上 |
 | CL-ALL-01 | 全部 | emoji 与禁用字形（沿用 `no-emoji.mjs` 的字符集） | error | 无 |
 | CL-ALL-02 | 全部 | 产品名写法：正文中出现 `ANet-Drone4D`（URL 与包名除外） | error | URL、代码、包名 |
+| CL-ALL-03 | 全部 | 交付称谓（v1.6，AWR-05 §7.10、ADR-194）：以主版本号 2 指代下一大版本（`Drone4D 2.0`、`Drone4D v2`、`Drone4D 2` 后接非数字、"2.0 版"、"二代"、"新一代 Drone4D"），以及 `D3.5`、`D3 Plus` | error | 第三方许可与软件版本号（Apache License 2.0、Apache-2.0、glTF 2.0、OAuth 2.0）；契约与协议版本号（`board.v2`、`wire.v2`、`1.3.0`）；本项目已发布的版本号（"0.2.0 版本"）；引用外部文献原题 |
 
-扫描范围：`apps/web/src/app/i18n/{zh-CN,en}.json`、`README.md`、`README.zh-CN.md`、公开站落地页与关于页、GitHub 仓库 About 与 topics（`tools/release/repo-meta.json`）、release notes、`CITATION.cff`、数据集发布页（`README` 与 `GENERATORS.md`）、`drone4d-camera` 文档、OpenAPI 描述（`bench.openapi.snapshot.json` 的 `summary` 与 `description`）。基线例外在 `tools/lint/copy-lint.baseline.json` 逐条登记（文件、键、规则、理由、登记人），P0b 出口前清零（D3-AC-46、D3-AC-23）。
+扫描范围：`apps/web/src/app/i18n/{zh-CN,en}.json`、`README.md`、`README.zh-CN.md`、公开站落地页与关于页、GitHub 仓库 About 与 topics（`tools/release/repo-meta.json`）、release notes、`CITATION.cff`、数据集发布页（`README` 与 `GENERATORS.md`）、`drone4d-camera` 文档、OpenAPI 描述（`bench.openapi.snapshot.json` 的 `summary` 与 `description`）。v1.6（L05）：扫描范围由 `tools/lint/copy-lint.scope.json` 在缺省范围外追加：D3 lab 分片词典 `apps/web/src/app/i18n/lab/*.json`；`/lab/` 公开构建 `apps/web/src/app/lab-public/` 下的全部 `i18n/*.json` 与模板 `lab-public/index.html`；原因码文案 `reasons.zh-CN.gen.json`；OpenAPI 快照 `packages/contracts/rest/openapi.snapshot.json`、`packages/contracts/rest/sandbox.openapi.snapshot.json` 与 `packages/contracts/bench/openapi/bench.openapi.snapshot.json`（bench 快照路径以此为准）；数据集发布包的 README 与 GENERATORS 模板（`tools/release/`，属 P3，目录不存在时跳过）。扫描文件 27 个，语言按文件名判定。基线例外在 `tools/lint/copy-lint.baseline.json` 逐条登记（文件、键、规则、理由、登记人），P0b 出口前清零（D3-AC-46、D3-AC-23）。
+
+规则编号对照（v1.6，L01）：本表的 CL-* 编号为设计编号；`tools/lint/copy-lint.mjs` 的实现编号为 COPY-01 至 COPY-10（含义见 AWR-05 §7.10），基线登记、`<!-- copy-lint-allow COPY-xx 理由 -->` 放行注释与 lint 输出一律使用实现编号。对照如下：
+
+| 设计编号 | 实现编号 |
+|---|---|
+| CL-ZH-01、CL-EN-01 | COPY-01 短语禁用表与白名单 |
+| CL-ZH-02 | COPY-02 感叹号与语气符号 |
+| （省略号；打开对话框的菜单省略号为白名单，AWR-05 §7.10） | COPY-03 |
+| CL-ALL-01 | COPY-04 emoji 与禁用字形 |
+| CL-ZH-03、CL-EN-03 | COPY-05 未注明条件的数字 |
+| CL-ALL-02 | COPY-06 产品名与专有名词写法 |
+| CL-EN-02 | COPY-07 英文 sentence case |
+| （D3-AC-53 最高级措辞） | COPY-08 |
+| （口号式标语，§21.15.8） | COPY-09 |
+| CL-ZH-04、CL-ALL-03 | COPY-10 称谓与术语表（交付称谓规则 CL-ALL-03 在 COPY-10 内实现） |
+| （基线登记） | COPY-BL-01 登记失效、COPY-BL-02 登记缺字段、COPY-BL-03 `--strict` 下仍有基线 |
+
+基线文件 `copy-lint.baseline.json` 的 `exceptions` 为 P-1 基线，由 `make lint-copy-strict` 判定清零；`allow` 为经评审的永久放行项，须填写 `reason` 与 `reviewed`。
+
+v1.6（K09，AWR-05 §23.5 C-48、C-50）：COPY-05 的英文白名单增加时限与超时参数语境：terminate、cancel、stop、shut down、time out 之后至多 2 个词接 within，以及否定谓语（could、did、does、do、can、will、would 加 not，或 cannot）之后至多 4 个词接 within，其间不含连词，视为参数，不报；性能与时间宣称仍报（R-06）。COPY-10 增加界面交付称谓规则：i18n 与 html 两类文件中出现 `D1` 至 `D4` 或 `D3.x` 报 error，`D3-AC-14` 一类验收编号与 Markdown 文件不报（R-04）。自测见 `tools/lint/selftest.mjs`。
 
 #### 21.15.8 README 与仓库元数据结构（D2 发布面复核与 D3 发布）
 
 | 章节（`README.md` / `README.zh-CN.md`） | 内容要求 |
 |---|---|
 | 标题与一句话定位 | "ANet Drone4D"；一句话定位分别说明交互沙盒（D2：服务器无需 GPU）与事件沙盘（D3：传感器生成需要服务器 GPU），不使用口号 |
-| Capabilities / 能力 | 能力表：能力、交付（D1、D2、D3）、运行前提；数字一律附条件 |
+| Capabilities / 能力 | 能力表：能力、交付（D1、D2、D3）、运行前提；数字一律附条件；D4 未发布前不列入能力表，不预告功能与日期（AWR-05 §7.10 交付称谓表） |
 | Requirements / 运行环境 | 浏览器与设备档、服务器（D2：4 核无 GPU；D3：NVIDIA GPU，驱动 ≥ 535） |
 | Quick start / 快速开始 | 命令块；不含口语化提示 |
 | Documentation / 文档 | 指向 `docs/` 与公开站 |
@@ -5103,9 +5138,11 @@ GitHub About：一句话描述（≤ 120 字符，无营销用语）；topics �
 1. 新增或修改的界面字符串均有中文与英文两份，键名符合 §13.7。
 2. 每个空状态、错误与确认对话框符合 §21.15.5 模板，错误带原因码。
 3. 页面上的每个性能或精度数字附条件；无"首创"类比较。
-4. 称谓符合 §21.15.1 第 7 条；"沙盘"只出现在 D3。
+4. 称谓符合 §21.15.1 第 7 条；"沙盘"只出现在 D3；交付称谓与版本号符合 AWR-05 §7.10 交付称谓表，不出现"Drone4D 2.0"一类称谓（CL-ALL-03）。
 5. 许可与署名在世界页、数据集页、公开站页脚与下载区可见（D3-AC-24）。
 6. copy-lint 无 error，warning 已逐条确认。
+
+v1.6（H11）：本次发布的评审记录为 [impl/D3-文案评审记录.md](impl/D3-文案评审记录.md)（AWR-05 §7.10、D3-AC-23、D3-AC-46）；`tests/d3/copy/test_copy_review_record.py` 要求每个新增的 D3 路由与词典文件都在记录中登记，记录引用的发现编号须已登记，中英文词典键集合与 ICU 参数名一致，D3 组件注释以外不出现中文字面量。评审裁决 R-01 至 R-07 见记录第 7 节（AWR-05 §23.5 C-45 至 C-51）。
 
 ### 21.16 图层与设备档（AWR-05 §7.8）
 
@@ -5185,6 +5222,8 @@ GitHub About：一句话描述（≤ 120 字符，无营销用语）；topics �
 | 环境轨迷你曲线 | sparkline | `LfSparkline` | Canvas / 数据变化 | 无 |
 | 事件泳道 | 时间轨 | `LfTimelineTrack`（增加状态色带与刻度字形） | Canvas / ≤ 10 Hz | 无 |
 
+v1.6（F06）：`LfBox` 与 `LfMatrix` 目前在页面内实现（`ui/lab/lidar-compare/charts.tsx`），仍须迁入 `ui/lf`（AWR-05 §26.5 F-41）。
+
 #### 21.17.4 transitions.dev 配方（§8.2 表的续行，编号接 #46）
 
 | # | 交互 | 配方 | 宿主 | 打开 / 进入 | 关闭 / 退出 | 曲线 | lite 差异 | reduced |
@@ -5217,7 +5256,7 @@ GitHub About：一句话描述（≤ 120 字符，无营销用语）；topics �
 
 ### 21.19 文案（新增键，中文与英文）
 
-D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不再推迟到 V1.0，§21.27 第 10 条）；键名前缀 `lab.`；原因码 600–699 的短文案由 `reasons.json` 生成（`reasons.zh-CN.gen.json` 与英文对应文件）。
+D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不再推迟到 V1.0，§21.27 第 10 条）；键名前缀 `lab.`；原因码 600–699 的短文案由 `reasons.json` 生成（`reasons.zh-CN.gen.json` 与英文对应文件）。v1.6（F02）：D3 lab 文案按功能分片：`app/i18n/lab/<feature>.zh-CN.json` 与 `.en.json` 成对、同键，键前缀 `lab.`，跨分片唯一且不与 `zh-CN.json`、`en.json` 重复；运行时由 `app/i18n/index.ts` 按文件名序合并；演示构建不含分片（`tests/lab/worlds.test.ts` 校验）。英文界面目前不显示原因码处理建议，建议 `rt/reasons.json` 增加 `remedy_en`（AWR-17 §18.12，AWR-05 §25.5）。
 
 | 键 | 中文 | English |
 |---|---|---|
@@ -5226,7 +5265,7 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 | `lab.nav.{home,worlds,events,experiments,runs,datasets,compare,leaderboard}` | 概览、世界、事件、实验、运行、数据集、对照、排行榜 | Overview, Worlds, Events, Experiments, Runs, Datasets, Compare, Leaderboard |
 | `lab.login.title` / `lab.login.hint` | 工作区登录 / 使用管理员签发的工作区令牌登录。令牌只在本次提交中使用，不会保存在浏览器中。 | Workspace sign-in / Sign in with a workspace token issued by an administrator. The token is used only for this request and is not stored in the browser. |
 | `lab.session.expiring` | 会话将于 {m} 分钟后到期 | The session expires in {m} minutes |
-| `lab.role.{visitor,invited,researcher,evaluator,admin}` | 访客、受邀成员、研究者、评测员、管理员（v1.3：`public_submitter` 废止） | Visitor, Invited member, Researcher, Evaluator, Administrator |
+| `lab.role.{visitor,invited,researcher,evaluator,admin}` | 访客、受邀成员、研究者、评测员、管理员（v1.3：`public_submitter` 废止；v1.6（H11）：词典中 `lab.role.researcher` 仍为"研究员"、`lab.role.invited` 英文仍为 "Invited"，与本表不一致，按 W-03 改正，见 [impl/D3-文案评审记录.md](impl/D3-文案评审记录.md)） | Visitor, Invited member, Researcher, Evaluator, Administrator |
 | `lab.forbidden` | 当前角色无权查看此页面（115 ROLE_FORBIDDEN）。如需访问，请联系工作区管理员。 | Your role does not permit access to this page (115 ROLE_FORBIDDEN). Contact the workspace administrator for access. |
 | `lab.world.scale` | 尺度 {s} m/单位（{method}，残差 {r} m） | Scale {s} m per unit ({method}, residual {r} m) |
 | `lab.world.scaleAssumed` | 尺度为人工设定，未经地标配准 | The scale was set manually and has not been registered against landmarks |
@@ -5316,7 +5355,7 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 | 路径 | 内容 | 所有者（工作包） | 复用的 D1、D2 代码与研究原型 |
 |---|---|---|---|
 | `apps/web/src/app/routes/lab*.tsx`（新） | 14 条路由与参数解析 | M15（WP-D3-10） | `app/router/{table,match,search}.ts`、`app/routes/runs.tsx` 的覆盖页写法 |
-| `apps/web/src/app/lab/{surface,staticData,benchClient}.ts`（新） | 构建与界面解析（§21.2.3）、静态制品加载（§21.14.2）、bench REST 客户端（Cookie、CSRF 头、problem+json） | M15（WP-D3-10、26） | `net/api.ts` 的错误映射、`lib/demo.ts` 的构建开关写法 |
+| `apps/web/src/app/lab/{surface,staticData,benchClient}.ts`（新；v1.6：公开只读构建的对应文件为 `apps/web/src/app/lab-public/{flags,staticIndex}.ts`） | 构建与界面解析（§21.2.3）、静态制品加载（§21.14.2）、bench REST 客户端（Cookie、CSRF 头、problem+json） | M15（WP-D3-10、26） | `net/api.ts` 的错误映射、`lib/demo.ts` 的构建开关写法 |
 | `apps/web/src/ui/lab/shell/`（新） | 外壳、导航栏、面包屑、登录页、会话提示 | M15 | `ui/layout/AppHeader.tsx`、`ui/components/ui/{sidebar,breadcrumb}.tsx` |
 | `apps/web/src/ui/lab/{home,worlds}/`（新） | 首页与世界页 | M15 | `ui/views/WorldHub.tsx` 的卡片布局 |
 | `apps/web/src/ui/lab/editor/`（新）：`EventEditor.tsx`、`Inspector.tsx`、`toolModes.ts`、`preflightController.ts`、`navWorker.ts`、`draftSync.ts`、`ClaimsSheet.tsx` | §21.4 | M15（WP-D3-17） | `ui/panels/mission-edit/{EditViewportLayer,editModel}.ts`（`PolyEditor` 与撤销栈）、`ui/tools/toolMode.ts`；r6 原型 `.cache/research/d3/r6-event-benchmark/node/{build_navmesh,tape_gen}.mjs`（WASM 调用方式）、`schema/event.v1.schema.json` |
@@ -5325,15 +5364,16 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 | `apps/web/src/ui/lab/fleet/`（新）：`ExperimentNew.tsx`、`FleetTable.tsx`、`specRules.ts`、`EstimateCard.tsx` | §21.5 | M15（WP-D3-17） | `stores/catalog.ts` 的机型目录读取方式、`ui/panels/fleet/*` 的表单件 |
 | `apps/web/src/ui/lab/runs/`（新） | 运行列表与状态 | M15（WP-D3-10） | `ui/views/RunsPage.tsx`、`ui/lf/{LfTable,LfTickGauge}.tsx` |
 | `apps/web/src/ui/lab/wall/`（新）：`ObservationWall.tsx`、`layout.ts`、`frameScheduler.ts`、`tileRenderer.ts`、`evalOverlay.tsx` | §21.7 | M15（WP-D3-10） | `ui/fpv/{PerceptionHud,hudModel}.tsx` 的角标排版；M06 `engine/droneview/**`（帧解码 Worker、`d3frames.v1` 解析） |
-| `apps/web/src/ui/lab/lidar/`（新）：`CompareCanvas.tsx`、`errorRamp.ts`、`MetricsPanel.tsx` | §21.8 | M15、M06（WP-D3-26） | `engine/pointcloud` 的 ANET_Q16 解码（Tier S）；r4 原型 `.cache/research/d3/r4-mesh-lidar/scripts/{recon,viz}.py`（误差口径）；r1 `eval_sim.py`（指标口径） |
-| `apps/web/src/ui/lab/inspect/`（新）：`InspectPage.tsx`、`RerunPanel.tsx`、`rerunSync.ts` | §21.9 | M15（WP-D3-17） | r8 原型 `.cache/research/d3/r8-rerun/web/{index.html,app.js}`（`fromRerun` 防重入、`set_current_time`、`time_update`）；`ui/components/ui/resizable.tsx` |
+| `apps/web/src/ui/lab/lidar-compare/`（新；v1.6，F06：原写 `ui/lab/lidar/`）：`CompareCanvas.tsx`、`charts.tsx` 等 | §21.8 | M15、M06（WP-D3-26） | `engine/pointcloud` 的 ANET_Q16 解码（Tier S）；r4 原型 `.cache/research/d3/r4-mesh-lidar/scripts/{recon,viz}.py`（误差口径）；r1 `eval_sim.py`（指标口径） |
+| `apps/web/src/ui/lab/inspect/`（新）：`InspectPage.tsx`、`RerunPanel.tsx`、`rerunSync.ts`（v1.6，R06：另有 `viewerLoader.ts`，是 `@rerun-io/web-viewer` 唯一的动态 `import()`） | §21.9 | M15（WP-D3-17） | r8 原型 `.cache/research/d3/r8-rerun/web/{index.html,app.js}`（`fromRerun` 防重入、`set_current_time`、`time_update`）；`ui/components/ui/resizable.tsx` |
+| `apps/web/src/ui/lab/replay/`（新，v1.6）：`ReplayPage.tsx`、`ReplayTile.tsx`、`SamplePackPanel.tsx`、`sync.ts`、`samplePack.ts` | §21.2.2 `/lab/replay`（双 Run 同步回放与样例包浏览）；v1.6（B20）：样例包文件种类为 `video`、`mcap`、`metrics`、`tape`、`manifest`、`slice` 与 `tracks`（事件回放机队轨迹 `tracks_obs.bin`，`bench/tracks.v1` 观测层，契约 `bench/sample_pack.v1`）；`samplePack.ts` 的 `SAMPLE_FILE_KINDS`、`SamplePackPanel.tsx` 的图标（`layer.trajectory`）与文案 `lab.replay.pack.file.tracks`（"机队轨迹（观测层）" / "Fleet tracks (observation layer)"）已补 `tracks`（v1.6，K09）；事件回放的场景视图接入 `tracks_obs.bin` 仍待，可复用 `lab-public/samples/tracks.ts` 的解码器（AWR-05 §31.5 F-91） | M15（F04） | `ui/lab/wall/{frames,layout}.ts`、`stores/lab/playhead.ts` |
 | `apps/web/src/ui/lab/{compare,datasets,leaderboard}/`（新） | §21.10 至 §21.12 | M15（WP-D3-26、WP-D3-23、WP-D3-21） | `ui/lf/{LfBarRank,LfLine,LfStat}.tsx` |
 | `apps/web/src/ui/lf/{LfBox,LfMatrix}.tsx`（新）；`LfBarRank.tsx`（增加 `whisker`）、`LfTimelineTrack.tsx`（增加色带与刻度字形） | §21.17.3 | M15 | lieflat 规范（d01） |
 | `apps/web/src/engine/actors/tape/`（新，M06） | 前端磁带解码器：zstd WASM、按演员分列差分解码、Hermite 插值与阶跃规则 | M06（WP-D3-10） | `engine/time/{hermite,trackModel}.ts`；`engine/targets` 已导出组件（`TargetsOverlay`、`bodyMesh`）；r6 原型 `scripts/tape.py`（格式参照）；r7 `scripts/e3_tape_interp.py`（插值对拍） |
 | `apps/web/src/viewport/layers/{actors,worldMesh}.tsx`（新，M06） | P1 背景演员实例化图层与舞台网格图层；`LayerId` 增补经扩展点 14 | M06（WP-D3-17、21） | `viewport/layers/targets.tsx`、`pointcloud.tsx`；r2 原型 `.cache/research/d3/r2-glb-world/web/index.html`（GLTFLoader + meshopt + KTX2 加载） |
 | `apps/web/src/lib/demo.ts`、`app/router/table.ts`、落地页与导航入口 | 扩展点 15：`VITE_AWR_LAB_PUBLIC` 与 `VITE_AWR_LAB_ONLY` | M15（WP-D3-27） | D2 `DEMO_ROUTES`、`installRoutes` |
 | `apps/web/src/app/i18n/{zh-CN,en}.json` | §21.19 新键；扩展点 17 的 D2 发布面复核 | M15（WP-D3-13） | 文案键生成脚本 |
-| `tools/lint/copy-lint.mjs`、`copy-lint.baseline.json`、`copy-proper-nouns.txt`（新，M00） | §21.15.7 | M00、M15（WP-D3-13） | `tools/lint/no-emoji.mjs` 的扫描框架 |
+| `tools/lint/copy-lint.mjs`、`copy-lint.baseline.json`、`copy-proper-nouns.txt`（新，M00；v1.6，L05：`copy-proper-nouns.txt` 未建，专有名词表在 `copy-lint.mjs` 中；扫描范围配置为 `copy-lint.scope.json`） | §21.15.7 | M00、M15（WP-D3-13） | `tools/lint/no-emoji.mjs` 的扫描框架 |
 | `tools/shadcn/icons/inventory.mjs` | §21.17.2 新 key | M15 | D1 生成器 |
 | `apps/web/tests/lab/**`、`apps/web/perf/lab/**`（新） | §21.25 的用例（Playwright `lab/*`） | M15、M16 | `tests/m15/*` 的 FakeSource 夹具；新增 `fake_bench.py`（bench REST 与 lab-gateway 夹具） |
 
@@ -5441,11 +5481,11 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 | UX-AC-094 | 评测视图 | 研究者与访客的请求中 `/truth/` 出现 0 次；评测员切换后出现"评测视图"标签与包围框；评测视图像素中无红色 | Playwright | 本机 B | P0 |
 | UX-AC-095 | LiDAR 对比（D3-AC-15） | Tier B 三方叠加正确、误差着色与 `metrics.json` 一致（抽样 1,000 点，量化误差 ≤ 2 mm）；Tier S 以点云降级；帧率符合 UX-NFR-041；箱线图分位数与数据一致 | Playwright `lab/lidar-compare`、`perf/lab/lidar.spec.ts` | 本机 S、B | P0 |
 | UX-AC-096 | 数据检视（D3-AC-25） | 五种加载状态按 §21.9.2 呈现；双向同步误差 ≤ 1 帧；100 次往复无震荡；选择联动正确；Tier S 显示 UNSUPPORTED；Viewer 未加载时场景帧率不回退 | Playwright `lab/inspect` | 本机 B、S | P0 |
-| UX-AC-097 | 对照页（D3-AC-35） | 两运行共用播放头；规格不一致时提示；差异图表与 `evaluation.json` 一致 | Playwright `lab/compare` | 本机 B | P0 |
+| UX-AC-097 | 对照页（D3-AC-35） | 两运行共用播放头；规格不一致时提示；差异图表与 `evaluation.json` 一致 | Playwright `lab/compare`；v1.6（F13）：共用播放头、规格不一致提示与报告一致性核对已实现（单元测试 `apps/web/tests/lab/tierCompare.test.ts`，单运行模式读取 `tier_compare.json`），Playwright 待补 | 本机 B | P0 |
 | UX-AC-098 | 数据集浏览（D3-AC-24、50） | 树、摘要与表格数据与接口一致；种子 < 10 的指标带提示；下载区显示许可与署名；test 划分条目 0 个 | Playwright `lab/datasets` | 本机 B | P0 |
 | UX-AC-099 | 内部排行榜与提交（v1.3；D3-AC-43、57、59） | 排行榜按分轨与榜单版本显示 S、置信区间、四分量与并列组，基线行不占名次；提交 Sheet 显示推送命令、分轨与配额，配额不足时禁用并显示 681；撤回只在评测前可用；公开构建中不存在排行榜与提交路由与字符串 | Playwright（`fake_bench`）`lab/leaderboard`、`lab/submissions`、构建扫描 | 本机 B | P0 |
 | UX-AC-100 | lab 播放头 | 三种来源切换正确；Tier S 写 store ≤ 4 Hz；缓冲门限 500 ms；实时运行不可 seek | `tests/lab/playhead.test.ts` | 本机 S | P0 |
-| UX-AC-101 | 公开站回放（D3-AC-19、21） | 前端磁带解码的脚本演员位置与内部回放差 ≤ 5 cm；状态切换处无滑移；机队位置取 `tracks_obs.bin` | Playwright `lab/public-replay` | 本机 S | P0 |
+| UX-AC-101 | 公开站回放（D3-AC-19、21） | 前端磁带解码的脚本演员位置与内部回放差 ≤ 5 cm；状态切换处无滑移；机队位置取 `tracks_obs.bin`；单元级证据为 `apps/web/tests/m06/tape_replay.test.ts`（v1.6，B08，golden `packages/contracts/golden/event/tape-replay.{bin,json}`，实测最大差约 5 µm） | Playwright `lab/public-replay` | 本机 S | P0 |
 | UX-AC-102 | 公开站约束（D3-AC-21） | 全部公开页的请求只含 `/lab/` 与 `/lab-static/` 的 GET；WS 数 0；公开只读构建分块中不含 `/api/bench/v1/runs`、`/events`、`/session` 字符串 | Playwright `lab/public`、分块扫描 | 本机 S | P0 |
 | UX-AC-103 | 移动布局 | tablet 与 phone 模拟下布局符合 §21.14.3；命中区审计 0 违例；无横向滚动 | Playwright（设备模拟） | 本机 S | P1 |
 | UX-AC-104 | 文案（D3-AC-23、46） | copy-lint 中英文规则集 0 error；基线例外在 P0b 出口前为 0；README 结构符合 §21.15.8；评审清单记录存在 | `make lint`、评审记录 | 本机 | P0 |
@@ -5548,7 +5588,14 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 规则：
 1. 数据全部来自 `/lab-static/v/<version>/samples/<sid>/`（磁带、`tracks_obs.bin`、每机 RGB 与热成像伪彩 H.264 视频、`public` 档切片与 `basemap.rrd`）；不显示主得分、分量与任何跨策略比较；页面底部显示样例说明（世界、事件类型、机队、策略名与"样例运行，不构成排名"）与许可署名。
 2. "样例数据检视"在 Tier B/A 以右侧分栏加载 Rerun Web Viewer（与 §21.9 相同的外壳与 lab 播放头同步）；Tier S 与移动设备显示切片下载入口。
-3. 视频同步：以 lab 播放头为准，偏差 > 1 帧时重新 seek；同时播放路数按设备档限制（§21.14.3）。
+3. 视频同步：以 lab 播放头为准，偏差 > 1 帧时重新 seek；同时播放路数按设备档限制（§21.14.3）。v1.6 实现（F07，`apps/web/src/app/lab-public/samples/videoSync.ts`）：
+   - 播放中视频时钟的目标为播放头减半帧，因为合成器按重叠最多选帧，比按帧号取整早半帧；暂停与拖动时 seek 到帧中点。
+   - 漂移 > 1 帧时重新 seek：目标按实测 seek 时延前置（至多 250 ms），同一路两次 seek 至少间隔 500 ms。
+   - 漂移在 0.25–1 帧之间时微调播放速率（至多 ±20%）。
+   - 起播时播放头保持到视频开始推进（至多 1 s）；视频未就绪超过 500 ms 进入缓冲状态，播放头冻结。
+   - 同时播放路数上限：手机 1，平板与 Tier S 4，桌面 Tier B/A 6；两个通道都在上限内时才提供"并排"视图。
+   - 偏差以 `requestVideoFrameCallback` 测量，写入 `data-sync-*` 属性（`presented`、`max-dev`、`hist`、`reseeks`、`videos`），供 Playwright `lab/public-samples` 读取。
+4. 请求守卫（v1.6，F07）：页面挂载期间 `samples/staticGuard.ts` 只放行同源 `/lab/`、`/lab-static/` 的 GET 与 HEAD，其余请求（含 Rerun Viewer 启动时的 GitHub 版本检查）被拦截。
 
 #### 21.29.4 文案（新增键，中文与英文）
 
@@ -5713,3 +5760,24 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 | UX-AC-117 | 事件编辑器：三种绘制方式产出 ≤ 64 顶点的简单多边形；本地命中测试 p95 ≤ 100 ms（Tier B 参考设备、舞台网格）；质量标注提议不改变编译结果，研究者看不到提升按钮 | P1 | Playwright `lab/event-editor` |
 | UX-AC-118 | 高斯检视视图：来源角标常驻；预算生效且显示渲染数量；与播放头偏差 ≤ 1 帧；离开页面后上下文释放；`m06.gpu-limits` 最小上限下 WebGL 错误为 0 | P3 | Playwright `lab/gaussian` |
 | UX-AC-119 | 公开构建中 `gaussian`、`gs-editor` 路由与相关字符串为 0 | P3 | 构建扫描 |
+
+### 21.31 D3-REV 修订（v1.6 同步，依据 AWR-05 v1.6 ADR-194）
+
+#### 21.31.1 修订依据与摘要
+
+依据用户 2026-10-18 决定 R-D3-61 至 R-D3-70 与 AWR-05 v1.6 的 ADR-194（先行生效，待 D3 封板前用户确认）：
+
+1. 交付称谓扩为 D1 至 D4：§21.15.1 第 7 条、§21.15.2 术语表、§21.15.8 README 能力表、§21.15.9 评审清单第 4 条同步修订；copy-lint 增设 CL-ALL-03（§21.15.7）。
+2. 封板范围为 P-1、P0a、P0b：本节需求表中"阶段"列为 P1、P2、P3 的 UX-FR 与 UX-AC（事件编辑器、机队与策略配置、舞台网格、全世界网格瓦片、协同探索演示、高斯检视视图与编辑工具等）随 AWR-05 §23.3 的 D3.x 顺延清单顺延，编号与阈值不变，不计入 D3 封板，交付时按原阈值验收。
+3. 公开站只读视图（§21.14）在 D3 封板前上线并以生产环境实测判定（AWR-05 D3-AC-21），不以演练代替。
+
+#### 21.31.2 对 §0 至 §20 中称谓的覆盖
+
+§0 至 §20 原文不改；下列称谓在 D3 范围内与发布面复核中按本节执行：
+
+| 位置 | 原文 | 按本节 |
+|---|---|---|
+| §1、§3 等 D1 章节 | "数字沙盘"（Web 应用主工作面的设计用语） | 用户可见称谓为"三维场景视图"；"数字沙盘"只作 D1 设计史用语，不进入界面字符串 |
+| §20.2.2 路由表"视图"列 | `/world/:id` 为"沙盘"；`/sandbox/:sid` 为"沙盘（沙盒）" | `/world/:id` 为"三维场景视图"；`/sandbox/:sid` 为"交互沙盒" |
+| UX-AC-039 | 按钮"在沙盘中打开" | "在三维场景视图中打开"；界面字符串与 e2e 断言随 D2 发布面文案复核同一变更修改（D3-AC-46）（v1.6，L02：已修改，`jobs.openInSandbox` 为"在三维场景视图中打开"，回归测试 `tests/e2e/test_release_copy.py`） |
+| §0 至 §20 的界面字符串中以"沙盘"指 D1 视图的其他键 | 例如窗口过窄提示"数字沙盘要求窗口宽度……" | 改为"三维场景视图"或"本应用"，随 D2 发布面文案复核修改（CL-ZH-04）（v1.6，L02：已修改，涉及键 `jobs.subtitle`、`shell.tooSmallHint`、`ff.narrowHint` 与 `landing.story.digital-twin.alt`；窄窗提示统一为"本应用要求窗口宽度不小于 360 CSS px"） |

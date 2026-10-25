@@ -489,6 +489,11 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1
+        },
+        "event": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,47}$",
+          "description": "v1.3 (P0b, additive): vehicle_event only, the vehicle key event type it reports (depart, turn, stop, park, enter_zone, exit_zone; M23 §15.3); EU matches it against vehicle key events of the same type. Other report types omit it"
         }
       },
       "required": [

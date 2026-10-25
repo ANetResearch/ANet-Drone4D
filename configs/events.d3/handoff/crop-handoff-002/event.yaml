@@ -1,0 +1,53 @@
+# crop-handoff-002：交汇与交接类 dev 事件（P0b 形式，M23 §15.3 第 2 行，D3-AC-62；E10）。A 在集市东侧小街拾取包裹，步行到中心路口广场，
+# 与先到的 B 交汇并当面交接（双方在广场停留 12 s，交接落在交汇区间内）；B 携包裹进入南楼，A 向西北街离开（分散）。
+# 验证器产出 meet、handover、disperse 与 enter_building，以及 handover during meet、handover causes enter_building 等关系边，可导出 OpenLABEL。
+schema: drone4d.event.v1
+event_id: crop-handoff-002
+version: 1
+event_type: rendezvous_handoff
+world: {id: oryahovo-crop1}
+anchors_ref: event:anchors.json
+seed: 20261022
+duration_s: 240
+mode: exogenous
+time_origin_utc: "2026-06-16T11:20:00Z"
+actors:
+  - id: person_a
+    class: person
+    roles: [participant]
+    appearance_ref: person-21
+    route:
+      - {t: 0, at: ev_market_exit, do: spawn}
+      - {t: 30, at: ev_parcel_spot, do: pickup, target: parcel}
+      - {t: 115, at: ev_plaza, dwell_s: 12, do: drop, target: parcel}
+      - {t: 165, at: ev_nw_street}
+  - id: person_b
+    class: person
+    roles: [participant]
+    appearance_ref: person-14
+    route:
+      - {t: 40, at: ev_plaza_kiosk, do: spawn}
+      - {t: 115, at: ev_plaza, dwell_s: 12, do: pickup, target: parcel}
+      - {t: 175, at: ev_s_door, do: enter_building}
+  - id: parcel
+    class: object
+    route:
+      - {t: 0, at: ev_parcel_spot, do: spawn}
+background:
+  - {class: person, count: 24, zone: ev_town_center, speed_mps: [0.8, 1.6], pause_s: [0, 20], stream: 1}
+environment:
+  interpolation: smooth
+  keyframes:
+    - {t: 0, wind_mps: 4.0, wind_dir_deg: 280, gust_sigma_mps: 1.0, rain_mm_h: 0, visibility_m: 18000}
+    - {t: 240, wind_mps: 5.0, wind_dir_deg: 290, gust_sigma_mps: 1.2, rain_mm_h: 0, visibility_m: 15000}
+annotations:
+  - {id: meet_ab, type: proximity_encounter, participants: [person_a, person_b], window: [105, 135]}
+  - {id: hand_ab, type: object_handover, participants: [person_a, person_b, parcel], window: [110, 135]}
+  - {id: enter_bs, type: enter_building, participants: [person_b], window: [165, 190], params: {anchor: ev_s_door}}
+relations:
+  - {src: hand_ab, rel: during, dst: meet_ab}
+  - {src: hand_ab, rel: before, dst: enter_bs}
+brief:
+  public_anchors: [ev_plaza, ev_s_door]
+  targets:
+    - {actor: person_a, description_zh: "身高约 1.86 m，体型偏瘦；上身绿色纯色上衣，下身棕色长裤；背双肩包；步速较慢", description_en: "Approx. 1.86 m, slim build; plain green top, brown trousers; backpack; slow gait"}

@@ -49,6 +49,7 @@ guide/targets
 guide/tasking
 guide/mobile
 guide/identity
+guide/sdk-quickstart
 ```
 
 {doc}`guide/showcase`
@@ -68,6 +69,9 @@ guide/identity
 
 {doc}`guide/identity`
 : 面向内部人员的身份入口：位置与用途。
+
+{doc}`guide/sdk-quickstart`
+: 事件沙盘（V0.3，开发中）的 Python SDK `drone4d`：安装、编写示例 Agent，在高保真仿真档与快速仿真档上运行 3 机回合。
 
 ## 开放接口
 

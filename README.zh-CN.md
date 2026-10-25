@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="docs/media/drone4d-banner.jpg" alt="ANet-Drone4D：面向多智能体无人机的四维世界运行时" width="100%" />
+<img src="docs/media/drone4d-banner.jpg" alt="ANet Drone4D 品牌图：面向多智能体无人机的四维世界运行时" width="100%" />
 
-<h3>从真实世界，到无人机集群。</h3>
+<h3>ANet Drone4D</h3>
 
-真实世界驱动的多智能体无人机四维仿真平台：城市级点云数字孪生、机群仿真、集群控制与目标感知在同一仿真时钟下运行，无需服务端 GPU 即可在任意浏览器中实时渲染。
+ANet Drone4D 是以真实世界为基础的多智能体无人机四维仿真平台。交互沙盒（V0.2）在同一仿真时钟下运行城市级点云数字孪生、机群仿真、集群控制与目标感知，服务器无需 GPU，场景由访客浏览器渲染。事件沙盘（V0.3，开发中）引入网格世界、事件磁带与事件级观测基准，其传感器生成需要服务器配备 NVIDIA GPU。
 
-[![Release](https://img.shields.io/badge/release-v0.2.0-1f1f1f)](https://github.com/ANetResearch/ANet-Drone4D/releases/tag/v0.2.0)
+[![Release](https://img.shields.io/github/v/release/ANetResearch/ANet-Drone4D?label=release&color=1f1f1f)](https://github.com/ANetResearch/ANet-Drone4D/releases/latest)
 [![CI](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-Read%20the%20Docs%20layout-1f1f1f)](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/)
 [![Live demo](https://img.shields.io/badge/live%20demo-drone4d.agentnetwork.org.cn-e0322d)](https://drone4d.agentnetwork.org.cn)
@@ -27,34 +27,35 @@
 
 <sub>ANet 合成城市中的场景 S0，在无 GPU 的机器上录制，以两倍实时速度播放。</sub>
 
-## 要点
-
-- **点云数字孪生。** 七个世界——ANet 合成城市与 UrbanScene3D 六座城市——以八叉树点云流式载入浏览器，点密度随视点与帧预算自适应调节。
-- **无人机集群仿真与集群控制。** FleetSim 在 250 Hz 共享时钟下推进 1 至 1,000 架飞行器，在同一回路中运行 PX4 风格飞行模型、任务生成器、电子围栏与机间间距保护。
-- **目标物、感知与任务。** 六类目标物按 Johnson/TTPF 判据在 EO、NIR、LWIR、雷达与声学传感器上执行探测；机巢与贪心任务分配驱动无人机在各目标物敏感范围外的驻点执行 7x24 接力监视。
-- **每位访客一个交互沙盒。** 每个会话运行隔离的仿真核心，可通过桌面浏览器、移动设备、REST v1 或 Python SDK 访问。公开演示站上的每座城市还持续播放录制的无人机模拟监测展示。
-- **面向下一阶段。** D3 事件实验室引入 Gazebo Sim 锁步物理、网格相机与 LiDAR、FAST-LIVO2 重建对比，以及面向多智能体观测策略的事件级基准评测。
-
 ## 能力
 
-| | 能力 | 状态 |
-|---|---|---|
-| 数字孪生 | 城市级点云、渐进加载、自动点密度 | 已交付 |
-| 无人机集群 | FleetSim，同一时钟下最多 1,000 架飞行器 | 已交付 |
-| PX4 | PX4 风格位置与姿态级联（PX4-lite），以 PX4 SIH 飞行记录校验 | 已交付 |
-| 集群控制 | 编队、区域覆盖、电子围栏、间距保护、14 状态飞行状态机 | 已交付 |
-| 目标感知 | 六类目标物，覆盖 EO、NIR、LWIR、雷达与声学传感器 | 已交付 |
-| 智能体集群 | 基于 Mock ANet 的能力发现与任务委派（公开站未启用） | 已交付 |
-| Gazebo | Gazebo Sim 锁步，作为高保真物理档 | 开发中 |
-| LiDAR 与相机 | 网格 LiDAR（Livox MID-360 扫描模式）与照片级网格相机 | 开发中 |
-| 四维重建 | 以仿真数据驱动 FAST-LIVO2，并与网格真值对比评估 | 开发中 |
-| Rerun | 录制数据导出至 Rerun 检视 | 开发中 |
-| 3DGS | 叠加在网格几何之上的高斯泼溅外观层 | 研究 |
-| PX4 SITL | 与 Gazebo 联合的飞控软件在环验证 | 研究 |
+| 能力 | 交付 | 运行前提 | 状态 |
+|---|---|---|---|
+| 点云数字孪生：七个世界（ANet 合成城市与 UrbanScene3D 六座城市）以八叉树流式加载，点密度随视点与帧预算自适应 | D1（V0.1） | 服务器：仅需 CPU；浏览器：WebGL2 | 已交付 |
+| 机群仿真：FleetSim 在 250 Hz 共享时钟下推进 1 至 1,000 架飞行器；在 8 vCPU（Xeon E5-2603 v4）虚拟机上，1,000 架时以 0.53 个 CPU 核保持实时因子 1.00（3 次运行取中位） | D1（V0.1） | 服务器：仅需 CPU | 已交付 |
+| PX4 风格位置与姿态级联（PX4-lite），以 PX4 SIH 飞行记录校验 | D1（V0.1） | 服务器：仅需 CPU | 已交付 |
+| 集群控制：编队、区域覆盖、电子围栏、机间间距保护、14 状态飞行状态机、八种任务生成器 | D1（V0.1） | 服务器：仅需 CPU | 已交付 |
+| 环境场：风场与湍流、能见度与降水，12 种天气预设 | D1（V0.1） | 服务器：仅需 CPU | 已交付 |
+| 基于进程内 Mock ANet 的能力发现与任务委派（公开演示站未启用） | D1（V0.1） | 服务器：仅需 CPU | 已交付 |
+| 交互沙盒：每位访客一个隔离的仿真核心，每个会话最多 12 架无人机、30 个目标物与 4 座机巢；桌面、平板与手机布局；REST v1 与 Python SDK | D2（V0.2） | 服务器：4 核 CPU，无需 GPU | 已交付 |
+| 目标感知：六类目标物，覆盖 EO、夜视、LWIR、LiDAR、雷达与声学传感器（Johnson 判据与 TTPF） | D2（V0.2） | 服务器：仅需 CPU | 已交付 |
+| 机巢、贪心任务分配与在目标物敏感范围外驻点执行的 7x24 接力监视 | D2（V0.2） | 服务器：仅需 CPU | 已交付 |
+| 事件沙盘：GLB 网格世界、事件磁带，以 Gazebo Sim 锁步作为高保真物理档 | D3（V0.3） | 服务器：NVIDIA GPU | 开发中 |
+| 网格相机与网格 LiDAR（Livox MID-360 扫描模式） | D3（V0.3） | 服务器：NVIDIA GPU | 开发中 |
+| 以仿真数据驱动 FAST-LIVO2 重建并与网格真值对比评估；Rerun 数据检视 | D3（V0.3） | 服务器：NVIDIA GPU | 开发中 |
 
-状态反映 [v0.2.0 发布](https://github.com/ANetResearch/ANet-Drone4D/releases/tag/v0.2.0)与[D3 设计基线](docs/05-D3-设计增补与决策记录.md)。
+状态反映已发布的 V0.2 各版本与[D3 设计基线](docs/05-D3-设计增补与决策记录.md)。
 
-## 开始使用
+## 运行环境
+
+| 组件 | 要求 |
+|---|---|
+| 浏览器 | 桌面版 Chrome 或 Edge（最新两个大版本），支持 WebGL2；WebGPU 为可选。平板与手机浏览器使用专用布局。帧率与画质取决于设备 GPU。 |
+| 服务器：交互沙盒（V0.2） | Linux x86_64，4 核 CPU，无需 GPU；公开演示站即运行在此类主机上。 |
+| 服务器：事件沙盘（V0.3，开发中） | Linux x86_64，传感器生成需要 NVIDIA GPU（EGL，驱动 ≥ 535，显存不少于 8 GB）。 |
+| 工具链 | Python 3.12 与 Node 22，由 `make setup` 安装。 |
+
+## 快速开始
 
 无需注册即可访问**[在线演示](https://drone4d.agentnetwork.org.cn)**，站点提供只读的共享展示以及为每位访客隔离的沙盒。在 Linux 上本地运行平台：
 
@@ -67,6 +68,12 @@ make run          # 随后打开 http://127.0.0.1:8000/world/synthcity
 
 [快速开始](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/intro/quickstart.html)指南包含每一步的真实输出，并介绍如何通过 Python SDK 驱动沙盒会话。
 
+## 文档
+
+- [文档站](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/)：入门、专题、REST 接口与 Python SDK 参考。
+- [设计文档](docs/)：系统架构、技术选型、产品与界面需求、数据与协议规范以及验收报告。
+- [在线演示](https://drone4d.agentnetwork.org.cn)及其[交互式接口文档](https://drone4d.agentnetwork.org.cn/sandbox/api)。
+
 ## 功能导览
 
 > [!NOTE]
@@ -76,7 +83,7 @@ make run          # 随后打开 http://127.0.0.1:8000/world/synthcity
 
 <img src="docs/media/feature-reality.jpg" alt="由航测数据数字化为点云孪生的城市街区" width="100%" />
 
-`worldpkg` 将原始点云归一化——统一单位、上方向轴、水平校准、正北朝向、原点、法线、地面模型、离地高度与分类标签——构建为 World Package v1。该格式将采用 12 字节 ANET_Q16 点编码、兼容 Potree 2.0 的八叉树与 DSM/DTM 栅格、语义图层及分区数据相结合。UrbanScene3D 的六座城市（每座约 500 万点）仅用 CPU 即可在 27 至 35 s 内完成构建，并以零错误通过 `validate --deep` 校验。ANet 合成城市由固定随机种子生成（1.2 km × 1.2 km，约 390 万点，零第三方数据），构建耗时约 25 s。
+`worldpkg` 将原始点云归一化——统一单位、上方向轴、水平校准、正北朝向、原点、法线、地面模型、离地高度与分类标签——构建为 World Package v1。该格式将采用 12 字节 ANET_Q16 点编码、兼容 Potree 2.0 的八叉树与 DSM/DTM 栅格、语义图层及分区数据相结合。在 8 vCPU（Xeon E5-2603 v4）、无 GPU 的虚拟机上，UrbanScene3D 的六座城市（每座约 500 万点）各在 27 至 35 s 内完成构建，并以零错误通过 `validate --deep` 校验。ANet 合成城市由固定随机种子生成（1.2 km × 1.2 km，约 390 万点，零第三方数据），在同一台 8 vCPU 虚拟机上构建耗时约 25 s。
 
 ### 流式加载城市级点云
 
@@ -98,11 +105,11 @@ make run          # 随后打开 http://127.0.0.1:8000/world/synthcity
 
 <sub>**实景截图。** 同一视点下由小雨向浓雾过渡：在 40 s 过渡期的中段，能见度由 6.0 km 降至 690 m，最终稳定在 150 m。</sub>
 
-### 多机集群，统一时钟
+### 统一时钟下的机群仿真
 
 <img src="docs/media/feature-swarm.jpg" alt="点云城市上空的无人机编队与覆盖航线" width="100%" />
 
-FleetSim 将全部无人机组织为单一的数组结构体（SoA），在 250 Hz 共享时钟下同步推进。其 PX4 风格的位置与姿态级联控制器经 numba 编译，通过 numpy 参考实现校验，并与 PX4 SIH 飞行记录比对验证。在 1,000 架无人机规模下，FleetSim 仅占用约半颗 CPU 核心即可保持实时运行。安全逻辑在同一回路内执行，涵盖 14 状态飞行状态机、电子围栏、能量感知自动返航、机间间距保护与失联处置策略。八种任务生成器提供从建筑立面螺旋扫描到编队飞行与区域覆盖的各类轨迹。
+FleetSim 将全部无人机组织为单一的数组结构体（SoA），在 250 Hz 共享时钟下同步推进。其 PX4 风格的位置与姿态级联控制器经 numba 编译，通过 numpy 参考实现校验，并与 PX4 SIH 飞行记录比对验证。在 8 vCPU（Xeon E5-2603 v4）虚拟机上运行 1,000 架无人机时，FleetSim 以 0.53 个 CPU 核保持实时因子 1.00，单步 p99 为 2.69 ms（D1 验收，3 次运行取中位）。安全逻辑在同一回路内执行，涵盖 14 状态飞行状态机、电子围栏、能量感知自动返航、机间间距保护与失联处置策略。八种任务生成器提供从建筑立面螺旋扫描到编队飞行与区域覆盖的各类轨迹。
 
 <table>
 <tr>
@@ -117,7 +124,7 @@ FleetSim 将全部无人机组织为单一的数组结构体（SoA），在 250 
 
 <img src="docs/media/feature-agents.jpg" alt="三架不同型号的无人机协同搜索地形，其中一架热成像无人机发现目标" width="100%" />
 
-每架无人机在智能体网络上注册自身能力。在 S3 搜救场景中，光学相机无人机探测到候选目标物后，通过能力发现机制在网络中查询具备热成像能力的无人机，收集由仿真器内部估算器定价的报价，并将确认任务委派给最优响应方。任务结果通过回执与验收谓词进行校验。V0.1 在进程内 Mock ANet 上执行该工作流；完整 ANet 集成规划于 V1.0 交付。
+每架无人机在智能体网络上注册自身能力。在 S3 搜救场景中，光学相机无人机探测到候选目标物后，通过能力发现机制在网络中查询具备热成像能力的无人机，收集由仿真器内部估算器定价的报价，并将确认任务委派给选定的响应方。任务结果通过回执与验收谓词进行校验。当前各版本在进程内 Mock ANet 上执行该工作流，公开演示站未启用；接入 ANet 网络本身不在 V0.2 与 V0.3 范围内。
 
 ### 交互沙盒、目标物与接力监视
 
@@ -226,12 +233,12 @@ with sb.create("synthcity", "t5_area_guard") as s:   # 公开站满载时自动�
 
 | 版本 | 范围 | 状态 |
 |---|---|---|
-| V0.1 | 点云数字孪生、渐进加载、FleetSim 与 PX4-lite、实时协议、Mock ANet | 已发布 |
-| V0.2.0 | 交互沙盒、目标物与量化感知、机巢与接力监视、开放接口、手机与平板适配、城市模拟监测展示 | 已发布 |
-| V0.3 | D3 事件实验室：GLB 世界、事件磁带、Gazebo Sim 锁步、网格相机与 LiDAR、FAST-LIVO2、基准评测 | 开发中 |
-| P3 与 V1.0 | 3DGS 外观层、PX4 SITL、配备自托管 ANetHub 的真实 ANet | 规划中 |
+| V0.1 | 三维场景视图：点云数字孪生、渐进加载、FleetSim 与 PX4-lite、实时协议、Mock ANet | 已发布 |
+| V0.2 | 交互沙盒：目标物与量化感知、机巢与接力监视、开放接口、手机与平板适配、城市模拟监测展示；自 `v0.2.1` 起为补丁版本 | 已发布 |
+| V0.3 | 事件沙盘：GLB 网格世界、事件磁带、Gazebo Sim 锁步、网格相机与 LiDAR、FAST-LIVO2 评估、事件级观测基准 | 开发中 |
+| V0.3.x | 在 V0.3 基线上的增量交付，包括 SITL 物理档与 3DGS 外观层 | 规划中 |
 
-进度以 [GitHub Milestone](https://github.com/ANetResearch/ANet-Drone4D/milestones) 与置顶的[路线图 Issue](https://github.com/ANetResearch/ANet-Drone4D/issues/1) 为准。参见[版本路线](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/project/roadmap.html)与[D3 设计](docs/05-D3-设计增补与决策记录.md)。
+后续版本处于调研与概念设计阶段，此处不作排期。进度以 [GitHub Milestone](https://github.com/ANetResearch/ANet-Drone4D/milestones) 与置顶的[路线图 Issue](https://github.com/ANetResearch/ANet-Drone4D/issues/1) 为准。参见[版本路线](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/project/roadmap.html)与[D3 设计](docs/05-D3-设计增补与决策记录.md)。
 
 </details>
 
@@ -247,7 +254,7 @@ V0.2.0 依据 55 项验收标准（D2-AC-01 至 D2-AC-55）进行评估。第 2 
 | P0 (50) | 41 | 9 | 0 |
 | P1 (5) | 3 | 0 | 2 |
 
-24 h 浸泡测试以零重启完成，内存增长率为 0.48 MB/h。其余未通过项作为已知问题记录于[发布说明](https://github.com/ANetResearch/ANet-Drone4D/releases/tag/v0.2.0)；完整报告见 [docs/impl/D2-验收报告-第2轮.md](docs/impl/D2-验收报告-第2轮.md)。
+在模拟 4 核公开站主机的 cgroup 环境下，24 h 浸泡测试以零重启完成，内存增长率为 0.48 MB/h。其余未通过项作为已知问题记录于[发布说明](https://github.com/ANetResearch/ANet-Drone4D/releases/tag/v0.2.0)；完整报告见 [docs/impl/D2-验收报告-第2轮.md](docs/impl/D2-验收报告-第2轮.md)。
 
 </details>
 
@@ -271,16 +278,23 @@ V0.2.0 依据 55 项验收标准（D2-AC-01 至 D2-AC-55）进行评估。第 2 
 
 <br/>
 
-ANet-Drone4D 是 Agent Network Research 旗下 ANet 生态的组成部分，与 [ANet](https://github.com/ANetResearch/ANet)、[ANetHub](https://github.com/ANetResearch/ANetHub) 及 [ANetCore](https://github.com/ANetResearch/ANetCore) 并列。无人机在此作为第一类物理智能体：发布自身能力、发现对等节点、委派任务并依据回执校验执行结果。ANet 作为协作面而非飞行控制面运行——委派的任务会被转换为标准控制指令，与人工操作员输入的指令一样接受同等的准入与安全检查。
+Drone4D 是 Agent Network Research 旗下 ANet 生态的组成部分，与 [ANet](https://github.com/ANetResearch/ANet)、[ANetHub](https://github.com/ANetResearch/ANetHub) 及 [ANetCore](https://github.com/ANetResearch/ANetCore) 并列。无人机在此作为第一类物理智能体：发布自身能力、发现对等节点、委派任务并依据回执校验执行结果。ANet 作为协作面而非飞行控制面运行——委派的任务会被转换为标准控制指令，与人工操作员输入的指令一样接受同等的准入与安全检查。
 
 </details>
 
-<details>
-<summary><b>数据与引用</b></summary>
+## 许可与署名
 
-<br/>
+- **代码。** 本项目以 **ANet Open Source License** 发布。该许可证基于 Apache License 2.0 修改，允许商业使用，但须满足两项条件：面向无关第三方运营多租户托管仿真或数字孪生服务须获得书面授权；必须保留所有 ANet 标识与版权声明。完整条款见 [LICENSE](LICENSE)，标识说明见 [NOTICE](NOTICE)。
+- **UrbanScene3D。** 六座城市世界衍生自 UrbanScene3D，在公开演示站经数据集权利方授权使用。本仓库不分发原始数据集及由其构建的世界包，详见 [NOTICE](NOTICE)。
+- **ANet 合成城市。** 由本项目以固定随机种子生成，不含第三方数据，世界包与截图可自由再分发。
+- **事件沙盘世界（V0.3）。** 网格世界 `oryahovo-crop1` 与 `smalltown-01` 由 Mitko（[sketchfab.com/bg3d](https://sketchfab.com/bg3d)）在 Sketchfab 上以[知识共享署名 4.0 国际](https://creativecommons.org/licenses/by/4.0/)许可（CC-BY-4.0）发布的摄影测量模型构建，经修改（米制标定、调平与派生图层）；原作者不为 ANet Drone4D 背书。模型标题与来源链接见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)；本仓库不分发源模型及由其构建的世界包。
+- **OpenStreetMap。** 事件沙盘世界的配准证据、锚点与道路、步行路网由 OpenStreetMap 数据派生，(c) OpenStreetMap contributors，以 [Open Database License 1.0](https://opendatacommons.org/licenses/odbl/1-0/)（ODbL-1.0）提供；对外发布的派生图层沿用同一许可与署名。
+- **高程数据。** 事件沙盘世界的调平与海拔高度取自 [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/)：SRTM terrain data courtesy of the U.S. Geological Survey；Europe terrain data produced using Copernicus data and information funded by the European Union - EU-DEM layers。调平核对使用 [Copernicus DEM GLO-30](https://registry.opendata.aws/copernicus-dem/)，只用于计算统计量，不再分发：Produced using Copernicus WorldDEM-30 (c) DLR e.V. 2010-2014 and (c) Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved.
+- **第三方组件。** 许可清单见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-六座城市世界衍生自 UrbanScene3D，在公开演示站经数据集权利方授权使用。本仓库不分发原始数据集，详见 [NOTICE](NOTICE)。使用这些世界时请引用 UrbanScene3D（ECCV 2022）：
+## 引用
+
+使用六座城市世界时请引用 UrbanScene3D（ECCV 2022）：
 
 ```bibtex
 @inproceedings{UrbanScene3D,
@@ -291,31 +305,25 @@ ANet-Drone4D 是 Agent Network Research 旗下 ANet 生态的组成部分，与 
 }
 ```
 
-引用 ANet-Drone4D 请使用 GitHub 的 "Cite this repository" 功能（[CITATION.cff](CITATION.cff)）或以下 BibTeX 条目：
+引用 Drone4D 请使用 GitHub 的 "Cite this repository" 功能（[CITATION.cff](CITATION.cff)）或以下 BibTeX 条目：
 
 ```bibtex
 @software{anet_drone4d_2026,
-  title   = {ANet-Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
+  title   = {ANet Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.2.0},
+  version = {0.2.2},
   url     = {https://github.com/ANetResearch/ANet-Drone4D}
 }
 ```
 
-</details>
-
 ## 致谢
 
-ANet-Drone4D 基于 [three.js](https://threejs.org)、[React Three Fiber](https://github.com/pmndrs/react-three-fiber)、[Potree](https://github.com/potree/potree)、[zenoh](https://zenoh.io)、[numba](https://numba.pydata.org)、[PX4](https://github.com/PX4/PX4-Autopilot)、[Prometheus](https://github.com/amov-lab/Prometheus) 与 UrbanScene3D 构建。
+Drone4D 基于 [three.js](https://threejs.org)、[React Three Fiber](https://github.com/pmndrs/react-three-fiber)、[Potree](https://github.com/potree/potree)、[zenoh](https://zenoh.io)、[numba](https://numba.pydata.org)、[PX4](https://github.com/PX4/PX4-Autopilot)、[Prometheus](https://github.com/amov-lab/Prometheus) 与 UrbanScene3D 构建。
 
 ## 参与贡献
 
 欢迎以英文或中文提交 Issue 与 Pull Request，指南详见 [CONTRIBUTING.md](CONTRIBUTING.md)。涉及系统契约（包括文件格式、`awr.rt.v1`、REST 接口或原因码）的变更须先创建 Issue 讨论，并以 `make ci` 作为合并门禁。安全漏洞请报告至 hi@anet0.com（[SECURITY.md](SECURITY.md)）。
-
-## 许可证
-
-本项目以 **ANet Open Source License (ANet-Drone4D)** 发布。该许可证基于 Apache License 2.0 修改，允许商业使用，但须满足两项条件：面向无关第三方运营多租户托管仿真或数字孪生服务须获得书面授权；必须保留所有 ANet 标识与版权声明。完整条款见 [LICENSE](LICENSE)。
 
 <div align="center">
 <br/>

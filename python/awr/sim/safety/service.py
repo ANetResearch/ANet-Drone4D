@@ -20,7 +20,7 @@ import numpy as np
 from awr.contracts.enums import FLIGHTSTATE_NAMES, GcsLossPolicy, Owner
 from awr.contracts.reasons import Reason
 from awr.sim.core.admission import AdmitResult
-from awr.sim.core.envwind import env_mean_wind
+from awr.sim.core.envwind import decision_wind
 from awr.sim.fleet.pipeline import TICK_NS
 from awr.sim.fleet.state import CtrlMode
 
@@ -238,7 +238,7 @@ class SafetyRuntime:
 
     def wind_head(self, slots: np.ndarray, z: np.ndarray) -> np.ndarray:
         """返航方向在 z_rtl 处的逆风分量（≥ 0）；环境服务不可用时为 0（M07 未装配）。全部机体一次批量查询（FX-SIM1），
-        查询失败时整批为 0（与逐机查询逐机失败的结果相同）。"""
+        查询失败时整批为 0（与逐机查询逐机失败的结果相同）。取风口径见 `envwind.decision_wind`（缺省为 D2 口径，D3-AC-01）。"""
         slots = np.asarray(slots, np.int64)
         out = np.zeros(len(slots))
         env = getattr(self.ctx, "env", None)
@@ -253,7 +253,7 @@ class SafetyRuntime:
         if not ok.any():
             return out
         try:
-            w = env_mean_wind(env, P[ok], self.t_ns)[:, :2]
+            w = decision_wind(env, P[ok], self.t_ns)[:, :2]
             u = d[ok] / n[ok, None]
             out[ok] = np.maximum(0.0, -(w * u).sum(1))
         except Exception:

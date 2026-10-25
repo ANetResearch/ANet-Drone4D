@@ -1,0 +1,15 @@
+{
+ "schema": "awr.anchors.v1",
+ "extends": "world",
+ "world_id": "oryahovo-crop1",
+ "anchors": [
+  {"id": "ev_plaza", "kind": "zone", "category": "plaza", "profile": "person", "polygon": [[2.0, -52.0], [24.0, -52.0], [24.0, -30.0], [2.0, -30.0]], "public": true, "seed": true, "label_zh": "中心路口广场"},
+  {"id": "ev_plaza_kiosk", "kind": "point", "category": "manual", "profile": "person", "xy": [20.0, -60.0], "public": true, "label_zh": "广场南侧报亭"},
+  {"id": "ev_nw_street", "kind": "point", "category": "manual", "profile": "person", "xy": [-5.0, -20.0], "label_zh": "西北街南段"},
+  {"id": "ev_ne_street", "kind": "point", "category": "manual", "profile": "person", "xy": [40.0, -10.0], "label_zh": "东北街口"},
+  {"id": "ev_south_walk", "kind": "point", "category": "manual", "profile": "person", "xy": [10.0, -95.0], "label_zh": "南街人行道"},
+  {"id": "ev_south_corner", "kind": "point", "category": "manual", "profile": "person", "xy": [30.0, -70.0], "label_zh": "南街东侧拐角"},
+  {"id": "ev_town_center", "kind": "zone", "category": "manual", "profile": "person", "polygon": [[-60.0, -110.0], [80.0, -110.0], [80.0, 20.0], [-60.0, 20.0]], "label_zh": "镇中心南片"}
+ ],
+ "remove": []
+}

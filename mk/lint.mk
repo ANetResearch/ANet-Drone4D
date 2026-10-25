@@ -7,25 +7,39 @@
 # REL-01/02/03（check-release.mjs，ADR-079）检查发布集合（git ls-files --cached --others --exclude-standard）：单文件 ≤ 5 MB、不含世界与点云数据、
 # 不含凭据；不在 git 仓库内（或 git 不可用）时给出提示并通过，git 目录在工作树之外时设置 GIT_DIR 与 GIT_WORK_TREE。
 # REL-04（D2.1，ADR-123）：本机有部署口令文件（~/.config/awr/admin.secret 或 AWR_ADMIN_SECRET_FILE）时其内容不得出现在发布集合中。
+# REL-05..09（D3，docs/05 §14，ADR-154、ADR-205；D3-AC-24、45、46）：仓库无 FAST-LIVO2 源码与链接产物、gz 分叉文件保留原版权头、产品镜像配方
+# 不含仅限研究的组件、NOTICE 与 THIRD_PARTY_NOTICES 署名齐全、copy-lint 通过；自测 tools/lint/selftest-release.mjs 随 lint-selftest 运行。
 # VER-01/02（check-version.mjs，D2.1，ADR-118）：pyproject.toml、apps/web/package.json、根 package.json 与 awr.__version__ 的产品版本
 # 相等且为 X.Y.Z。
+# COPY-01..10（copy-lint.mjs，docs/05 §7.10，ADR-153；D3-AC-46、D3-AC-23、D3-AC-53）：企业级文案中英文规则集，缺省扫描 D2 发布面
+# （README.md、README.zh-CN.md、zh-CN.json、en.json、CITATION.cff），tools/lint/copy-lint.scope.json 追加范围；P-1 基线例外登记在
+# tools/lint/copy-lint.baseline.json，P0b 出口前清零；v1.6（L05）起 lint-copy-lint 与 lint-check-release（REL-09）均为严格模式，
+# 仍有基线例外时失败。
 
-LINT_SCRIPTS := no-emoji no-hex lint-lf motion-lint check-icons no-raw-controls check-brand check-deps check-units check-release check-version
+LINT_SCRIPTS := no-emoji no-hex lint-lf motion-lint check-icons no-raw-controls check-brand check-deps check-units check-release check-version copy-lint
 
-.PHONY: lint-tools lint-selftest lint-py-imports lint-py-callbacks lint-perf-flags lint-thresholds $(addprefix lint-,$(LINT_SCRIPTS))
+.PHONY: lint-tools lint-selftest lint-py-imports lint-py-callbacks lint-perf-flags lint-thresholds lint-copy-strict $(addprefix lint-,$(LINT_SCRIPTS))
 
 LINT_TARGETS += lint-selftest $(addprefix lint-,$(LINT_SCRIPTS)) lint-py-imports lint-py-callbacks lint-perf-flags lint-thresholds
 
 lint-tools: lint-selftest $(addprefix lint-,$(LINT_SCRIPTS)) lint-py-imports lint-py-callbacks lint-perf-flags lint-thresholds ## 只运行 tools/lint 全部规则（不含 ruff、oxlint）
 
 lint-selftest:
-	@cd $(ROOT) && node tools/lint/selftest.mjs
+	@cd $(ROOT) && node tools/lint/selftest.mjs && node tools/lint/selftest-release.mjs
 
 lint-lint-lf:
 	@cd $(ROOT) && node tools/lint/lint-lf.mjs --palette
 
-lint-no-emoji lint-no-hex lint-motion-lint lint-check-icons lint-no-raw-controls lint-check-brand lint-check-deps lint-check-units lint-check-release lint-check-version:
+lint-no-emoji lint-no-hex lint-motion-lint lint-check-icons lint-no-raw-controls lint-check-brand lint-check-deps lint-check-units lint-check-version:
 	@cd $(ROOT) && node tools/lint/$(patsubst lint-%,%,$@).mjs
+
+# P0b 出口（D3-AC-23，L05）起 make lint 与 REL 均以严格模式运行 copy-lint：扫描缺省发布面与 copy-lint.scope.json 追加的 D3 页面、
+# /lab/ 公开构建、原因码文案与 OpenAPI 快照，基线例外须为 0（新增放行只能登记为经评审的 allow 条目）
+lint-check-release:
+	@cd $(ROOT) && node tools/lint/check-release.mjs --copy-strict
+
+lint-copy-lint lint-copy-strict:
+	@cd $(ROOT) && node tools/lint/copy-lint.mjs --strict
 
 lint-py-imports:
 	@cd $(ROOT) && $(PY) tools/lint/check_py_imports.py

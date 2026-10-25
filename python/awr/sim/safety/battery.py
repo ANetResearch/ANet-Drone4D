@@ -23,7 +23,7 @@ import numpy as np
 
 from awr.contracts.reasons import Reason
 from awr.sim.core.awareness import get_awareness
-from awr.sim.core.envwind import env_mean_wind
+from awr.sim.core.envwind import decision_wind, env_mean_wind
 from awr.sim.core.interfaces import EstimatePath, EstimateResult, RtlPlan, VehicleProfile
 from awr.sim.fleet import kernels_l1 as KL
 from awr.sim.fleet import params_px4 as PX
@@ -451,7 +451,7 @@ class BatteryModel:
         P = self.rt.S.enu.pos[s].copy()
         P[:, 2] = np.asarray(z, np.float64)
         try:
-            w = env_mean_wind(env, P, self.rt.t_ns)[:, :2]
+            w = decision_wind(env, P, self.rt.t_ns)[:, :2]
             return np.where(np.isfinite(w), w, 0.0)
         except Exception:
             return out
@@ -617,7 +617,7 @@ class P600EnergyModel:
         if env is None:
             return np.zeros(3)
         try:
-            w = env_mean_wind(env, np.asarray(pos, np.float64)[None])[0]
+            w = decision_wind(env, np.asarray(pos, np.float64)[None])[0]
             return w if w.size == 3 and np.all(np.isfinite(w)) else np.zeros(3)
         except Exception:
             return np.zeros(3)
@@ -690,7 +690,8 @@ class P600EnergyModel:
         if ph is None:
             return 0.0
         X = np.asarray(samples, np.float64).reshape(-1, 7)
-        if env is not None and len(X) >= 2:
+        if env is not None and get_awareness().env_wind and len(X) >= 2:
+            # 运行期环境场（`env_wind` 显式开启，论文实验）：逐段同一公式的向量化求值，按段序累加
             dt = X[1:, 0] - X[:-1, 0]
             ok = dt > 0
             if not ok.any():
@@ -705,6 +706,17 @@ class P600EnergyModel:
             v_air = np.hypot(vel[:, 0] - w[:, 0], vel[:, 1] - w[:, 1])
             terms = self._power_arr(prof, float(ph), v_air, vel[:, 2]) * dt[ok] / 3600.0
             return float(np.cumsum(terms)[-1])
+        if env is not None:
+            # D2 口径（缺省，D3-AC-01）：逐段标量求值与 `_wind` 的 D2 查询，与 d2@928c57b 逐位相同
+            wh = 0.0
+            for k in range(len(X) - 1):
+                dt1 = float(X[k + 1, 0] - X[k, 0])
+                if dt1 <= 0:
+                    continue
+                v1 = 0.5 * (X[k, 4:7] + X[k + 1, 4:7])
+                w1 = self._wind(env, 0.5 * (X[k, 1:4] + X[k + 1, 1:4]))
+                wh += self._power(prof, ph, float(np.linalg.norm(v1[:2] - w1[:2])), float(v1[2])) * dt1 / 3600.0
+            return wh
         # 无风（M10 能量预检的调用方式）：逐段同一公式的向量化求值，按段序累加（cumsum 与逐段 += 同一次序）。此前逐样本
         # Python 循环，ladder n1000 的任务启动预检在一个 tick 内做 1000 架，约 3 s，sim-core 被判挂死（FX2-R2 自测）
         if len(X) < 2:

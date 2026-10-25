@@ -67,6 +67,30 @@ __all__ = [
     "AnchorsAnchorsQuality",
     "AnchorsAnchorsSnapDistM",
     "AnchorsSources",
+    "AppearanceLibV1",
+    "AppearanceLibV1Attribute",
+    "AppearanceLibV1Classes",
+    "AppearanceLibV1Cls",
+    "AppearanceLibV1Entries",
+    "AppearanceLibV1EntriesAnimClips",
+    "AppearanceLibV1EntriesAsset",
+    "AppearanceLibV1EntriesAssetRender",
+    "AppearanceLibV1EntriesAssetRenderAccessory",
+    "AppearanceLibV1EntriesAssetRenderMarking",
+    "AppearanceLibV1EntriesAssetRenderPattern",
+    "AppearanceLibV1EntriesAssetRenderRoofRack",
+    "AppearanceLibV1EntriesDescription",
+    "AppearanceLibV1EntriesEmbedding",
+    "AppearanceLibV1EntriesGait",
+    "AppearanceLibV1EntriesRefImage",
+    "AppearanceLibV1EntriesThermalZones",
+    "AppearanceLibV1Generator",
+    "AppearanceLibV1License",
+    "AppearanceLibV1LicenseThirdParty",
+    "AppearanceLibV1Palette",
+    "AppearanceLibV1Rgb",
+    "AppearanceLibV1Rule",
+    "AppearanceLibV1Sha256",
     "BenchResult",
     "BenchResultHost",
     "BenchResultRecords",
@@ -88,6 +112,10 @@ __all__ = [
     "BoardV1Tracks",
     "BriefV1",
     "BriefV1PublicAnchors",
+    "BriefV1Search",
+    "BriefV1SearchPrior",
+    "BriefV1SearchPriorComponents",
+    "BriefV1SearchPriorGrid",
     "BriefV1Targets",
     "BusCommand",
     "BusCommandAdmission",
@@ -170,6 +198,11 @@ __all__ = [
     "CoordinateTrueNorth",
     "D3Semantic",
     "D3SemanticClasses",
+    "DatasetIndexV1",
+    "DatasetIndexV1Experiments",
+    "DatasetIndexV1File",
+    "DatasetIndexV1Runs",
+    "DatasetIndexV1RunsMetrics",
     "Detection",
     "DetectionPage",
     "Effect",
@@ -241,6 +274,8 @@ __all__ = [
     "EventV1",
     "EventV1Actors",
     "EventV1ActorsAppearance",
+    "EventV1ActorsDrive",
+    "EventV1ActorsDriveIdm",
     "EventV1ActorsGait",
     "EventV1ActorsRoute",
     "EventV1Annotations",
@@ -255,8 +290,24 @@ __all__ = [
     "EventV1Interactive",
     "EventV1Labels",
     "EventV1Relations",
+    "EventV1Search",
+    "EventV1SearchPrior",
+    "EventV1SearchPriorComponents",
+    "EventV1SearchPriorGrid",
     "EventV1World",
     "Export",
+    "ExportManifestV1",
+    "ExportManifestV1Exporter",
+    "ExportManifestV1Files",
+    "ExportManifestV1Generation",
+    "ExportManifestV1GenerationStatement",
+    "ExportManifestV1GenerationTools",
+    "ExportManifestV1License",
+    "ExportManifestV1LicenseAttribution",
+    "ExportManifestV1Quantization",
+    "ExportManifestV1Sha256",
+    "ExportManifestV1Skipped",
+    "ExportManifestV1Source",
     "Faults",
     "FaultsOneOf0",
     "FaultsOneOf1",
@@ -293,6 +344,7 @@ __all__ = [
     "FrameV1AgentViewGimbalReading",
     "FrameV1AgentViewMountNominal",
     "FrameV1AgentViewRgb",
+    "FrameV1AgentViewTempCk",
     "FrameV1GroundTruth",
     "FrameV1GroundTruthGimbalTrue",
     "FrameV1GroundTruthGtDepth",
@@ -304,6 +356,11 @@ __all__ = [
     "FrameV1GroundTruthTWorldSensor",
     "FrameV1GroundTruthTiming",
     "FrameV1Internal",
+    "FrameV1InternalThermal",
+    "FrameV1InternalThermalNoise",
+    "FrameV1InternalThermalPlanckTable",
+    "FrameV1InternalThermalThermalStatic",
+    "FrameV1InternalThermalThermalTable",
     "FramesV1",
     "Gcs",
     "Geo",
@@ -354,6 +411,19 @@ __all__ = [
     "Keys",
     "KeysKeys",
     "KeysKeysQosOneOf1",
+    "LabStaticIndexV1",
+    "LabStaticIndexV1Bytes",
+    "LabStaticIndexV1EventId",
+    "LabStaticIndexV1Events",
+    "LabStaticIndexV1External",
+    "LabStaticIndexV1Features",
+    "LabStaticIndexV1License",
+    "LabStaticIndexV1Relpath",
+    "LabStaticIndexV1Run",
+    "LabStaticIndexV1Sha256",
+    "LabStaticIndexV1Slice",
+    "LabStaticIndexV1Video",
+    "LabStaticIndexV1Worlds",
     "Layouts",
     "LayoutsSchemas",
     "LayoutsSchemasFields",
@@ -716,6 +786,13 @@ __all__ = [
     "RunSpecV1World",
     "SafetyCodes",
     "SafetyCodesCodes",
+    "SamplePackV1",
+    "SamplePackV1File",
+    "SamplePackV1Metric",
+    "SamplePackV1Sample",
+    "SamplePackV1SampleMetrics",
+    "SamplePackV1Sha256",
+    "SamplePackV1Source",
     "SandboxSessionState",
     "SandboxSessionStateClock",
     "SandboxSessionStateExpiringOneOf0",
@@ -849,6 +926,7 @@ __all__ = [
     "TapeManifestV1Provenance",
     "TapeManifestV1Report",
     "TapeManifestV1ReportArrivals",
+    "TapeManifestV1ReportLanes",
     "TapeManifestV1ReportMinDistM",
     "TapeV1",
     "TapeV1Actors",
@@ -969,6 +1047,8 @@ __all__ = [
     "TruthV1AnnotationChecks",
     "TruthV1Events",
     "TruthV1EventsEvidence",
+    "TruthV1KeyEvents",
+    "TruthV1KeyRelations",
     "TruthV1RelationChecks",
     "UavSafety",
     "UavSafetyActive",
@@ -1164,6 +1244,14 @@ type ActV1GimbalCmd = ActV1GimbalCmdOneOf0 | ActV1GimbalCmdOneOf1
 type ActV1NavCmd = ActV1NavCmdOneOf0 | ActV1NavCmdOneOf1 | ActV1NavCmdOneOf2 | ActV1NavCmdOneOf3 | ActV1NavCmdOneOf4 | ActV1NavCmdOneOf5 | ActV1NavCmdOneOf6 | ActV1NavCmdOneOf7
 
 
+# event/appearance_lib.v1.schema.json#/$defs/rgb
+type AppearanceLibV1Rgb = list[int]
+
+
+# event/appearance_lib.v1.schema.json#/$defs/sha256
+type AppearanceLibV1Sha256 = str
+
+
 # rec/blocks.schema.json# Recording block messages (awr.StateExtBlock.v1, awr.SafetyBlock.v1)
 type Blocks = BlocksStateExtBlock | BlocksSafetyBlock
 
@@ -1192,6 +1280,10 @@ type Engine = ReconIrEngine
 type EnvWorldDefaults = dict[str, EnvWorldDefaultsItem]
 
 
+# bench/export_manifest.v1.schema.json#/$defs/sha256
+type ExportManifestV1Sha256 = str
+
+
 # rt/faults.schema.json# Fault injection request
 type Faults = FaultsOneOf0 | FaultsOneOf1 | FaultsOneOf2 | FaultsOneOf3 | FaultsOneOf4 | FaultsOneOf5
 
@@ -1202,6 +1294,22 @@ type Geo = GeoReq | GeoRep
 
 # rec/inputlog.schema.json# Input log runs/<run>/inputs.msgpack (awr.inputlog.v1)
 type Inputlog = InputlogHeader | InputlogEntry
+
+
+# bench/lab_static_index.v1.schema.json#/$defs/bytes
+type LabStaticIndexV1Bytes = int
+
+
+# bench/lab_static_index.v1.schema.json#/$defs/event_id
+type LabStaticIndexV1EventId = str
+
+
+# bench/lab_static_index.v1.schema.json#/$defs/relpath
+type LabStaticIndexV1Relpath = str
+
+
+# bench/lab_static_index.v1.schema.json#/$defs/sha256
+type LabStaticIndexV1Sha256 = str
 
 
 # rt/ops.schema.json# awr.rt.v1 control-plane JSON messages
@@ -1246,6 +1354,14 @@ type ReconIr = ReconIrSession | ReconIrEngine | ReconIrRig | ReconIrCameras | Re
 
 # bus/replay.schema.json# Event replay request and reply (evt/<producer>/_replay) and replay-worker control
 type Replay = ReplayReplayReq | ReplayReplayRep | ReplayWorkerCmd
+
+
+# bench/sample_pack.v1.schema.json#/$defs/metric
+type SamplePackV1Metric = float | None
+
+
+# bench/sample_pack.v1.schema.json#/$defs/sha256
+type SamplePackV1Sha256 = str
 
 
 # scenario/scenario.schema.json#/$defs/actions
@@ -1557,6 +1673,7 @@ class ActV1Report(TypedDict):
     window: ActV1ReportWindow
     position_enu_m: NotRequired[list[float]]
     confidence: NotRequired[float]
+    event: NotRequired[str]
 
 
 # bench/act.v1.schema.json#/$defs/Report/properties/participants/items
@@ -1847,6 +1964,165 @@ class AnchorsSources(TypedDict):
     sha256: str
 
 
+# event/appearance_lib.v1.schema.json# Appearance library (drone4d.appearance_lib.v1)
+class AppearanceLibV1(TypedDict):
+    schema: Literal["drone4d.appearance_lib.v1"]
+    lib_id: str
+    generator: AppearanceLibV1Generator
+    license: AppearanceLibV1License
+    palette: dict[str, AppearanceLibV1Palette]
+    min_delta_e00: NotRequired[float]
+    classes: AppearanceLibV1Classes
+    rules: dict[str, AppearanceLibV1Rule]
+    min_hard_negatives: NotRequired[int]
+    entries: list[AppearanceLibV1Entries]
+
+
+# event/appearance_lib.v1.schema.json#/$defs/attribute
+class AppearanceLibV1Attribute(TypedDict):
+    name: str
+    kind: Literal["color", "enum"]
+    values: list[str]
+
+
+# event/appearance_lib.v1.schema.json#/properties/classes
+class AppearanceLibV1Classes(TypedDict):
+    person: NotRequired[AppearanceLibV1Cls]
+    vehicle: NotRequired[AppearanceLibV1Cls]
+
+
+# event/appearance_lib.v1.schema.json#/$defs/cls
+class AppearanceLibV1Cls(TypedDict):
+    count: int
+    min_pair_distance: int
+    asset: str
+    rig: NotRequired[str]
+    attributes: list[AppearanceLibV1Attribute]
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/anim_clips/items
+class AppearanceLibV1EntriesAnimClips(TypedDict):
+    id: int
+    name: str
+    loop: bool
+    period_s: float
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/asset
+class AppearanceLibV1EntriesAsset(TypedDict):
+    kind: Literal["procedural", "gltf"]
+    generator: str
+    rig: NotRequired[str]
+    uri: NotRequired[str]
+    sha256: NotRequired[AppearanceLibV1Sha256]
+    render: AppearanceLibV1EntriesAssetRender
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/asset/properties/render
+class AppearanceLibV1EntriesAssetRender(TypedDict):
+    top_rgb: NotRequired[AppearanceLibV1Rgb]
+    bottom_rgb: NotRequired[AppearanceLibV1Rgb]
+    skin_rgb: NotRequired[AppearanceLibV1Rgb]
+    body_rgb: NotRequired[AppearanceLibV1Rgb]
+    roof_rgb: NotRequired[AppearanceLibV1Rgb]
+    glass_rgb: NotRequired[AppearanceLibV1Rgb]
+    pattern: NotRequired[AppearanceLibV1EntriesAssetRenderPattern]
+    accessory: NotRequired[AppearanceLibV1EntriesAssetRenderAccessory]
+    roof_rack: NotRequired[AppearanceLibV1EntriesAssetRenderRoofRack]
+    marking: NotRequired[AppearanceLibV1EntriesAssetRenderMarking]
+    body_type: NotRequired[Literal["sedan", "hatchback", "suv", "van", "pickup"]]
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/asset/properties/render/properties/accessory
+class AppearanceLibV1EntriesAssetRenderAccessory(TypedDict):
+    kind: Literal["none", "backpack", "cap", "shoulder_bag"]
+    rgb: NotRequired[AppearanceLibV1Rgb]
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/asset/properties/render/properties/marking
+class AppearanceLibV1EntriesAssetRenderMarking(TypedDict):
+    kind: Literal["none", "side_stripe", "door_panel"]
+    rgb: NotRequired[AppearanceLibV1Rgb]
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/asset/properties/render/properties/pattern
+class AppearanceLibV1EntriesAssetRenderPattern(TypedDict):
+    kind: Literal["solid", "striped", "checked"]
+    accent_rgb: NotRequired[AppearanceLibV1Rgb]
+    period_m: NotRequired[float]
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/asset/properties/render/properties/roof_rack
+class AppearanceLibV1EntriesAssetRenderRoofRack(TypedDict):
+    rgb: AppearanceLibV1Rgb
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/description
+class AppearanceLibV1EntriesDescription(TypedDict):
+    zh: str
+    en: str
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/embedding
+class AppearanceLibV1EntriesEmbedding(TypedDict):
+    model: str
+    values: list[float]
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/gait
+class AppearanceLibV1EntriesGait(TypedDict):
+    speed_mps: list[float]
+    median_mps: float
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/ref_image
+class AppearanceLibV1EntriesRefImage(TypedDict):
+    uri: str
+    sha256: AppearanceLibV1Sha256
+    views: NotRequired[list[Literal["front", "side", "top45"]]]
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/thermal_zones/items
+class AppearanceLibV1EntriesThermalZones(TypedDict):
+    zone: Literal["skin", "clothing", "body", "engine", "exhaust", "glass"]
+    emissivity: float
+    temp_model: str
+    parts: NotRequired[list[str]]
+
+
+# event/appearance_lib.v1.schema.json#/properties/generator
+class AppearanceLibV1Generator(TypedDict):
+    name: str
+    version: str
+    spec_sha256: AppearanceLibV1Sha256
+    seed: int
+    embedding_model: NotRequired[str]
+    rounds: NotRequired[dict[str, int]]
+
+
+# event/appearance_lib.v1.schema.json#/$defs/license
+class AppearanceLibV1License(TypedDict):
+    kind: Literal["original", "third_party"]
+    spdx: str
+    holder: str
+    attribution: NotRequired[str]
+    third_party: NotRequired[list[AppearanceLibV1LicenseThirdParty]]
+
+
+# event/appearance_lib.v1.schema.json#/$defs/license/properties/third_party/items
+class AppearanceLibV1LicenseThirdParty(TypedDict):
+    name: str
+    spdx: str
+    source: NotRequired[str]
+
+
+# event/appearance_lib.v1.schema.json#/properties/palette/additionalProperties
+class AppearanceLibV1Palette(TypedDict):
+    rgb: AppearanceLibV1Rgb
+    zh: str
+    en: str
+
+
 # perf/bench-result.schema.json# awr.bench.result.v1
 class BenchResult(TypedDict):
     schema: Literal["awr.bench.result.v1"]
@@ -1932,11 +2208,17 @@ class BlocksStateExtBlock(TypedDict):
 class BoardV1(TypedDict):
     schema: Literal["drone4d.bench.board.v1"]
     board_version: str
+    score_version: NotRequired[str]
     tracks: list[BoardV1Tracks]
     lanes: list[BoardV1Lanes]
     seed_set_commit: NotRequired[str]
     evaluator_major: int
     platform_digest: str
+    test_split_version: NotRequired[str]
+    gpu_model: NotRequired[str]
+    cpu_isa_level: NotRequired[str]
+    seeds_per_event: NotRequired[int]
+    repeats: NotRequired[int]
     entries: list[BoardV1Entries]
 
 
@@ -1949,9 +2231,10 @@ class BoardV1Entries(TypedDict):
     lane: str
     metrics: BoardV1EntriesMetrics
     dominance_tier: int | None
-    status: NotRequired[Literal["valid", "invalid"]]
+    status: NotRequired[Literal["valid", "invalid", "incomplete"]]
     first_listed_unix_ns: int
     baseline: bool
+    display_order: NotRequired[int]
 
 
 # bench/board.v1.schema.json#/properties/entries/items/properties/metrics
@@ -2028,6 +2311,7 @@ class BriefV1(TypedDict):
     public_anchors: list[BriefV1PublicAnchors]
     targets: list[BriefV1Targets]
     task_area: list[list[float]]
+    search: NotRequired[BriefV1Search]
 
 
 # event/brief.v1.schema.json#/properties/public_anchors/items
@@ -2035,6 +2319,40 @@ class BriefV1PublicAnchors(TypedDict):
     id: str
     kind: NotRequired[str]
     pos_enu_m: list[float]
+
+
+# event/brief.v1.schema.json#/properties/search
+class BriefV1Search(TypedDict):
+    target_class: Literal["person", "vehicle", "object"]
+    prior: BriefV1SearchPrior
+    area_polygon: list[list[float]]
+    motion: Literal["static", "wander"]
+    wander_radius_m: NotRequired[float]
+    window_s: float
+
+
+# event/brief.v1.schema.json#/properties/search/properties/prior
+class BriefV1SearchPrior(TypedDict):
+    type: Literal["gmm", "grid"]
+    components: NotRequired[list[BriefV1SearchPriorComponents]]
+    grid: NotRequired[BriefV1SearchPriorGrid]
+
+
+# event/brief.v1.schema.json#/properties/search/properties/prior/properties/components/items
+class BriefV1SearchPriorComponents(TypedDict):
+    anchor: NotRequired[str]
+    xy: NotRequired[list[float]]
+    sigma_m: float
+    weight: NotRequired[float]
+
+
+# event/brief.v1.schema.json#/properties/search/properties/prior/properties/grid
+class BriefV1SearchPriorGrid(TypedDict):
+    origin_xy: list[float]
+    cell_m: float
+    nx: int
+    ny: int
+    weights: list[float]
 
 
 # event/brief.v1.schema.json#/properties/targets/items
@@ -2745,6 +3063,54 @@ class D3SemanticClasses(TypedDict):
     reflect_905: NotRequired[float]
 
 
+# bench/dataset_index.v1.schema.json# Dataset event index dataset/<event_id>/index.json (drone4d.bench.dataset_index.v1)
+class DatasetIndexV1(TypedDict):
+    schema: Literal["drone4d.bench.dataset_index.v1"]
+    event_id: str
+    world_id: str
+    split: Literal["dev", "test"]
+    event: list[DatasetIndexV1File]
+    truth: list[DatasetIndexV1File]
+    experiments: list[DatasetIndexV1Experiments]
+    runs: list[DatasetIndexV1Runs]
+
+
+# bench/dataset_index.v1.schema.json#/properties/experiments/items
+class DatasetIndexV1Experiments(TypedDict):
+    experiment_id: str
+    runs: list[str]
+
+
+# bench/dataset_index.v1.schema.json#/$defs/file
+class DatasetIndexV1File(TypedDict):
+    path: str
+    bytes: int
+    sha256: str
+
+
+# bench/dataset_index.v1.schema.json#/properties/runs/items
+class DatasetIndexV1Runs(TypedDict):
+    run_id: str
+    experiment_id: str
+    split: Literal["dev", "test"]
+    obs_level: str
+    ranked: bool
+    determinism_level: Literal["1b", "2", "3", "none"]
+    seed_commit: str
+    metrics: DatasetIndexV1RunsMetrics
+    exports: list[Literal["files", "bag"]]
+    export_manifest_sha256: str | None
+
+
+# bench/dataset_index.v1.schema.json#/properties/runs/items/properties/metrics
+class DatasetIndexV1RunsMetrics(TypedDict):
+    ec: float | None
+    ec_coverage: float | None
+    eu_f1: float | None
+    ao_real: float | None
+    ranked_valid: bool | None
+
+
 # sensor/detection.schema.json# awr.sensor.detection.v1
 class Detection(TypedDict):
     seq: int
@@ -3331,6 +3697,7 @@ class EventV1(TypedDict):
     comms: NotRequired[EventV1Comms]
     annotations: NotRequired[list[EventV1Annotations]]
     relations: NotRequired[list[EventV1Relations]]
+    search: NotRequired[EventV1Search]
     brief: NotRequired[EventV1Brief]
     interactive: NotRequired[EventV1Interactive]
     labels: NotRequired[EventV1Labels]
@@ -3348,6 +3715,21 @@ class EventV1ActorsAppearance(TypedDict):
     accessories: NotRequired[list[str]]
 
 
+# event/event.v1.schema.json#/properties/actors/items/properties/drive
+class EventV1ActorsDrive(TypedDict):
+    profile: NotRequired[Literal["urban", "cautious", "aggressive"]]
+    idm: NotRequired[EventV1ActorsDriveIdm]
+
+
+# event/event.v1.schema.json#/properties/actors/items/properties/drive/properties/idm
+class EventV1ActorsDriveIdm(TypedDict):
+    v0_mps: NotRequired[float]
+    T_s: NotRequired[float]
+    s0_m: NotRequired[float]
+    a_mps2: NotRequired[float]
+    b_mps2: NotRequired[float]
+
+
 # event/event.v1.schema.json#/properties/actors/items/properties/gait
 class EventV1ActorsGait(TypedDict):
     speed_mps: NotRequired[list[float]]
@@ -3358,7 +3740,7 @@ class EventV1ActorsGait(TypedDict):
 class EventV1ActorsRoute(TypedDict):
     t: float
     at: str
-    do: NotRequired[Literal["spawn", "pass", "wait", "enter_building", "exit_building", "board", "alight", "despawn", "pickup", "drop"]]
+    do: NotRequired[Literal["spawn", "pass", "wait", "enter_building", "exit_building", "board", "alight", "despawn", "pickup", "drop", "stop", "park"]]
     dwell_s: NotRequired[float]
     via: NotRequired[list[str]]
     target: NotRequired[str]
@@ -3451,6 +3833,41 @@ class EventV1Relations(TypedDict):
     dst: str
 
 
+# event/event.v1.schema.json#/properties/search
+class EventV1Search(TypedDict):
+    target: str
+    prior: EventV1SearchPrior
+    area_polygon: list[list[float]]
+    motion: NotRequired[Literal["static", "wander"]]
+    wander_radius_m: NotRequired[float]
+    window_s: NotRequired[float]
+
+
+# event/event.v1.schema.json#/properties/search/properties/prior
+class EventV1SearchPrior(TypedDict):
+    type: Literal["gmm", "grid"]
+    components: NotRequired[list[EventV1SearchPriorComponents]]
+    grid: NotRequired[EventV1SearchPriorGrid]
+    grid_ref: NotRequired[str]
+
+
+# event/event.v1.schema.json#/properties/search/properties/prior/properties/components/items
+class EventV1SearchPriorComponents(TypedDict):
+    anchor: NotRequired[str]
+    xy: NotRequired[list[float]]
+    sigma_m: float
+    weight: NotRequired[float]
+
+
+# event/event.v1.schema.json#/properties/search/properties/prior/properties/grid
+class EventV1SearchPriorGrid(TypedDict):
+    origin_xy: list[float]
+    cell_m: float
+    nx: int
+    ny: int
+    weights: list[float]
+
+
 # event/event.v1.schema.json#/properties/world
 class EventV1World(TypedDict):
     id: str
@@ -3469,6 +3886,117 @@ class Export(TypedDict):
     files: list[WorldCommonFileRef]
     created_at: NotRequired[str]
     params: NotRequired[dict[str, Any]]
+
+
+# bench/export_manifest.v1.schema.json# Dataset export manifest derived/export_manifest.json (drone4d.bench.export_manifest.v1)
+class ExportManifestV1(TypedDict):
+    schema: Literal["drone4d.bench.export_manifest.v1"]
+    exporter: ExportManifestV1Exporter
+    generated_unix_ns: int
+    run_id: str
+    experiment_id: str
+    event_id: str
+    world_id: str
+    split: Literal["dev"]
+    formats: list[Literal["files", "bag"]]
+    layers: list[Literal["obs", "run", "truth"]]
+    source: ExportManifestV1Source
+    quantization: dict[str, ExportManifestV1Quantization]
+    license: ExportManifestV1License
+    generation: ExportManifestV1Generation
+    retention: dict[str, Literal["transient", "standard", "pinned"]]
+    counts: dict[str, int]
+    skipped: list[ExportManifestV1Skipped]
+    files: list[ExportManifestV1Files]
+
+
+# bench/export_manifest.v1.schema.json#/properties/exporter
+class ExportManifestV1Exporter(TypedDict):
+    name: Literal["awr.bench.export"]
+    version: str
+    contracts_version: str
+
+
+# bench/export_manifest.v1.schema.json#/properties/files/items
+class ExportManifestV1Files(TypedDict):
+    path: str
+    format: Literal["files", "bag"]
+    layer: Literal["obs", "run", "truth"]
+    kind: Literal["rgb", "depth_log16", "thermal_u16", "thermal_agc", "seg_instance", "seg_semantic", "lidar", "state", "messages", "actions", "reports", "bag"]
+    uav: NotRequired[str]
+    sensor: NotRequired[str]
+    seq: NotRequired[int]
+    t_ns: NotRequired[int]
+    n: NotRequired[int]
+    bytes: int
+    sha256: ExportManifestV1Sha256
+    source_sha256: NotRequired[ExportManifestV1Sha256]
+    stats: NotRequired[dict[str, Any]]
+
+
+# bench/export_manifest.v1.schema.json#/properties/generation
+class ExportManifestV1Generation(TypedDict):
+    synthetic: Literal[True]
+    statement: ExportManifestV1GenerationStatement
+    appearance: str
+    tools: list[ExportManifestV1GenerationTools]
+    versions: dict[str, Any]
+
+
+# bench/export_manifest.v1.schema.json#/properties/generation/properties/statement
+class ExportManifestV1GenerationStatement(TypedDict):
+    zh: str
+    en: str
+
+
+# bench/export_manifest.v1.schema.json#/properties/generation/properties/tools/items
+class ExportManifestV1GenerationTools(TypedDict):
+    name: str
+    version: str
+    role: str
+
+
+# bench/export_manifest.v1.schema.json#/properties/license
+class ExportManifestV1License(TypedDict):
+    complete: bool
+    dataset: str | None
+    citation: str | None
+    url: str | None
+    notice: str | None
+    redistribution: bool | None
+    derivedFrom: list[dict[str, Any]]
+    attribution: ExportManifestV1LicenseAttribution
+    modification: str
+    missing: list[str]
+
+
+# bench/export_manifest.v1.schema.json#/properties/license/properties/attribution
+class ExportManifestV1LicenseAttribution(TypedDict):
+    en: NotRequired[str | None]
+    zh: NotRequired[str | None]
+
+
+# bench/export_manifest.v1.schema.json#/properties/quantization/additionalProperties
+class ExportManifestV1Quantization(TypedDict):
+    encoding: str
+    lossless: bool
+
+
+# bench/export_manifest.v1.schema.json#/properties/skipped/items
+class ExportManifestV1Skipped(TypedDict):
+    what: str
+    why: str
+    n: NotRequired[int]
+
+
+# bench/export_manifest.v1.schema.json#/properties/source
+class ExportManifestV1Source(TypedDict):
+    raw_mcap_sha256: ExportManifestV1Sha256
+    raw_mcap_bytes: int
+    frames_idx_sha256: ExportManifestV1Sha256
+    truth_mcap_sha256: ExportManifestV1Sha256 | None
+    run_manifest_sha256: ExportManifestV1Sha256
+    evaluation_sha256: ExportManifestV1Sha256 | None
 
 
 # rt/faults.schema.json#/oneOf/0
@@ -3718,7 +4246,7 @@ class FrameIndexV1(TypedDict):
     sensor_id: str
     channel: str
     encoding: Literal["foxglove.CompressedImage", "foxglove.RawImage", "awr.sensor.lidar_frame.v2"]
-    codec: Literal["jpeg", "raw", "32FC1", "lidar_v2"]
+    codec: Literal["jpeg", "raw", "32FC1", "lidar_v2", "16UC1"]
     agent_delivered: bool
     period_ns: int
     items: list[FrameIndexV1_]
@@ -3737,7 +4265,7 @@ class FrameIndexV1_(TypedDict):
 class FrameV1(TypedDict):
     schema: Literal["drone4d.frame.v1"]
     frame_id: str
-    kind: Literal["camera"]
+    kind: Literal["camera", "thermal"]
     agent_view: FrameV1AgentView
     ground_truth: FrameV1GroundTruth
     internal: FrameV1Internal
@@ -3757,8 +4285,9 @@ class FrameV1AgentView(TypedDict):
     pixel_convention: Literal["colmap_center_0.5"]
     mount_nominal: FrameV1AgentViewMountNominal
     gimbal_reading: FrameV1AgentViewGimbalReading
-    rgb: FrameV1AgentViewRgb
+    rgb: NotRequired[FrameV1AgentViewRgb]
     depth: NotRequired[FrameV1AgentViewDepth]
+    temp_ck: NotRequired[FrameV1AgentViewTempCk]
 
 
 # sensor/v2/frame.v1.schema.json#/properties/agent_view/properties/depth
@@ -3792,6 +4321,16 @@ class FrameV1AgentViewRgb(TypedDict):
     sha256: str
 
 
+# sensor/v2/frame.v1.schema.json#/properties/agent_view/properties/temp_ck
+class FrameV1AgentViewTempCk(TypedDict):
+    dtype: Literal["u16"]
+    unit: Literal["0.01 K"]
+    codec: Literal["radiometric_u16"]
+    compression: Literal["zstd"]
+    ref: str
+    sha256: str
+
+
 # sensor/v2/frame.v1.schema.json#/properties/ground_truth
 class FrameV1GroundTruth(TypedDict):
     T_world_sensor: FrameV1GroundTruthTWorldSensor
@@ -3799,7 +4338,7 @@ class FrameV1GroundTruth(TypedDict):
     instance: FrameV1GroundTruthInstance
     instance_unocc: FrameV1GroundTruthInstanceUnocc
     semantic: FrameV1GroundTruthSemantic
-    invalid_mask: FrameV1GroundTruthInvalidMask
+    invalid_mask: NotRequired[FrameV1GroundTruthInvalidMask]
     gt_depth: NotRequired[FrameV1GroundTruthGtDepth]
     objects: list[FrameV1GroundTruthObjects]
     timing: FrameV1GroundTruthTiming
@@ -3860,11 +4399,13 @@ class FrameV1GroundTruthTWorldSensor(TypedDict):
 # sensor/v2/frame.v1.schema.json#/properties/ground_truth/properties/timing
 class FrameV1GroundTruthTiming(TypedDict):
     t_truth_ns: list[int]
-    blur_subframes: int
-    rs_bands: int
-    rs_method: Literal["vertex", "bands"]
+    blur_subframes: NotRequired[int]
+    rs_bands: NotRequired[int]
+    rs_method: NotRequired[Literal["vertex", "bands"]]
     rs_nodes: NotRequired[int]
     readout_window_ns: NotRequired[list[int]]
+    lag_subframes: NotRequired[int]
+    subframe_weights: NotRequired[list[float]]
 
 
 # sensor/v2/frame.v1.schema.json#/properties/internal
@@ -3876,7 +4417,9 @@ class FrameV1Internal(TypedDict):
     backend: str
     renderer_version: str
     fx_version: str
-    appearance: Literal["mesh", "gs"]
+    appearance: Literal["mesh", "3dgs"]
+    appearance_source: NotRequired[Literal["mesh", "aerial", "mesh_distilled", "generative"]]
+    appearance_version: NotRequired[str | None]
     noise_tier: str
     noise_table_version: str
     encoder: str
@@ -3884,6 +4427,48 @@ class FrameV1Internal(TypedDict):
     driver: str
     run_seed: NotRequired[int]
     derived: bool
+    thermal: NotRequired[FrameV1InternalThermal]
+
+
+# sensor/v2/frame.v1.schema.json#/properties/internal/properties/thermal
+class FrameV1InternalThermal(TypedDict):
+    renderer: str
+    thermal_table: FrameV1InternalThermalThermalTable
+    planck_table: FrameV1InternalThermalPlanckTable
+    noise: FrameV1InternalThermalNoise
+    thermal_static: NotRequired[FrameV1InternalThermalThermalStatic]
+
+
+# sensor/v2/frame.v1.schema.json#/properties/internal/properties/thermal/properties/noise
+class FrameV1InternalThermalNoise(TypedDict):
+    version: str
+    profile: str
+    netd_mk_300k: float
+    fpn_offset_k: float
+    fpn_gain_frac: float
+    optics_sigma_px: float
+    tau_bolometer_s: float
+    lag_subframes: int
+
+
+# sensor/v2/frame.v1.schema.json#/properties/internal/properties/thermal/properties/planck_table
+class FrameV1InternalThermalPlanckTable(TypedDict):
+    version: str
+    sha256: str
+    band_um: list[float]
+
+
+# sensor/v2/frame.v1.schema.json#/properties/internal/properties/thermal/properties/thermal_static
+class FrameV1InternalThermalThermalStatic(TypedDict):
+    sha256: str
+    sun_az_el_deg: list[float]
+    backend: str
+
+
+# sensor/v2/frame.v1.schema.json#/properties/internal/properties/thermal/properties/thermal_table
+class FrameV1InternalThermalThermalTable(TypedDict):
+    version: str
+    sha256: str
 
 
 # bench/frames.v1.schema.json# Frame range container header (d3frames.v1)
@@ -4327,6 +4912,99 @@ class KeysKeysQosOneOf1(TypedDict):
     priority: Literal["REAL_TIME", "INTERACTIVE_HIGH", "INTERACTIVE_LOW", "DATA_HIGH", "DATA", "DATA_LOW", "BACKGROUND"]
     congestion: Literal["DROP", "BLOCK"]
     express: bool
+
+
+# bench/lab_static_index.v1.schema.json# Public-site static artifact index /lab-static/index.json (drone4d.lab_static_index.v1)
+class LabStaticIndexV1(TypedDict):
+    schema: Literal["drone4d.lab_static_index.v1"]
+    version: str
+    built_unix_ns: str
+    lab_build: NotRequired[str]
+    license: LabStaticIndexV1License
+    worlds: list[LabStaticIndexV1Worlds]
+    events: list[LabStaticIndexV1Events]
+    files_sha256: LabStaticIndexV1Relpath
+    files_bytes_total: int
+    features: LabStaticIndexV1Features
+
+
+# bench/lab_static_index.v1.schema.json#/properties/events/items
+class LabStaticIndexV1Events(TypedDict):
+    id: LabStaticIndexV1EventId
+    version: int
+    world_id: NotRequired[str]
+    tape: LabStaticIndexV1Relpath
+    tape_json: NotRequired[LabStaticIndexV1Relpath]
+    brief: NotRequired[LabStaticIndexV1Relpath]
+    bytes: NotRequired[LabStaticIndexV1Bytes]
+    sha256: NotRequired[LabStaticIndexV1Sha256]
+    runs: list[LabStaticIndexV1Run]
+
+
+# bench/lab_static_index.v1.schema.json#/$defs/external
+class LabStaticIndexV1External(TypedDict):
+    channel: Literal["modelscope"]
+    url: str
+
+
+# bench/lab_static_index.v1.schema.json#/properties/features
+class LabStaticIndexV1Features(TypedDict):
+    inspect: bool
+    compare: bool
+    leaderboard: Literal[False]
+    submit: Literal[False]
+
+
+# bench/lab_static_index.v1.schema.json#/properties/license
+class LabStaticIndexV1License(TypedDict):
+    files: list[LabStaticIndexV1Relpath]
+    attribution: list[str]
+
+
+# bench/lab_static_index.v1.schema.json#/$defs/run
+class LabStaticIndexV1Run(TypedDict):
+    run_id: str
+    policy: str
+    n_uav: int
+    obs_level: str
+    metrics: NotRequired[LabStaticIndexV1Relpath]
+    tracks_obs: NotRequired[LabStaticIndexV1Relpath]
+    videos: NotRequired[list[LabStaticIndexV1Video]]
+    slices: NotRequired[list[LabStaticIndexV1Slice]]
+    basemap: NotRequired[LabStaticIndexV1Relpath]
+    basemap_bytes: NotRequired[LabStaticIndexV1Bytes]
+    basemap_sha256: NotRequired[LabStaticIndexV1Sha256]
+    lidar_compare: NotRequired[LabStaticIndexV1Relpath]
+
+
+# bench/lab_static_index.v1.schema.json#/$defs/slice
+class LabStaticIndexV1Slice(TypedDict):
+    event_id: str
+    t_from_s: float
+    t_to_s: float
+    rrd: LabStaticIndexV1Relpath
+    bytes: NotRequired[LabStaticIndexV1Bytes]
+    sha256: NotRequired[LabStaticIndexV1Sha256]
+    external: NotRequired[LabStaticIndexV1External]
+
+
+# bench/lab_static_index.v1.schema.json#/$defs/video
+class LabStaticIndexV1Video(TypedDict):
+    uav: str
+    cam: str
+    kind: NotRequired[Literal["rgb", "thermal"]]
+    path: LabStaticIndexV1Relpath
+    bytes: NotRequired[LabStaticIndexV1Bytes]
+    sha256: NotRequired[LabStaticIndexV1Sha256]
+    external: NotRequired[LabStaticIndexV1External]
+
+
+# bench/lab_static_index.v1.schema.json#/properties/worlds/items
+class LabStaticIndexV1Worlds(TypedDict):
+    id: str
+    pointcloud: NotRequired[LabStaticIndexV1Relpath]
+    summary: NotRequired[LabStaticIndexV1Relpath]
+    bytes: NotRequired[LabStaticIndexV1Bytes]
 
 
 # rt/layouts.schema.json# layouts.json meta-schema
@@ -6786,12 +7464,14 @@ class QaReportGenerator(TypedDict):
 class QaReportGlb(TypedDict):
     registration: NotRequired[dict[str, Any]]
     leveling: NotRequired[dict[str, Any]]
+    scale: NotRequired[dict[str, Any] | None]
     topology: NotRequired[dict[str, Any]]
     stages: NotRequired[list[QaReportGlbStages]]
     quality: NotRequired[dict[str, Any]]
     semantic: NotRequired[dict[str, Any]]
     collision: NotRequired[dict[str, Any]]
     navmesh: NotRequired[dict[str, Any]]
+    navgraph: NotRequired[dict[str, Any]]
     anchors: NotRequired[dict[str, Any]]
     sensor_hints: NotRequired[dict[str, Any]]
     vglb: NotRequired[list[dict[str, Any]]]
@@ -6818,7 +7498,7 @@ class QaReportSizes(TypedDict):
 
 # schemas/world/qa-report.schema.json#/properties/stages/items
 class QaReportStages(TypedDict):
-    name: Literal["read", "ingest", "dtm", "normals", "classify", "tile", "dsm", "zones", "hash", "validate", "normalize", "pointcloud", "raycast", "appearance"]
+    name: Literal["read", "ingest", "dtm", "normals", "classify", "tile", "dsm", "zones", "hash", "validate", "normalize", "pointcloud", "raycast", "appearance", "grids", "quality", "semantic", "collision", "occupancy", "navmesh", "navgraph", "anchors", "package"]
     seconds: float
     peak_rss_mb: NotRequired[float]
 
@@ -7511,6 +8191,7 @@ class RunSpecV1FleetSensorsOverrides(TypedDict):
     height_px: NotRequired[int]
     fps: NotRequired[str]
     mount_preset: NotRequired[str]
+    hfov_deg: NotRequired[float]
     role: NotRequired[Literal["agent", "slam"]]
 
 
@@ -7547,7 +8228,7 @@ class RunSpecV1PhysicsOpts(TypedDict):
 # bench/run_spec.v1.schema.json#/properties/policy
 class RunSpecV1Policy(TypedDict):
     kind: Literal["reference", "image", "sdk"]
-    name: NotRequired[Literal["hover", "guard", "coverage", "track", "track_share", "static_guard", "coverage_scan"]]
+    name: NotRequired[Literal["hover", "guard", "coverage", "track", "track_share", "static_guard", "coverage_scan", "hover_plaza", "track_solo", "hover1_plaza", "hover3_anchors", "lawn3_cover", "track3_nocomm", "track3_share", "track5_share"]]
     image_digest: NotRequired[str]
     params: NotRequired[dict[str, Any]]
 
@@ -7594,6 +8275,69 @@ class SafetyCodesCodes(TypedDict):
     icon: str
     merge_key: str | None
     d1: Literal["core", "ext", "stub"]
+
+
+# bench/sample_pack.v1.schema.json# Internal sample pack (drone4d.bench.sample_pack.v1)
+class SamplePackV1(TypedDict):
+    schema: Literal["drone4d.bench.sample_pack.v1"]
+    pack_id: str
+    generated_utc: str
+    acceptance: NotRequired[str]
+    round: NotRequired[str | None]
+    event_id: str
+    event_version: int | None
+    world_id: str | None
+    board_version: str | None
+    board_versions: NotRequired[dict[str, str | None]]
+    source: NotRequired[SamplePackV1Source]
+    samples: list[SamplePackV1Sample]
+
+
+# bench/sample_pack.v1.schema.json#/$defs/file
+class SamplePackV1File(TypedDict):
+    kind: Literal["video", "mcap", "metrics", "tape", "manifest", "slice", "tracks"]
+    path: str
+    bytes: int
+    sha256: SamplePackV1Sha256
+    layer: NotRequired[Literal["obs", "run", "agent", "truth"]]
+    media_type: NotRequired[str]
+    uav: NotRequired[str]
+    cam: NotRequired[str]
+    frames: NotRequired[int]
+    fps: NotRequired[float]
+    t0_ns: NotRequired[int]
+    width: NotRequired[int]
+    height: NotRequired[int]
+    duration_s: NotRequired[float]
+
+
+# bench/sample_pack.v1.schema.json#/$defs/sample
+class SamplePackV1Sample(TypedDict):
+    group: str
+    obs_level: NotRequired[str]
+    policy: str
+    run_id: str
+    board_version: NotRequired[str | None]
+    sim_s: NotRequired[float | None]
+    uavs: NotRequired[list[str]]
+    metrics: SamplePackV1SampleMetrics
+    files: list[SamplePackV1File]
+
+
+# bench/sample_pack.v1.schema.json#/$defs/sample/properties/metrics
+class SamplePackV1SampleMetrics(TypedDict):
+    ec: SamplePackV1Metric
+    eu: SamplePackV1Metric
+    ao: SamplePackV1Metric
+    ce: SamplePackV1Metric
+
+
+# bench/sample_pack.v1.schema.json#/properties/source
+class SamplePackV1Source(TypedDict):
+    report_sha256: NotRequired[SamplePackV1Sha256]
+    fingerprint: NotRequired[str | None]
+    formal: NotRequired[bool | None]
+    formal_passed: NotRequired[bool | None]
 
 
 # rt/payloads/sandbox_session_state.schema.json# awr.sandbox.session_state.v1
@@ -8778,6 +9522,7 @@ class TapeManifestV1Report(TypedDict):
     boards: list[dict[str, Any]]
     warnings: list[str]
     min_dist_m: TapeManifestV1ReportMinDistM
+    lanes: NotRequired[TapeManifestV1ReportLanes]
 
 
 # event/tape_manifest.v1.schema.json#/properties/report/properties/arrivals/items
@@ -8787,6 +9532,15 @@ class TapeManifestV1ReportArrivals(TypedDict):
     t_plan_s: float
     t_arrive_s: float
     late_s: float
+
+
+# event/tape_manifest.v1.schema.json#/properties/report/properties/lanes
+class TapeManifestV1ReportLanes(TypedDict):
+    navgraph_sha256: str
+    digest: str
+    vehicles: list[dict[str, Any]]
+    audit: dict[str, Any]
+    log: dict[str, Any]
 
 
 # event/tape_manifest.v1.schema.json#/properties/report/properties/min_dist_m
@@ -9909,6 +10663,10 @@ class TruthV1(TypedDict):
     relation_checks: list[TruthV1RelationChecks]
     skyvis_1hz: dict[str, list[float | None]]
     consistency: dict[str, Any]
+    key_events: NotRequired[list[TruthV1KeyEvents]]
+    key_relations: NotRequired[list[TruthV1KeyRelations]]
+    validator_params: NotRequired[dict[str, Any]]
+    report_map: NotRequired[dict[str, list[str]]]
     perf: NotRequired[dict[str, Any]]
 
 
@@ -9942,6 +10700,28 @@ class TruthV1EventsEvidence(TypedDict):
     door_dist_m: NotRequired[float]
     sky_vis_min: NotRequired[float]
     zone: NotRequired[str]
+    object: NotRequired[str]
+    dist_m: NotRequired[float]
+    gap_ms: NotRequired[int]
+
+
+# event/truth.v1.schema.json#/properties/key_events/items
+class TruthV1KeyEvents(TypedDict):
+    id: str
+    type: str
+    participants: list[str]
+    interval_ms: list[int]
+    window_s: NotRequired[float]
+    declared: NotRequired[bool]
+    ref: NotRequired[str]
+    params: dict[str, Any]
+
+
+# event/truth.v1.schema.json#/properties/key_relations/items
+class TruthV1KeyRelations(TypedDict):
+    src: str
+    rel: Literal["before", "after", "during", "overlaps", "causes", "enables"]
+    dst: str
 
 
 # event/truth.v1.schema.json#/properties/relation_checks/items
@@ -11433,6 +12213,33 @@ AgentConfigV1BriefTargets = TypedDict("AgentConfigV1BriefTargets", {
 })
 
 
+# event/appearance_lib.v1.schema.json#/properties/entries/items
+AppearanceLibV1Entries = TypedDict("AppearanceLibV1Entries", {
+    "id": str,
+    "class": Literal["person", "vehicle"],
+    "attrs": dict[str, str],
+    "vector": list[int],
+    "asset": AppearanceLibV1EntriesAsset,
+    "size_m": list[float],
+    "gait": NotRequired[AppearanceLibV1EntriesGait],
+    "anim_clips": list[AppearanceLibV1EntriesAnimClips],
+    "thermal_zones": list[AppearanceLibV1EntriesThermalZones],
+    "embedding": AppearanceLibV1EntriesEmbedding,
+    "description": AppearanceLibV1EntriesDescription,
+    "ref_image": NotRequired[AppearanceLibV1EntriesRefImage],
+    "license": AppearanceLibV1License,
+})
+
+
+# event/appearance_lib.v1.schema.json#/$defs/rule
+AppearanceLibV1Rule = TypedDict("AppearanceLibV1Rule", {
+    "class": Literal["person", "vehicle"],
+    "min_distance": int,
+    "min_shared": int,
+    "shared_any_of": NotRequired[list[str]],
+})
+
+
 # bus/event.schema.json#/$defs/phys_payloads
 BusEventPhysPayloads = TypedDict("BusEventPhysPayloads", {
     "phys.contact.mesh": NotRequired[BusEventPhysPayloadsPhysContactMesh],
@@ -11521,7 +12328,10 @@ EventV1Actors = TypedDict("EventV1Actors", {
     "id": str,
     "class": Literal["person", "vehicle", "dog", "machine", "object", "uav"],
     "appearance": NotRequired[EventV1ActorsAppearance],
+    "appearance_ref": NotRequired[str],
+    "roles": NotRequired[list[Literal["target", "distractor", "participant", "background_vehicle"]]],
     "gait": NotRequired[EventV1ActorsGait],
+    "drive": NotRequired[EventV1ActorsDrive],
     "route": list[EventV1ActorsRoute],
     "reaction": NotRequired[Reaction],
 })
@@ -11552,7 +12362,8 @@ FrameV1GroundTruthObjects = TypedDict("FrameV1GroundTruthObjects", {
     "bbox_xywh": list[int],
     "bbox_unocc_xywh": list[int],
     "occluder_sem_px": dict[str, int],
-    "flags": list[Literal["truncated"]],
+    "flags": list[Literal["truncated", "no_ring"]],
+    "dT_app_k": NotRequired[float],
 })
 
 

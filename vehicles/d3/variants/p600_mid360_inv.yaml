@@ -1,0 +1,27 @@
+# vehicles/d3/variants/p600_mid360_inv.yaml：建图缺省机型变体（awr.vehicle_variant.v1；AWR-20 §15.5.1、§15.7.2、§15.7.7；ADR-157）。
+# 有效文档 = apply_mounts(deep_merge(p600_mid360@2.0.0, set), mounts, remove)，随后按 §5.5 重算质量与功率派生值并重跑 VH、MT、
+# SN 与 OV、RG 规则（awr.sim.catalog.loader.Overlay）。基机型 vehicles/p600/params.yaml 不变。
+# 挂载：MID-360 倒装（预设 inverted_mapping：xyz [0, 0, −0.08] m、rpy [180, 0, 0]°，D2 挂载文件已登记该预设）；内置 IMU 随 LiDAR
+# 倒装，FAST-LIVO2 的 extrinsic_T / extrinsic_R 为 LiDAR 在内置 IMU 系中的外参（侧表 lidar_in_imu），与机体挂载无关，因此倒装后
+# extrinsic_T = [−0.011, −0.02329, 0.04412]、extrinsic_R = I（与 r1 闭环配置一致）。slam_cam 机体固连、下俯 45°、无云台。
+# derived 为 §15.5.1 表值，加载器按 ≤ 1% 核对（OV-3）。
+schema: awr.vehicle_variant.v1
+id: p600_mid360_inv
+base: p600_mid360@2.0.0
+profile_version: 1.0.0
+display_name: "P600 (MID-360 inverted, mapping)"
+display_name_zh: "P600（倒装 MID-360 建图配置）"
+reference: false
+mounts:
+  mid360: {spec_ref: mid360@2.0.0, mount_preset: inverted_mapping, default: true, removable: false, d3_sensor_id: lidar0}
+  eo: {d3_sensor_id: cam0}
+  slam_cam: {file: ../mounts/p600_slam_cam.yaml, default: true, removable: false, d3_sensor_id: slam_cam}
+  gnss: {d3_sensor_id: gnss0}
+  imu: {d3_sensor_id: imu0}
+d3:
+  tags: [mapping_default, slam_rig]
+  rig_order: [cam0, slam_cam, lidar0, lidar0_imu, imu0, gnss0, nav]
+  task_constraints: {mapping_agl_m: [0, 40], mapping_speed_max_mps: 6.0}
+derived: {mass_kg: 3.885, p_hover_w: 412.0, hover_endurance_s: 1693.5, hover_thrust: 0.495, twr: 2.02, mtow_margin_kg: 0.215}
+conf: D
+src: "ADR-157；挂载 r1、r4 §5.1；SLAM 相机 M25 §6.20；派生值 AWR-20 §15.5.1"

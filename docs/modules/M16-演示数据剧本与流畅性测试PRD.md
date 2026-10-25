@@ -108,7 +108,7 @@
 
 | 角色 | 使用 M16 的方式 |
 |---|---|
-| 演示者 | `make demo` 启动；按提示卡执行 D0–D7；失败时用录屏兜底 |
+| 演示者 | `make demo` 启动；按提示卡执行演示段 D0–D7；失败时用录屏兜底 |
 | 模块开发者（并行编码 agent） | 在 `apps/web/perf/<module>/` 提交 spec 并注册用例；本地 `make perf CASE=<id>` 复现 |
 | 测试与发布负责人 | 执行 G2 夜间、G3 里程碑、G4 发布门禁；审阅报告、接受基线、登记豁免 |
 | 科研用户 | 用剧本与 profile 做受控对比（晴与雨下的 pos_err、N 与 CPU 的关系），引用报告中的保真度声明 |
@@ -162,7 +162,7 @@
 | M16-FR-024 | 剧本静态校验 `tests/e2e/test_scenarios_static.py`（G1）：schema、V-SC-01～11 的离线部分、ID 与文件名一致、出生点在 border 内且不在 nofly 内、剧本间命名唯一、catalog 引用存在 | P0 | V0.1 | 是 | M16-AC-015 | 16 §12.6 |
 | M16-FR-025 | 剧本能量回归 `tests/e2e/test_scenarios_energy.py`（`needs_data`）：以 `awr.sim.core.estimate` 对每个内置剧本做预检，落地 SOC ≥ 0.25，另用离线 1-D 模型复算最小余量比 ≥ 1.4 | P0（S1、ladder）/ P1（其余） | V0.1 | 是 | M16-AC-016 | 12 §5.8.4；M09 §6.8.6 |
 | M16-FR-026 | 剧本端到端 `tests/e2e/test_scenarios.py`：S1（P0）、S2–S6（P1）、ladder n200 与 free 冒烟；×10 运行，读 `scenario.result`、度量与事件 | P0 / P1 | V0.1 | 是 | M16-AC-010、013、014 | M10-FR-063 |
-| M16-FR-027 | `make demo`：检查清单 → 启动（profile=demo，`AWR_WORLD=shenzhen`，`AWR_SCENARIO=s1-shenzhen-facade`）→ 打印访问方式、SSH 转发命令与 D0–D7 提示卡（每段操作、看点、×1 与 ×10 的墙钟时刻） | P0 | V0.1 | 是 | M16-AC-017 | PRD-FR-067；13 §4.4 |
+| M16-FR-027 | `make demo`：检查清单 → 启动（profile=demo，`AWR_WORLD=shenzhen`，`AWR_SCENARIO=s1-shenzhen-facade`）→ 打印访问方式、SSH 转发命令与演示段 D0–D7 提示卡（每段操作、看点、×1 与 ×10 的墙钟时刻） | P0 | V0.1 | 是 | M16-AC-017 | PRD-FR-067；13 §4.4 |
 | M16-FR-028 | 自动彩排 `tests/e2e/demo_rehearsal.spec.ts`：headless 执行 D0–D5 的操作并断言看点；`--record` 时输出 1280×720 webm 作为录屏兜底 | P1 | V0.1 | 是 | M16-AC-018 | 13 §4.4.2 回退列 |
 | M16-FR-029 | 剧本编写工具 `awr.datasets.scenarios`：ladder 布局、环形与方形折线、圆形 zones 多边形、S3 目标生成、离线能量复核；输出确定（同输入逐字节一致） | P1 | V0.1 | 是 | M16-AC-019 | 本文设定 |
 
@@ -606,6 +606,8 @@ v1（12 m 交错格网、2 m/s）的问题（INT-1 §7.2，`test_ladder_smoke` �
 
 演示脚本的内容由 13 §4.4 定义，本节只规定 M16 如何把它变成可执行、可彩排的资产。
 
+称谓注记（v1.6，AWR-05 §7.10 使用规则第 6 条）：下表"段"列的 D0 至 D7 是演示脚本的段号，不是交付称谓（D1 至 D4）；其他文档引用时写"演示段 Dn"（如"演示段 D6a"）。段号是否改名随 D3.x 的演示脚本修订另定（AWR-05 §23.5 C-10）；改名前 `tests/e2e/test_demo_check.py` 中对"D6a"的断言保持不变。
+
 | 段 | 13 的操作 | M16 提供的数据与参数 | 自动彩排断言（`demo_rehearsal.spec.ts`） |
 |---|---|---|---|
 | D0 开场 | 打开 `/world/shenzhen` | S1 为缺省剧本（catalog） | `__perf.load.ttfp ≤ 1000`；揭开遮罩前后无 `pageerror` |
@@ -1024,7 +1026,7 @@ sequenceDiagram
     MK->>RUN: AWR_WORLD=shenzhen AWR_SCENARIO=s1-shenzhen-facade AWR_SCENARIO_PROFILE=demo
     RUN->>SUP: 预检、worldpkg build --missing、exec
     SUP-->>OP: READY 与访问方式
-    MK-->>OP: 提示卡 D0–D7（§6.5）
+    MK-->>OP: 提示卡：演示段 D0–D7（§6.5）
   end
 ```
 

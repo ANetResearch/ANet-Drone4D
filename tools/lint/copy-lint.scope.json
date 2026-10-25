@@ -1,0 +1,14 @@
+{
+ "$comment": "copy-lint 扫描范围追加（docs/05 §7.10 适用范围、14 §21.15.7 扫描范围；D3-AC-23）。缺省范围（copy-lint.mjs DEFAULT_SCOPE：两份 README、zh-CN.json 与 en.json（含 lab.* 键）、CITATION.cff）之外追加：D3 lab 页面按 lab 分片的词典；/lab/ 公开只读构建的 HTML 模板与其全部词典（含样例页，lab-public 下后续新增页面的 i18n 分片随目录遍历自动纳入，P3 的数据集发布页 lab-public/datasets 亦然）；D3 页面显示的原因码文案；三份 OpenAPI 快照的 summary、description 与文档标题；数据集发布包的 README 与 GENERATORS.md 模板（P3，ADR-194 移入 D3.x；目录尚不存在时跳过）。条目不写 lang 时按文件名判定语言（*.en.json、en.json 为英文，*.zh-CN.json、zh-CN.json 为中文），OpenAPI 按字符串判定。tests/d3/copy/test_copy_scope.py 校验 lab 页面与 /lab/ 构建引用的每个词典、仓库内每个 OpenAPI 快照都在范围内。",
+ "replace_default": false,
+ "files": [
+  { "path": "apps/web/src/app/i18n/lab/", "match": "\\.json$", "kind": "i18n" },
+  { "path": "apps/web/src/app/lab-public/", "match": "(?:^|/)i18n/[^/]+\\.json$", "kind": "i18n" },
+  { "path": "apps/web/src/app/lab-public/index.html", "lang": "zh", "kind": "html" },
+  { "path": "apps/web/src/app/i18n/reasons.zh-CN.gen.json", "lang": "zh", "kind": "i18n" },
+  { "path": "packages/contracts/rest/openapi.snapshot.json", "lang": "auto", "kind": "openapi" },
+  { "path": "packages/contracts/rest/sandbox.openapi.snapshot.json", "lang": "auto", "kind": "openapi" },
+  { "path": "packages/contracts/bench/openapi/bench.openapi.snapshot.json", "lang": "auto", "kind": "openapi" },
+  { "path": "tools/release/", "match": "(?:^|/)(?:README|GENERATORS)[^/]*\\.md$", "kind": "md" }
+ ]
+}

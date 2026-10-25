@@ -6,15 +6,17 @@ container u8`；规范帧数据 F = 对 tick k、演员 idx 依次拼接（tick 
 容器：魔数 "D4DTAPE\\x01" | u32 header_len | 规范头 JCS 字节 | u32 n_blocks | n_blocks × 40 B 块索引（u64 off_S、u32 comp_S、
 u32 raw_S、u64 off_B、u32 comp_B、u32 raw_B、u32 tick0、u16 n_ticks、u16 0）| 块数据。块 b 覆盖 tick [100b, 100b + 100)，按演员拆为
 脚本演员子块 S（idx < n_s）与背景子块 B；子块原文按字段 → 演员 → tick 排列，每个演员在块内首值为绝对值、其余为与前一 tick 的差
-（按字段位宽补码回绕；yaw 先折叠到 [−18000, 18000)），zstd 级别 19、带内容校验、单帧。压缩级别与拆分方式不影响 F 与内容哈希。
+（按字段位宽补码回绕；yaw 先折叠到 [−18000, 18000)），zstd 级别 19、带内容校验、单帧。压缩级别与拆分方式不影响 F 与内容哈希；
+各子块独立成帧，按子块并行压缩（线程数不影响压缩字节）。
 
 哈希：content = SHA-256(header_bytes ‖ F)、body = SHA-256(F)、header = SHA-256(header_bytes)、file = SHA-256(tape.bin)。校验方对存储的
-规范头原始字节求哈希，不重新序列化。
+规范头原始字节求哈希，不重新序列化。脚本演员列哈希 `scripted_sha256` = SHA-256(JCS(脚本演员表) ‖ F_S)，F_S 为 idx < n_s 的 tick 主序记录。
 """
 
 from __future__ import annotations
 
 import hashlib
+import os
 import struct
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -32,6 +34,7 @@ MAGIC = b"D4DTAPE\x01"
 TICK_NS = 100_000_000
 BLOCK_TICKS = 100
 ZSTD_LEVEL = 19
+PARALLEL_MIN_BYTES = 1 << 20                  # 子块原文合计 ≥ 1 MiB 时按子块并行压缩
 FIELDS = (("x_mm", "<i4"), ("y_mm", "<i4"), ("z_mm", "<i4"), ("yaw_cdeg", "<i2"), ("vx_cmps", "<i2"), ("vy_cmps", "<i2"),
           ("vz_cmps", "<i2"), ("state", "u1"), ("container", "u1"))
 RECORD = np.dtype([(n, t) for n, t in FIELDS])
@@ -89,6 +92,18 @@ def _fold(frames: np.ndarray) -> np.ndarray:
     return f
 
 
+def _workers() -> int:
+    """压缩线程数：`AWR_TAPE_THREADS`（≥ 1）或可用 CPU 数，上限 8。"""
+    env = os.environ.get("AWR_TAPE_THREADS", "").strip()
+    if env.isdigit() and int(env) >= 1:
+        return int(env)
+    try:
+        n = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):  # pragma: no cover - 非 Linux
+        n = os.cpu_count() or 1
+    return max(1, min(8, n))
+
+
 def write_tape(path: Path, header: dict, frames: np.ndarray, *, n_scripted: int, level: int = ZSTD_LEVEL) -> dict:
     """frames (n_ticks, n_actors) RECORD。返回清单的哈希部分 {content_sha256, body_sha256, header_sha256, file_sha256, bytes}。"""
     import zstandard
@@ -98,16 +113,29 @@ def write_tape(path: Path, header: dict, frames: np.ndarray, *, n_scripted: int,
     if header.get("n_ticks") != n_t or len(header.get("actors", [])) != n_a:
         raise EventError(611, "header n_ticks / actors do not match the frame array")
     hb = jcs(header)
-    cz = zstandard.ZstdCompressor(level=level, write_checksum=True, write_content_size=True)
-    blocks, index = [], []
     nb = (n_t + BLOCK_TICKS - 1) // BLOCK_TICKS
+    raws = []
+    for b in range(nb):
+        t0, t1 = b * BLOCK_TICKS, min((b + 1) * BLOCK_TICKS, n_t)
+        raws += [_encode_sub(frames[t0:t1, :n_scripted]), _encode_sub(frames[t0:t1, n_scripted:]) if n_a > n_scripted else b""]
+
+    def _z(raw: bytes) -> bytes:
+        # 每个子块独立成帧、参数相同，压缩字节与执行次序和线程数无关；zstandard 在压缩期间释放 GIL
+        return zstandard.ZstdCompressor(level=level, write_checksum=True, write_content_size=True).compress(raw) if raw else b""
+
+    workers = min(len(raws), _workers())
+    if workers > 1 and sum(map(len, raws)) >= PARALLEL_MIN_BYTES:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            comp = list(ex.map(_z, raws))
+    else:
+        comp = [_z(r) for r in raws]
+    blocks, index = [], []
     off = len(MAGIC) + 4 + len(hb) + 4 + nb * _IDX.size
     for b in range(nb):
         t0, t1 = b * BLOCK_TICKS, min((b + 1) * BLOCK_TICKS, n_t)
-        rs = _encode_sub(frames[t0:t1, :n_scripted])
-        rb = _encode_sub(frames[t0:t1, n_scripted:]) if n_a > n_scripted else b""
-        cs = cz.compress(rs)
-        cb = cz.compress(rb) if rb else b""
+        rs, rb, cs, cb = raws[2 * b], raws[2 * b + 1], comp[2 * b], comp[2 * b + 1]
         index.append(_IDX.pack(off, len(cs), len(rs), off + len(cs), len(cb), len(rb), t0, t1 - t0, 0))
         blocks += [cs, cb]
         off += len(cs) + len(cb)
@@ -224,6 +252,14 @@ class TapeReader:
             hb.update(f)
         return {"content_sha256": hc.hexdigest(), "body_sha256": hb.hexdigest(), "header_sha256": hashlib.sha256(self.header_bytes).hexdigest(),
                 "file_sha256": hashlib.sha256(self._buf).hexdigest()}
+
+    def scripted_sha256(self) -> str:
+        """脚本演员列哈希：SHA-256(脚本演员表的 JCS ‖ 脚本演员子块的规范帧数据（tick 主序，idx < n_s）)，只解 S 子块。
+        背景人数、背景抽样与背景子块的编码不影响该值（D3-AC-07"背景 0 / 40 / 200 / 1,000 人时脚本演员列哈希相同"）。"""
+        h = hashlib.sha256(jcs(self.actors[:self.n_scripted]))
+        for bi in range(len(self.blocks)):
+            h.update(self.block_frames(bi, background=False).tobytes())
+        return h.hexdigest()
 
     def verify(self, expect_content_sha256: str | None = None) -> dict:
         """校验块覆盖与内容哈希；不一致抛 614。"""

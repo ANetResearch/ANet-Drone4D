@@ -13,6 +13,8 @@ FR-022、FR-027；M18-M19 PRD §6、§7.1；AWR-04 §7）。
 - D3 扩展点 3（AWR-05 §12.3，M23 §6.12）：`motion.mode = timeline` 的识别物每 tick 由 `set_motion_source` 登记的运动源给出位置、
   航向、速度、enabled 与 hidden，跳过 `step_motion` 与行为覆盖；`reaction_policy = exogenous` 时覆盖恒为 (None, True) 且不广播，
   判据与状态机照跑。运动源可只读调用 `state1(id)` 与 `config(id)`。缺省无运动源、无 timeline 识别物，D2 行为逐位不变。
+  登记运动源后另记事件度量（M23-FR-047、FR-050，D3-AC-08）：每次 stage 中 timeline 识别物在 sim-core 中的实现位置（毫米定点，
+  `timeline_track`）与其被发现记录（`timeline_discovered`），由 M23 写入 `event_run`；只读记录，不参与判据与运动。
 - D2.1 判据增补（M18-FR-029、FR-030）：声学带余量计入 `hearing_band_adj_db`（缺省不修正，逐位不变）；配置 `radar_rx` 的识别物其
   radar 敏感体参与判据（geometric 只看配置体；physical 另要求接收视场内且 SNR ≥ snr_req，`radar.py`）。
 """
@@ -160,11 +162,23 @@ class TargetRuntime:
         self.events_log: list[tuple[str, dict]] = []   # 最近事件（测试与 SB-45 的 last_discovered 外的诊断，≤ 256）
         self.motion_source: MotionSource | None = None  # D3 扩展点 3（timeline 识别物的位置来源）
         self._src_off: set[str] = set()                 # 运动源本 tick 给出 enabled = false 的 timeline 识别物
+        self._tl_track: list[tuple[int, dict[str, bytes]]] = []   # (stage t_ns, {timeline 识别物 id: 实现位置 "<i8" × 3，mm})
+        self._tl_disc: list[dict] = []                  # timeline 识别物的被发现记录（与 target.discovered 同一时刻与口径）
 
     # ------------------------------------------------------------ D3 运动源（扩展点 3）
     def set_motion_source(self, src: MotionSource | None) -> None:
-        """登记（或以 None 撤销）timeline 识别物的运动源；在步边界调用（会话装配）。"""
+        """登记（或以 None 撤销）timeline 识别物的运动源；在步边界调用（会话装配）。同时清空事件度量记录。"""
         self.motion_source = src
+        self._tl_track, self._tl_disc = [], []
+
+    def timeline_track(self, tids: Sequence[str]) -> list[tuple[int, bytes]]:
+        """登记运动源以来每次 stage 的 (t_ns, 按 `tids` 次序拼接的实现位置)；位置为运动步之后 `MotionState.pos` 的毫米定点
+        （`round(pos × 1000)`，"<i8" × 3），即判据与状态机、列与传感器在该 tick 读到的位置。缺席的 id 不占位。"""
+        return [(t, b"".join(row[k] for k in tids if k in row)) for t, row in self._tl_track]
+
+    def timeline_discovered(self) -> list[dict]:
+        """登记运动源以来 timeline 识别物的被发现记录：{target, uav, t_ms, criterion, kind, episode, count}（按发生次序）。"""
+        return [dict(d) for d in self._tl_disc]
 
     def _timeline_step(self, T: Any, t_ns: int) -> None:
         """timeline 识别物的一步：取运动源的位姿写入 MotionState，不推进 `step_motion`、不取流 17、不应用行为覆盖。"""
@@ -668,6 +682,10 @@ class TargetRuntime:
                     T.sound_on, T.sound_phase = False, 0.0
         if batch:
             self._motion_batch(batch, kern, nrm, uni, dt, t_s)  # type: ignore[arg-type]
+        if self.motion_source is not None:
+            tl = {T.id: np.round(np.asarray(T.ms.pos, np.float64) * 1000.0).astype("<i8").tobytes() for T in Ts if _timeline(T)}
+            if tl:
+                self._tl_track.append((t_ns, tl))
         IN, rows, R3 = self._inside_all_r3(Ts, P)
         idset = set(ids)
         bt = self._bt
@@ -1066,6 +1084,9 @@ class TargetRuntime:
         T.last_disc = {"t_sim_ns": round(t_s * 1e9), "uav": vid, "kind": data["kind"], "range_m": data["range_m"],
                        "margin_db": data.get("margin_db"), "margin_ratio": data.get("margin_ratio")}
         self._emit(ctx, "target.discovered", 3, t_s, data, uav=vid)
+        if self.motion_source is not None and _timeline(T):
+            self._tl_disc.append({"target": T.id, "uav": vid, "t_ms": round(t_s * 1e3), "criterion": mode, "kind": data["kind"],
+                                  "episode": data["episode"], "count": data["count"]})
 
     def _new_episode(self, ctx: Any, T: Any, vids: list[str], t_s: float, reason: str, broadcasts: list) -> None:
         T.episode = min(65535, T.episode + 1)

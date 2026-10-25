@@ -124,3 +124,16 @@ def test_evidence_uses_bbox_at_l2() -> None:
     assert tr.items[0].ev == [{"uav": "uav-01", "sensor": "eo", "frame_seq": 3, "bbox_xywh": [1, 2, 3, 4]}]
     tr.update([{**det, "seq": 4, "t_mid_ns": 400_000_000, "l2": False}], 400_000_000)
     assert tr.items[0].ev[-1] == {"uav": "uav-01", "sensor": "eo", "frame_seq": 4, "det_id": "0" * 16}
+
+
+def test_bundled_weights_load_and_match_model_card() -> None:
+    import json
+
+    card = json.loads(R.WEIGHTS.with_name("model_card.json").read_text())
+    assert card["model"] == "ref_det_v1" and card["classes"] == list(R.CLASSES) and card["input"] == [R.W_IN, R.H_IN]
+    assert card["numpy_max_abs_err"] <= 1e-3
+    det = R.RefDet()
+    img = np.full((R.H_IN, R.W_IN, 3), 110, np.uint8)
+    out = det.forward(img)
+    assert out.shape == (6, R.HM_H, R.HM_W) and np.isfinite(out).all()
+    assert det.detect(img) == det.detect(img)

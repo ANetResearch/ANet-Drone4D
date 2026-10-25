@@ -1,23 +1,24 @@
 cff-version: 1.2.0
-message: "If you use ANet-Drone4D in your research, please cite it using the metadata below."
+message: "If you use ANet Drone4D in your research, please cite it using the metadata below."
 type: software
-title: "ANet-Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones"
+title: "ANet Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones"
 abstract: >-
-  ANet-Drone4D is a real-world grounded digital twin and multi-agent simulation
+  ANet Drone4D is a real-world grounded digital twin and multi-agent simulation
   platform for drones. It follows one chain, Reality to Reconstruction to World
   to Environment to Simulation to Agent: captured or reconstructed point clouds
   become versioned World Packages with geometry queries, an environment field
-  adds wind, turbulence and visibility, a vectorised fleet simulator steps a
-  fleet of drones (designed for up to 1,000) on one shared clock, and a browser
-  sandbox streams the world progressively while the server computes it. Drones
-  are the first kind of physical agent; they discover each other's
-  capabilities and delegate tasks through ANet (an in-process mock of the ANet
-  network in version 0.1).
+  adds wind, turbulence and visibility, a vectorised fleet simulator steps 1 to
+  1,000 drones on one shared 250 Hz clock (real time at 1,000 drones on 0.53
+  CPU core of an 8-vCPU Xeon E5-2603 v4 machine, median of 3 runs), and the
+  Interactive Sandbox gives each visitor an isolated simulation core while the
+  browser renders the world; its server needs no GPU. Drones are the first kind
+  of physical agent; they discover each other's capabilities and delegate tasks
+  through an in-process mock of the ANet network.
 authors:
   - name: "Agent Network Research"
     website: "https://anet0.com"
     email: "hi@anet0.com"
-version: "0.2.0"
+version: "0.2.2"
 repository-code: "https://github.com/ANetResearch/ANet-Drone4D"
 url: "https://github.com/ANetResearch/ANet-Drone4D"
 license-url: "https://github.com/ANetResearch/ANet-Drone4D/blob/main/LICENSE"
@@ -28,7 +29,7 @@ keywords:
   - UAV swarm simulation
   - 4D world model
   - point cloud streaming
-  - WebGPU
+  - WebGL
   - agent network
   - ANet
 references:

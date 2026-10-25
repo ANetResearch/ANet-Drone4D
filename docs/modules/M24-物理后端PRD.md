@@ -5,9 +5,9 @@
 | 文档编号 | AWR-M24 |
 | 标题 | 物理后端档位（Physics Backends）PRD：Fast、Realistic（Gazebo Sim）、SITL 三档；统一 PhysicsTier 与 DroneAdapter；PoseHistory；gz-sim 锁步插件、PoseTap 与 Sensor Bridge；World Package → SDF 导出；部署与确定性策略 |
 | 文件说明 | 模块编号 **M24**，需求前缀 `M24-`；AWR-05 v1.2 §1.3、§5.0 已按本文件名 `M24-物理后端PRD.md` 登记（§13 第 3 条） |
-| 版本 | v1.1 |
-| 日期 | 2026-10-12 |
-| 状态 | 草案 v1.1（按 AWR-05 v1.3 修订：Realistic 档提前为 P0 缺省档与正式成绩来源；修订内容汇总见 §14） |
+| 版本 | v1.2 |
+| 日期 | 2026-10-18 |
+| 状态 | 草案 v1.2（按 AWR-05 v1.6 并入封板收尾批次（P02、P03、P04、B06）的实现口径与测试路径，汇总见 §15）；v1.1 状态：草案 v1.1（按 AWR-05 v1.3 修订：Realistic 档提前为 P0 缺省档与正式成绩来源；修订内容汇总见 §14） |
 | 上游文档 | 用户 D3 需求原文、补充要求与 2026-10-12 决策 [inputs/D3-需求原文-2026-10-11.md](../inputs/D3-需求原文-2026-10-11.md)（R-D3-08、R-D3-20、R-D3-23、R-D3-24、R-D3-28、R-D3-31、R-D3-37；v1.1 增加 2026-10-12 交互式确认的 R-D3-44、R-D3-48）；[AWR-05](../05-D3-设计增补与决策记录.md)（§1.2、§2.3、§4.1–§4.8、§5.0、§5.3、§5.4.1、§5.4.6、§5.4.7、§5.6.1–§5.6.3、§6.2、§6.3、§8.1、§8.4、§8.5、§10–§13；ADR-128、129、136、137、138、144、151、155、158、160、161、162）；[AWR-04](../04-D2-设计增补与决策记录.md)（ADR-090、095、096、110）；[AWR-03](../03-设计基线与决策记录.md)（§10.2，ADR-020、021、045、048、049、050）；[M08](M08-仿真内核与飞行器适配PRD.md)（§6.4、§6.5、§6.11，M08-FR-013、FR-068、FR-076、FR-201–FR-213）；[M07](M07-环境引擎PRD.md)（§6.3.8–§6.3.9）；[M13](M13-传感器仿真PRD.md)（§6.5.2 云台）；[AWR-20](../20-机型与传感器目录.md)（§3）；研究 [00-index](../research/d3/00-index.md) §2.5、§4.4、§8，[r5](../research/d3/r5-gazebo-realistic-backend.md)，[r9](../research/d3/r9-gz-sim.md)，[r7](../research/d3/r7-d2-code-audit.md) §0、§4、§7，[r10](../research/d3/r10-rotorpy-camera-sensor.md) §2.2、§4.1；用户设计讨论 design-r1（§三"关于 Gazebo"、§四"GLB 能否直接交给 Gazebo"、§九、§十） |
 | 下游文档 | M25（PoseHistory 消费、`GzNativeSensorBackend`、IMU 合成的比力口径）；M26（Env 经 `PhysicsTier` 推进与下发指令）；M27（`realistic_run` 作业、资源估算、录制通道、运行清单）；M22（`export-gazebo` 子命令调用本模块导出器）；M23（`tape_gz.bin` 转换输入、Interactive 实现磁带）；M08 D3 增补节（扩展点 1 的区段、预算与字段授权）；M16（`tools/bench/d3/gz_lockstep.py`、对照 harness）；[17](../17-接口与实时协议规范.md) D3 增补（原因码 630–639、事件）；[19](../19-部署与运维说明书.md) D3 增补（gz 镜像与容器）；`docs/impl/D3-*` |
 | 适用版本范围 | V0.3（本期交付 D3）至 V1.0 |
@@ -37,7 +37,7 @@
 | F4 | sim-core stage 区段 195–199 空闲，D2 的 `contact`（order 090）以 2 m DSM 最近格判定地表、撞墙与硬着陆；90–110 之间无空闲区段 | Fast 档网格接触只能在 195–199 内，晚于 M09 guard（110–124）与 tap（140）一个 tick 被看到 | `fleet/stages/budgets.py`；`fleet/fleet.py::build_pipeline`；r7 §4 |
 | F5 | `write_kinematic(S, slots, …)` 只接受带 `FW` 或 `L0` 位的 slot，同一 tick 每 slot 只允许写一次；M09 不管理 L0 幽灵机，M13 sensors stage 的掩码为 ALL | Realistic 机体在 sim-core 中以 L0 镜像存在，由 PoseTap 每 tick 写入；M09 自主失效保护对其不生效，须在档位一致性中处理 | `fleet/kinematic_write.py`；`sim/safety/service.py:131`；`sim/sensors/plugin.py` |
 | F6 | FleetSim 内部为 NED/FRD，`EnuViews` 与 `kernels_tap.enu_convert` 给出 ENU/FLU 换算；`a_meas` 为合加速度；重力常量 `G = 9.80665` | PoseSample 一律 ENU/FLU；比力以物理步末速度差分计算，与接触后的速度一致 | `fleet/state.py`、`fleet/kernels_tap.py`、`fleet/params_px4.py` |
-| F7 | gz-sim 进程内 C++ `Drone4DClock` 门控锁步 3 机 RTF 0.95（gz 原生 Ogre2 传感器下），纯物理 8.26；进程外 gz-transport 锁步 0.37–0.46；Python `gz.transport` 的 `request()` 持有 GIL 会丢应答 | 门控与采集放在 gz 进程内 C++；宿主侧不使用 `gz.transport` Python 绑定 | r9 §2.9、§3.3.3、§3.4；r5 §2.6 |
+| F7 | gz-sim 进程内 C++ `Drone4DClock` 门控锁步 3 机 RTF 0.95（gz 原生 Ogre2 传感器下），纯物理 8.26；进程外 gz-transport 锁步 0.37–0.46；Python `gz.transport` 的 `request()` 持有 GIL 会丢应答 | 门控与采集放在 gz 进程内 C++；宿主侧不使用 `gz.transport` Python 绑定。v1.2 以产品化实测替换 r9 依据（P03，共享卡，开发参考）：3 机 360 s、gz 容器 `--cpus 2`，只计物理与锁步协议 RTF 中位 3.79（gz 自报 4.39），L1 Env 端到端 1.79，L2 + M25 端到端 0.42；正式数字由 S21 独占卡复测，RTF 阈值由 D01 以 ADR 冻结 | r9 §2.9、§3.3.3、§3.4；r5 §2.6；P03 |
 | F8 | 无渲染传感器时 gz 单实例常驻内存 0.2 GB、视觉网格不加载，启动至锁步服务可用 0.7–0.9 s；有渲染传感器时首帧 13–16 s、显存约 2 GB | Realistic 缺省导出档不含渲染传感器与视觉网格，实例放在 CPU 池；GPU 只用于交叉验证档 | r9 §3.3.1 |
 | F9 | 碰撞网格从 2 万到 200 万面，10 架 x500 每步 1.75–1.97 ms，只影响内存（0.42 → 1.16 GB）；x500 每步约 0.7 + 0.12·N ms，单进程 250 Hz 实时上限约 25 架 | 碰撞网格规模可按一致性需要选择；`max_vehicles = 8` 留有余量 | r5 §2.3.2 |
 | F10 | gz 不做 glTF Y-up → Z-up 转换，节点矩阵照常应用；加 roll = +π/2 后深度与 DSM 中位差 0.6 mm；不支持 Draco、meshopt、KTX2 | 导出器只加 roll，不缩放；视觉资产须规范化 | r5 §2.1、§2.2；r9 §2.3 |
@@ -218,7 +218,7 @@ v1.1 按 AWR-05 v1.3（ADR-175、ADR-176）重排；v1.0 的阶段对照见 §14
 | M24-FR-057 | 交叉验证（P1，探针模式）：对 crop 与 town 的 `xval` 导出，在 ≥ 20 个探针位姿下以 gz 原生深度相机与 M25 相机比较静态像素深度，中位差 ≤ 1 cm；结果写入 `qa/xval_report.json` | P0 | P1 | V0.3 | M24-AC-012 | D3-AC-31 |
 | M24-FR-058 | Jetty 评估（P1）：按 §6.10.3 的评估矩阵比较 Harmonic 与 Jetty 的插件 ABI 与 API 改动量、锁步性能、确定性、已知缺陷复测、批量射线与 CPU LiDAR；按决策规则形成迁移或维持结论，提交基线以 ADR 记录 | P0 | P1 | V0.3 | M24-AC-014 | R-D3-37；D3-AC-40 |
 | M24-FR-059 | 锁步链路实测（P1）：以原型插件实测 Env → ZeroMQ → `Drone4DClock` → `PoseTap` → M25 链路下 3 机（720p RGB + MID-360 类 LiDAR，10 Hz，传感器由 M25 生成）的 RTF 与 tick 耗时分解，结果替换 AWR-05 §5.3.5 吞吐行的依据 | P0 | P-1（spike）、P0a（产品化复测） | V0.3 | M24-AC-014 | RV-09；D3-AC-40 |
-| M24-FR-060 | 同种子 reset 验证（P1）：同一实例经 `/world/<w>/control reset` 后重跑 300 tick 与新实例的位姿逐位比对；一致才允许 `reuse_policy = same_seed`，否则实例生命周期定为每 Run 重启 | P0 | P0b | V0.3 | M24-AC-014 | AWR-05 §5.3.5 实例生命周期行 |
+| M24-FR-060 | 同种子 reset 验证（P1）：同一实例经 `/world/<w>/control reset` 后重跑 300 tick 与新实例的位姿逐位比对；一致才允许 `reuse_policy = same_seed`，否则实例生命周期定为每 Run 重启。v1.2 验证结论（P04，2026-10-18 dmax）：`reuse_policy` 固定为 `per_run`，依据是插件不支持 Reset、世界复位后回不到回合起点；请求 `same_seed` 返回 630；每 Run 重启已验证逐位一致 | P0 | P0b | V0.3 | M24-AC-014 | AWR-05 §5.3.5 实例生命周期行 |
 | M24-FR-061 | 风系数标定（P2）：对每个 Realistic 可用机型，在恒定风 {2, 4, 6, 8, 10} m/s 下比较 gz 与 Fast 档悬停稳态倾角，求 k 使各风速倾角差 ≤ 0.5°，线性力律无法满足时以参考风速 8 m/s 标定并报告各风速残差；结果写入 `configs/phys/gz_wind_k.json` 并纳入版本记录 | P0 | P2 | V0.3 | M24-AC-017 | F15；AWR-20 VH-3（P600 8 m/s 倾角 7.43°） |
 | M24-FR-062 | 动力学对照报告（P2）：标准机动集（速度阶跃、偏航阶跃、恒风悬停、50 m 方形航线 6 m/s、爬升与下降）在两档各运行，报告上升时间、超调、位置 RMS、到达时刻差与倾角差，并随数据集发布 `phys_compare.json` | P1 | P2 | V0.3 | M24-AC-016 | AWR-05 §5.3.1 Realistic 用途；D3-AC-35 |
 | M24-FR-063 | 两档采样一致性（D3-AC-35 的 M24 部分）：以 Fast 档 `pose_history` stage 的采集结果为参考轨迹，Realistic 侧以运动学注入复现并由 `Drone4DClock` 采集（§6.10.7）；两侧经同一 M25 后 LiDAR 逐点位姿差 ≤ 1 mm、IMU 合成输出差在重采样容差内 | P0 | P0b | V0.3 | M24-AC-016 | D3-AC-35 |
@@ -231,7 +231,7 @@ v1.1 按 AWR-05 v1.3（ADR-175、ADR-176）重排；v1.0 的阶段对照见 §14
 | M24-FR-069 | 运行哈希输入增加：`physics`、`clock_profile`、`physics_opts`（§7.2）、`mesh_contact` 参数、导出 `gz_manifest` sha256、k 值表版本 | P0 | P0a | V0.3 | M24-AC-009 | ADR-136；D3-AC-17 |
 | **部署与运维** | | | | | | |
 | M24-FR-070 | 镜像：`d3-gz`（Ubuntu 24.04 + Gazebo Harmonic + `native/gz` 插件与 bridge，含 EGL vendor 文件）与 `d3-px4gz`（官方 PX4 镜像按摘要固定，叠加以相同 gz-sim 8.x 构建的插件）；经 `mk/gz.mk` 构建，镜像摘要写入版本记录 | P0 | P0a（`d3-gz`）、P2（`d3-px4gz`） | V0.3 | M24-AC-020 | AWR-05 §5.3.5；F14 |
-| M24-FR-071 | 容器规格（§8.2）：命名 `d3-gz-<run8>`、`d3-px4gz-<run8>`；标签 `d3.run_id`、`d3.attempt`；`GZ_PARTITION = <run_id>-<attempt>`、`GZ_IP = 127.0.0.1`；`physics` 与 `xval` 档 `--network none`，控制套接字经唯一可写的绑定目录 `/run/d4d`（世界包与导出目录只读挂载）；必须设 `--memory` 与 `--cpus`；只有 `xval` 档挂载 GPU 且只绑定一张卡；进入 `d3.slice` | P0 | P0a、P2 | V0.3 | M24-AC-020 | AWR-05 §4.6、§4.7；D3-AC-22 |
+| M24-FR-071 | 容器规格（§8.2）：命名 `d3-gz-<run8>`、`d3-px4gz-<run8>`；标签 `d3.run_id`、`d3.attempt`；`GZ_PARTITION = <run_id>-<attempt>`（v1.2 实现：缺省为容器名 `d3-gz-<run_id>`，runner 经 `GzInstance.partition` 传入 attempt 后为 `<run_id>-<attempt>` 形式）、`GZ_IP = 127.0.0.1`；`physics` 与 `xval` 档 `--network none`，控制套接字经唯一可写的绑定目录 `/run/d4d`（世界包与导出目录只读挂载）；必须设 `--memory` 与 `--cpus`；只有 `xval` 档挂载 GPU 且只绑定一张卡；进入 `d3.slice` | P0 | P0a、P2 | V0.3 | M24-AC-020 | AWR-05 §4.6、§4.7；D3-AC-22 |
 | M24-FR-072 | 生命周期与清理：实例进程以独立进程组运行，关闭时先发 Shutdown、5 s 后按进程组强制结束并 `docker rm -f`；回收作业每 60 s 删除标签所指运行已不在 RUNNING 的残留容器 | P0 | P0a、P2 | V0.3 | M24-AC-020 | r5 §5 第 13 条；r9 §3.4 |
 | M24-FR-073 | 可观测性：每 tick 记录耗时分解（编码、物理、等待、解码、镜像、追加）、gz 自报 RTF、实例 RSS 与 CPU、重试次数；1 Hz 汇总写入运行层通道 `/phys/tick_stats` 与运行日志 | P1 | P0a | V0.3 | M24-AC-020 | r9 §4.6 可观测性行 |
 | M24-FR-074 | 资源估算 `awr.phys.estimate(run_spec)`：返回 CPU 核、内存、GPU 份额（只有 `xval`）、启动开销与预计墙钟（按 P1 实测 RTF 校准），供 M27 准入与排队 | P0 | P0a | V0.3 | M24-AC-020 | AWR-05 §4.7、§5.6.2 |
@@ -727,12 +727,19 @@ def setpoints(self, k, last, pending) -> list[VelSp]:
 
 与 FleetSim 的关系：航点时间参数化（`topp_lite_nb`）、PX4 位置环增益（`params_px4`）、降落速度剖面（`setpoint.land_speed`）与限幅档共用；FleetSim 的 refgen 融合在 L1 核内、以物理频率闭环，而跟踪器以 tick 频率做位置反馈，二者的差异计入动力学对照报告（§13 第 12 条）。
 
+v1.6（P09）：`RefTracker`（`python/awr/phys/tracker.py` 新增类，Realistic 档参考跟踪器；P0a `Tracker` 保留给 KinematicTier 与未切换的运行）：
+- 与 Fast 档共用同一指令映射与同一参考生成器：影子 `FastTier`（无世界、不推进物理）只使用其 FleetState、ProfileTable 与 PathBuffer；指令经 `FastTier._apply`（M08 `actions.begin_*`），参考由 M08 `setpoint.refgen` 逐物理步（4 ms，与 Fast 档 L1 同频）推进：PositionSmoothing-lite、HOLD 刹停锁定、TAKEOFF 1 s 怠速加 3 s 斜坡、LAND 剖面（1.5 / 0.7 / 0.3 m/s）与触地爬行、ORBIT 角速度斜坡、PATH TOPP-lite、VELOCITY 零速轴锁定。
+- 位置环与 FleetSim `pos_ctrl` 同式（`v_sp = P·(tr_x − p) + tr_v`，同一限幅）；PX4 速度积分、加速度前馈与实测加速度阻尼以速度当量叠加：`v_cmd = v_sp + I + (tr_a − K_d·a) / K_p`（`K_p`、`K_i`、`K_d` 取 `MPC_*_VEL_*_ACC`），I 按 tick 起点误差积分，触地、怠速、失能时清零；水平设定按参考限幅截断，截断时积分反算；偏航与 FleetSim 姿态环同式（`MC_YAW_P · Δψ`）。
+- tick 内只有 tick 起点状态：参考推进与位置环使用线性外推的位置与偏航；逐步设定交给宿主按 `apply_step` 下发。
+- 接口：`bind`（回合起点，按 HelloAck 初始样本出生）、`observe`（tick 起点状态、接触、落地、坠毁同步到影子状态）、`set`、`kind`、`plan(k, t_k_ns, n_steps) → {uav: [Setpoint] × n_steps}`；`ground_h(xy)` 给出 AGL 与起飞基准（缺省 0，生产缺省取世界 DTM，AWR-05 ADR-208）。
+- compose 增加 `VelocityLimits.profile = "px4"`：Lee `velocityGain` = PX4 速度 P 增益 × 机体总质量（1.8、1.8、4.0 × 2.0643 kg），速度误差项的加速度限幅为 g·tan 45°、g·tan 45°、g，Lee 速度限幅在限幅档上加 3 m/s 余量（参考限幅由 RefTracker 执行）；缺省 `"r9"`（原型增益）不变。
+
 #### 6.5.8 风
 
 | 模式 | 实现 | 输入一致性 | 状态 |
 |---|---|---|---|
 | `uniform`（缺省） | `Drone4DClock` 每步把磁带关键帧插值的平均风（与 M07 同一插值规则）写入风实体 `WorldLinearVelocitySeed`；WindEffects 力 `m·k·(v_wind − v_link)`，k 取 `configs/phys/gz_wind_k.json`；湍流以 WindEffects 噪声近似（σ 按 FR-013），由 `gz_seed` 决定 | 平均风一致；阵风实现不同（时间高斯噪声 vs 空间冻结场） | P2 阻塞 |
-| `field` | 宿主每 tick 以 tick 起点状态预测各机在 5 个 20 ms 子区间中点的位置 `p_k + v_k·Δt`，调用 M07 `EnvironmentService.query` 取风矢量，经控制消息下发；`Drone4DWindDrag` 逐机施加阻力，力律 `linear`（k 标定）或 `composite`（与 FleetSim `aero = composite` 同式，参数取 M21 `CdA`、`c_rd`） | 风输入函数与 Fast 档相同（同一 M07 场、同为 50 Hz 零阶保持），差异只剩位置预测误差 | P2 应交付 |
+| `field` | 宿主每 tick 以 tick 起点状态预测各机在每个 20 ms 环境网格点 t_g（即子区间起点）的位置 `p_k + v_k·(t_g − t_k)`，再减 `GEAR_Z_M = 0.227 m` 换到 FleetSim 参考点（v1.2，P08：原为"5 个 20 ms 子区间中点"；Fast 档 env stage 在网格点以当时位置采样，只有在起点采样才能使两档在同一时刻采样，差异只剩位置预测误差），按与 env stage 相同的次序调用 M07（`on_env_tick_all`，随后 `step_dryden`（dt 0.02），再以 `WIND_PARTS` 调用 `query`，槽位 0..n−1）取风矢量，经控制消息下发；`Drone4DWindDrag` 逐机施加阻力，力律 `linear`（k 标定）或 `composite`（与 FleetSim `aero = composite` 同式，参数取 M21 `CdA`、`c_rd`）；`composite` 的 ΣΩ 取 gz 实际旋翼转速之和，MulticopterMotorModel 已按地速施加旋翼阻力（`rotorDragCoefficient` 等于 M21 `c_rd`），插件只施加增量 +ΣΩ·c_rd·w⊥（`motor_rotor_drag = true`）；ρ 取出生点 M07 ISA 的每运行常数 | 风输入函数与 Fast 档相同（同一 M07 场、同为 50 Hz 零阶保持），差异只剩位置预测误差 | P0b 已实现（P08；原为"P2 应交付"） |
 
 档间对照运行（FR-062、FR-063）使用 `field` 模式或 σ_turb = 0。
 
@@ -815,7 +822,7 @@ stateDiagram-v2
 | 磁带（人） | 无脚本 `<actor>`：`<skin>` 与 `<animation>` 来自 M25 动态资产、单位位姿、`Label`；不生成 `<script>`（若因工具需要生成，必须 `loop = true` 并在末尾加 86400 s 驻留路点） | xval | 由 `TapeGz` 写 `TrajectoryPose` 与 `AnimationTime` |
 | 磁带（车） | 运动学模型（`<gravity>false</gravity>`；碰撞体只在 `vehicle_collision = true` 时加入）、`Label` | xval；physics（`vehicle_collision` 或 Interactive） | 由 `TapeGz` 写 `WorldPoseCmd` |
 | 机队（M21 机型） | `<include>` `d4d_quad` 模板 + 参数（质量、惯量、轴距、电机常数、最大转速、限幅）+ `Drone4DVelocityControl`；xval 另挂原生传感器 | 全部（sitl 用 PX4 的 `x500` 模型） | 出生点贴 `dsm_2m` 并加起落架高度；SITL 出生点放 1.6 m × 1.6 m 起降垫 |
-| 环境 | `<gravity>0 0 -9.80665</gravity>`；`<physics type="dart">`（`max_step_size 0.004`，bullet 检测器）；`<wind>` 与 WindEffects 或 `Drone4DWindDrag`；`<magnetic_field>` 取 WMM 在原点的值（sitl） | 全部 | 雨、雾不导出 |
+| 环境 | `<gravity>0 0 -9.80665</gravity>`（v1.2：清单记录 `environment.gravity_mps2`）；`<physics type="dart">`（`max_step_size 0.004`，bullet 检测器）；`<wind>` 与 WindEffects 或 `Drone4DWindDrag`；`<magnetic_field>` 取 WMM 在原点的值（sitl） | 全部 | 雨、雾不导出 |
 | 系统清单 | 见 FR-031 | 按档 | 省略 SceneBroadcaster 与 GUI（sitl 保留 SceneBroadcaster 以兼容 PX4 工具） |
 
 #### 6.7.2 变换推导
@@ -852,12 +859,14 @@ def compose_run(run: RunSpec, exp: GzExport, tape: TapeRef | None) -> RunComposi
 | # | 检查 | 方法 | 阈值 | 导出档 | 依据 |
 |---|---|---|---|---|---|
 | A1 | SDF 合法 | `gz sdf -k world_static.sdf` 与 `run.sdf`（样例 Run） | 退出码 0 | 全部 | ADR-138 |
-| A2 | 视觉与碰撞同点偏差 | 均匀抽样 10,000 个碰撞顶点，在施加 SDF 变换后的视觉顶点集中做最近邻（KD 树，搜索半径 5 cm） | 最大偏差 ≤ 1 cm；未匹配率 ≤ 0.1% | xval（physics 档以视觉资产离线计算） | D3-AC-31；RV-33 |
+| A2 | 视觉与碰撞同点偏差 | 均匀抽样 10,000 个碰撞顶点，在施加 SDF 变换后的视觉顶点集中做最近邻（KD 树，搜索半径 5 cm） | 最大偏差 ≤ 1 cm；未匹配率 ≤ 0.1% | xval（physics 档以视觉资产离线计算；v1.2：P1 导出视觉层之前，physics 档的参照集为 `mesh.raycast` 的求交顶点（瓦片原点 + 瓦片局部 float32 坐标），实现为 `awr.world.export.gz.collision_deviation`，失败返回 636） | D3-AC-31；RV-33 |
 | A3 | 深度与 DSM | 在 GPU Worker 上以 `xval` 运行探针：每 500 m × 500 m 瓦片一个 600 m 高正射深度相机，反算地面高程与 `dsm_0p5m` 逐像素比较，排除立面与树冠像素（`quality` 与坡度 > 45° 掩膜） | 中位差 < 1 cm | xval | r5 §2.2（0.6 mm） |
 | A4 | actor 与磁带 | 样例事件 60 s：2D 包围框中心反投影到地面，与同时刻磁带位置（脚底 + 0.9 m）比较 | 中位差 < 0.6 m | xval | r5 §2.4 |
 | A5 | 落地探测 | 单机在平坦处（3.5 m 窗口起伏 < 0.4 m）上方 15 m 以 2 m/s 下降 | 静止高度与 DSM + 起落架高度之差 ≤ 0.3 m；不穿透 | physics | r5 §2.3.2 |
 | A6 | 磁带插值一致 | `TapeGz` 与 `TapeReader.actor_states` 在 10,000 个随机时刻对拍 | ≤ 1e-6 m、≤ 1e-6 rad；状态与容器逐位相同 | xval | FR-029 |
 | A7 | 幂等 | 同一输入重复导出 | 全部产物 sha256 相同 | 全部 | FR-025 |
+
+v1.2 实现（P02）：导出器执行 A1 + A2 + A7；清单记录 `qa.A2_collision_deviation` 与 `environment.gravity_mps2`；`EXPORTER_VERSION` 为 0.1.1。`gz sdf` 只经 `SDF_PATH` 解析 `model://`（不读 `GZ_SIM_RESOURCE_PATH`），对 `run.sdf` 执行 A1 时 `SDF_PATH` 须包含模型目录与导出根目录。测试为 `tests/d3/phys/test_gz_export_checks.py`（dmax `d3-gz`，只用 CPU）。
 
 ### 6.8 状态机
 
@@ -888,7 +897,7 @@ stateDiagram-v2
 | 状态 | 事件 | 守卫 | 动作 | 目标状态 |
 |---|---|---|---|---|
 | CREATED | `launch()` | 资源已由 M27 预留 | `docker run`（§8.2），新进程组，开始启动计时 | LAUNCHING |
-| LAUNCHING | 套接字文件出现 | ≤ 30 s | 建立 REQ 套接字 | LOADING |
+| LAUNCHING | 套接字文件出现 | ≤ 30 s | 建立 REQ 套接字；v1.6（K04）实现说明：套接字文件每 10 ms 检查一次，docker 实例的存活检查在后台线程中每 0.5 s 执行一次，守护进程的延迟不计入启动时长；宿主在套接字出现后立即发送 Hello；gz-sim 进入仿真循环前的 `TopicInfo("/stats")` 等待 gz-transport 13 发现服务初始化（2 次 1000 ms 心跳），因此 READY 不早于进程启动后约 2.0 s | LOADING |
 | LAUNCHING | 超时或进程退出 | — | 记 631 或 638 | FAILED |
 | LOADING | 收到 HelloAck | 协议版本、插件版本、`uav_index` 表与运行清单一致 | 写入初始样本（`t_ns = 0`，非 xval） | READY |
 | LOADING | 收到 HelloAck | 同上，导出档为 xval | 以单步授权推进预热（每次 1 步，记预热步数 W） | BARRIER |
@@ -989,7 +998,7 @@ def calibrate_k(vehicle_ref: str, speeds=(2, 4, 6, 8, 10), u_ref=8.0) -> WindCal
 
 #### 6.10.5 同种子 reset 验证（P1，FR-060）
 
-同一 `gz_seed`：实例 A 运行 300 tick 记录 PoseHistory；对 A 发送 `/world/<w>/control reset` 后再运行 300 tick；新实例 B 运行 300 tick。三份 PoseHistory 的 sha256 全部相同则允许 `reuse_policy = same_seed`，否则在运行清单与 M27 产能模型中固定为每 Run 重启。
+同一 `gz_seed`：实例 A 运行 300 tick 记录 PoseHistory；对 A 发送 `/world/<w>/control reset` 后再运行 300 tick；新实例 B 运行 300 tick。三份 PoseHistory 的 sha256 全部相同则允许 `reuse_policy = same_seed`，否则在运行清单与 M27 产能模型中固定为每 Run 重启。v1.2 结论（P04，2026-10-18 dmax）：判定为 `per_run`（插件不支持 Reset，世界复位后回不到回合起点），`same_seed` 请求返回 630；实现与用例见 `tests/d3/phys/determinism/test_fault.py`。
 
 #### 6.10.6 动力学对照报告（P2，FR-062）
 
@@ -1003,12 +1012,29 @@ def calibrate_k(vehicle_ref: str, speeds=(2, 4, 6, 8, 10), u_ref=8.0) -> WindCal
 
 报告 `phys_compare.json` 写入运行目录并随数据集发布，字段含机型、时钟档、风模式、碰撞源、k 值、每项指标与是否在容差内。
 
+v1.6（P09）首轮实测（dmax `d3-gz:p09`，field 风模式、`sigma_turb = 0`；报告实现为 `tier_compare.json`，`drone4d.phys.tier_compare.v1`，见 AWR-05 §5.3.6）：
+
+| 用例 | 档间差 / 容差 | 判定 |
+|---|---|---|
+| takeoff_land（爬升与下降） | 位置 RMS 0.0095 / 1.5 m；到达高度时刻差 0.104 / 1 s；触地时刻差 0 / 1 s；触地竖直速度差 6e-5 / 0.3 m/s | 通过 |
+| hover | 位置 RMS 0.0095 / 0.5 m；最大漂移 0.044 / 0.5 m | 通过 |
+| velocity_step（速度阶跃） | 位置 RMS 0.373 / 1.5 m；上升时间差 0.08 / 0.3 s；超调差 0.59 / 10% | 通过 |
+| velocity_limit | 稳态速度差 0.855 / 1.0 m/s（Fast 11.86、gz 11.00，均 ≤ 12.3） | 通过 |
+| yaw_step（偏航阶跃） | t90 差 0.096 / 0.2 s | 通过 |
+| waypoints（方形航线） | 位置 RMS 0.436 / 1.5 m；到达时刻差 0.117 / 1.0 s 每 100 m | 通过 |
+| orbit | 位置 RMS 1.110 / 1.5 m；半径 RMS 差 0.020 / 0.5 m；绕圈时刻差 0.372 / 1.0 s 每 100 m | 通过 |
+| contact_crash | 坠毁时刻差 0.02 / 0.5 s；坠毁水平位置差 0.243 / 0.5 m；事件种类 COLLISION_WORLD、IMPACT 两档相同 | 通过 |
+| wind_hover（恒风悬停） | 位置 RMS 0.023 / 0.5 m；倾角差 0.0004 / 0.5°（两档 7.850°） | 通过 |
+
+容差来源：速度阶跃、偏航阶跃、恒风悬停、方形航线、爬升与下降取上表初始容差；悬停、限幅、环绕、接触与坠毁为 P09 设定；报告的 `tolerance_status` 标为初始值，冻结按 AWR-05 ADR-208（推荐，待确认）。首轮以 P0a Tracker 与 r9 增益驱动时只有 2/9 通过，改用 RefTracker 与 `px4` 档后 9/9 通过。
+
 #### 6.10.7 两档采样一致性（P2，FR-063）
 
 1. 参考轨迹：一次 Fast 档运行的 PoseHistory（250 Hz，含机动与触地）。
 2. Realistic 侧使用测试构建的注入模式：注入机体关闭重力、碰撞与速度控制，PreUpdate 以 `WorldPoseCmd` 写入参考位姿，PostUpdate 照常采集位姿；速度、角速度与比力取注入组件中的参考值。该用例只验证采集、传输、网格校验与编码链路，不验证动力学。Fast 侧直接使用参考 PoseHistory。
 3. 两侧 PoseHistory 逐样本比较：时刻逐位相同，位置差 ≤ 1e-6 m、姿态差 ≤ 1e-9 rad（gz 位姿往返的双精度舍入），速度、角速度与比力逐位相同。
 4. 两侧送入同一 M25：LiDAR 逐点位姿差 ≤ 1 mm、IMU 合成输出差在重采样容差内（D3-AC-35）；给定完全相同的 PoseHistory 字节时 M25 输出逐字节相同（M25 负责）。
+5. v1.6（P09）：注入模式已实现：`Drone4DClock` 的 `<inject>path</inject>`（测试世界）读取 f64[n][n_uav][16] 参考轨迹，每个授予步写模型 `WorldPoseCmd` 使 link 落在本步末参考位姿并清零模型速度，PostUpdate 照常采集位姿，速度、角速度与比力取参考行；HelloAck 的 `plugin_build` 带 `+inject`；文件缺失或尺寸不符时 Hello 回 635。实测 7501 个样本时刻逐位相同、位置最大差 2.84e-7 m、姿态 2.67e-15 rad，速度、角速度、比力逐位相同；LiDAR 300 帧 4,203,660 点与 IMU 6000 样本逐字节相同。
 
 #### 6.10.8 RotorPy 对拍（P1，FR-064）
 
@@ -1226,7 +1252,7 @@ message Error    { uint32 code = 1; string detail = 2; }                        
 | 样本布局 | 每样本 16 个 f64：`px py pz qx qy qz qw vx vy vz wx wy wz fx fy fz`（ENU / FLU） |
 | 网格 | `t_ns[j] − t0_gz = t_k + (j + 1) · step_ns`（`t0_gz` 为就绪屏障时的 gz 时刻，physics 档为 0），宿主逐项相等校验 |
 | 体积 | 3 机每 tick 约 10 KB（25 × 3 × 128 B + 时刻与接触），与 ADR-160 后果一致 |
-| 错误 | 版本不符、越界索引、长度不符时回 Error{635}，宿主据此使运行失败 |
+| 错误 | 版本不符、越界索引、长度不符时回 Error{635}，宿主据此使运行失败；v1.2（P08）：`WindSp` 的 `uav_index` 或 `apply_step` 越界同样回 Error{635} |
 
 ### 7.5 `pose_history.v1` 编码
 
@@ -1396,6 +1422,7 @@ python/awr/phys/
   seeds.py                    gz_seed 派生（复用 awr.sim.sensors.cbrng 的 SplitMix64）
   tracker.py                  路径跟踪器（Realistic 与 SITL 共用）
   errors.py                   PhysError（630–639）
+  fast.py                     v1.2 实现（P07）：单模块 FastTier，取代下列 fast/{tier,capture,contact}.py；mesh_contact、pose_history stage 与 d3phys 块注册在各 FastTier 自己的 Registry 中
   fast/
     tier.py                   FastTier、fleet_config(clock_profile)
     plugin.py                 install()：register_stage ×2、register_state_block("d3phys")、register_session_loader("phys", order=42)、register_batch_output("phys_run")
@@ -1426,9 +1453,9 @@ native/gz/
   src/Drone4DControlServer.{cc,hh}    ZeroMQ REP/PUB/PULL 与 protobuf 编解码
   src/Drone4DVelocityControl.{cc,hh}  分叉（Apache-2.0 头）
   src/LeeVelocityController.{cc,hh}   分叉（Apache-2.0 头）
-  src/Drone4DWindDrag.{cc,hh}         field 模式逐机风力
+  src/Drone4DWindDrag.{cc,hh}         field 模式逐机风力（v1.2 实现：plugins/wind/{Drone4DWindDrag.cc, WindLaw.hh, D4dWind.hh, law_probe.cc}，P08）
   src/TapeGz.{cc,hh}                  tape_gz.bin 读取与插值
-  src/Components.hh                   D4dVelocityCmd、D4dWind 组件
+  src/Components.hh                   D4dVelocityCmd、D4dWind 组件（v1.2：D4dWind 位于 plugins/wind/D4dWind.hh）
   bridge/GzSensorBridge.cc
   test/                               gtest：协议、门控、插值、比力公式
   THIRD_PARTY.md                      分叉来源、上游提交与改动清单
@@ -1529,6 +1556,9 @@ tests/d3/phys/**、tests/d3/gz/**、tests/d3/rotorpy/test_dyn_parity.py
 | `tests/d3/phys/test_status.py` | 统一状态派生（三档信号表驱动） | 本机 CPU |
 | `tests/d3/phys/test_tracker.py` | 跟踪器对 goto、follow_path、orbit、takeoff、land 的到达与限幅 | 本机 CPU |
 | `tests/d3/gz/test_export.py` | 导出与验收 A1–A7（D3-AC-31） | dmax（单卡绑定） |
+| `tests/d3/phys/test_gz_export_checks.py`（v1.2） | A1、A2（physics 档）与重力检查（`run.sdf` 中的显式值、`gz sdf -p` 之后的值、实测自由落体）（D3-AC-34） | dmax `d3-gz`，只用 CPU |
+| `tests/d3/phys/test_gz_lockstep_long.py`（v1.2） | 3 机 360 s 锁步长程用例（D3-AC-34） | dmax |
+| `tests/d3/phys/determinism/test_fault.py`（v1.2） | gz 看门狗、重启重放、reset 复用验证（D3-AC-35、17） | dmax |
 | `tests/d3/gz/test_protocol.py`、`native/gz/test/` | 协议、幂等重发、错误路径、模糊测试 | dmax CPU 池 |
 | `tests/d3/gz/test_realistic.py` | 锁步、逐位、physics 与 xval 对拍、定高 | 独占 A40 / dmax |
 | `tests/d3/gz/test_tier_compare.py` | 采样一致性与对照报告（D3-AC-35） | 独占 A40 |
@@ -1553,11 +1583,11 @@ tests/d3/phys/**、tests/d3/gz/**、tests/d3/rotorpy/test_dyn_parity.py
 | M24-AC-010 | P0 | Fast 性能 | N = 60、250 Hz：`pose_history` 单次 p99 ≤ 40 µs，`mesh_contact` 单次 p99 ≤ 1.5 ms；60 架 360 s 两 stage 合计 ≤ 3 s 单核；会话匿名页增量 ≤ 10 MB | `tools/bench/d3/fleet_scale.py --phys-only`（ADR-033 协议） | dmax CPU 池 | 28（份额） |
 | M24-AC-011 | P0 | 导出与自动验收 | crop、town 的 physics 与 xval 档：A1–A7 全部通过（`gz sdf -k`、同点偏差 ≤ 1 cm、深度与 DSM 中位差 < 1 cm、actor 与磁带中位差 < 0.6 m、落地误差 ≤ 0.3 m、`TapeGz` 插值 ≤ 1e-6 m、重复导出逐字节相同）；SDF 只含 roll = +π/2、无缩放；故意错误的变换使 A2 或 A3 失败并返回 636；`<loop>false</loop>` 与非单位 actor 位姿不出现 | `tests/d3/gz/test_export.py` | dmax（单卡绑定） | 31 |
 | M24-AC-012 | P0 | 交叉验证 | crop、town 各 ≥ 20 个探针位姿，gz 原生深度与 M25 深度在静态像素上的中位差 ≤ 1 cm；`xval` 帧同镜像同型号 GPU 两次逐字节相同 | `python -m awr.phys xval`；`tests/d3/gz/test_export.py` | dmax（单卡绑定） | 31 |
-| M24-AC-013 | P0 | 控制协议健壮性 | 重发同一 `seq` 不重复推进（gz 迭代计数不变）；乱序、越界索引、长度不符返回 635；`kill -9` gz 进程在 ≤ 1 s 内识别为 638；步进挂起时 632 按 `step_timeout_s` 触发；故障后按控制日志重放到故障前 tick 的 PoseHistory 与原运行逐位相同；10 万条随机消息模糊测试无崩溃 | `tests/d3/gz/test_protocol.py`、`native/gz/test` | dmax CPU 池 | 40（部分） |
+| M24-AC-013 | P0 | 控制协议健壮性 | 重发同一 `seq` 不重复推进（gz 迭代计数不变）；乱序、越界索引、长度不符返回 635；`kill -9` gz 进程在 ≤ 1 s 内识别为 638；步进挂起时 632 按 `step_timeout_s` 触发；故障后按控制日志重放到故障前 tick 的 PoseHistory 与原运行逐位相同；10 万条随机消息模糊测试无崩溃 | `tests/d3/phys/determinism/test_fault.py`（v1.2；原写 `tests/d3/gz/test_protocol.py`）、`native/gz/test` | dmax CPU 池 | 40（部分） |
 | M24-AC-014 | P0 | gz 评估（v1.1：Jetty 部分 P1；链路实测 P-1 与 P0a；reset 验证 P0b） | Jetty 评估矩阵六项结论成文并提交 ADR；Env → ZeroMQ → `Drone4DClock` → `PoseTap` → M25 链路 3 机 RTF 与分解入库并替换 AWR-05 §5.3.5 依据；同种子 reset 与新实例 300 tick PoseHistory sha256 比较结论成文；physics 档就绪 p95 ≤ 5 s、RSS ≤ 1.5 GB | `tools/bench/d3/gz_lockstep.py`、`python -m awr.phys reset-check`、评估报告 | dmax | 40 |
 | M24-AC-015 | P0 | Realistic 锁步（v1.1：P0a 纯物理与协议，P0b 含 M25 标准轨） | 3 架 x500（720p RGB + MID-360 类 LiDAR，10 Hz，M25 生成）RTF ≥ 0.9；`pose_history_hz` 声明 250 且实测相邻样本间隔恒为 4 ms；同镜像同 ISA 两次运行 PoseHistory sha256 相同；physics 与 xval 档（相同预热步数）物理轨迹逐位相同；方形航线机动中世界系定高误差 ≤ 2 m；StepDone 时刻与 tick 网格之差为 0；控制往返开销 p95 ≤ 2 ms（8 架） | `tests/d3/gz/test_realistic.py`、`tools/bench/d3/gz_lockstep.py` | 独占 A40 | 34 |
-| M24-AC-016 | P0 | 两档对照（v1.1：P0b） | 同一磁带与 Run 规格在 Fast 与 Realistic 都能运行；注入模式下两侧 PoseHistory 时刻逐位相同、位置差 ≤ 1e-6 m、姿态差 ≤ 1e-9 rad、比力逐位相同，经 M25 后 LiDAR 逐点位姿差 ≤ 1 mm、IMU 输出差在重采样容差内；`phys_compare.json` 生成并含 §6.10.6 全部机动与容差判定 | `tests/d3/gz/test_tier_compare.py`、Playwright `lab/compare` | 独占 A40、本机 Tier B | 35 |
-| M24-AC-017 | P0 | 风与接触（v1.1：接触与 uniform 风 P0a，field 风 P0b，标定 P2） | 标定后各风速倾角差 ≤ 0.5°（或按参考风速标定并报告残差）；P600 8 m/s Fast 档倾角 7.43° ± 0.2°；uniform 模式平均风与磁带关键帧插值逐位一致；field 模式下发风矢量与 M07 查询逐位一致；gz 侧撞墙、硬着陆、落地三类判定与阈值表一致；`vehicle_collision = true` 的 ranked 运行被拒 | `tests/d3/gz/test_realistic.py`、`python -m awr.phys calibrate-wind` | dmax | 35（部分） |
+| M24-AC-016 | P0 | 两档对照（v1.1：P0b） | 同一磁带与 Run 规格在 Fast 与 Realistic 都能运行；注入模式下两侧 PoseHistory 时刻逐位相同、位置差 ≤ 1e-6 m、姿态差 ≤ 1e-9 rad、比力逐位相同，经 M25 后 LiDAR 逐点位姿差 ≤ 1 mm、IMU 输出差在重采样容差内；`phys_compare.json` 生成并含 §6.10.6 全部机动与容差判定；v1.6（P09）：报告实现为 `tier_compare.json`；注入模式采样一致性与 M25 逐字节（CPU 相机替身、LiDAR、IMU）已实测通过，GPU 相机逐字节待补测 | `tests/d3/gz/test_tier_compare.py`、Playwright `lab/compare`（v1.6，F13：共用播放头、规格不一致提示与报告一致性核对已实现，单元测试 `apps/web/tests/lab/tierCompare.test.ts`；Playwright 待补） | 独占 A40、本机 Tier B | 35 |
+| M24-AC-017 | P0 | 风与接触（v1.1：接触与 uniform 风 P0a，field 风 P0b，标定 P2） | 标定后各风速倾角差 ≤ 0.5°（或按参考风速标定并报告残差）；P600 8 m/s Fast 档倾角 7.43° ± 0.2°；uniform 模式平均风与磁带关键帧插值逐位一致；field 模式下发风矢量与 M07 查询逐位一致；gz 侧撞墙、硬着陆、落地三类判定与阈值表一致；`vehicle_collision = true` 的 ranked 运行被拒 | `tests/d3/gz/test_realistic.py`、`python -m awr.phys calibrate-wind`、`tests/d3/phys/test_gz_wind.py`（v1.2，P08：field 消息与 M07 查询逐位一致；x500 在 8 m/s 风中倾角 7.8503°，FleetSim 7.8505°） | dmax | 35（部分） |
 | M24-AC-018 | P1 | Interactive 下发（P2） | Interactive 运行中 gz 侧回放的演员位置与 M23 实现磁带的 `TapeReader` 插值差 ≤ 1e-6 m；控制日志重放后实现磁带逐字节相同 | `tests/d3/gz/test_realistic.py` | dmax | 37（支撑） |
 | M24-AC-019 | P1 | SITL（P2） | 1 / 3 / 5 / 10 架 15 s 内全部到 READY；≤ 5 架 RTF ≥ 0.95；offboard 速度阶跃跟踪 5 s 内速度误差 ≤ 0.5 m/s；`ranked = false`，提交排名返回 633；心跳中断 3 s 后状态为 LOST 并记 639；PoseHistory 网格无缺口 | `tests/d3/gz/test_sitl.py` | dmax | 36 |
 | M24-AC-020 | P0 | 部署与清理 | 全部 gz 与 px4gz 容器带标签、`--memory`、`--cpus`；physics 与 sitl 容器无 GPU 设备，xval 容器只见一张 GPU；physics 与 xval 容器无网络接口（除 lo）；分区名唯一；100 次连续运行（含 10 次注入故障）后无残留进程与容器；回收作业删除人为遗留容器；`estimate()` 与实测启动开销相差 ≤ 30% | `tests/d3/gz/test_deploy.py`、运行清单审计 | dmax | 22 |
@@ -1693,12 +1723,12 @@ tests/d3/phys/**、tests/d3/gz/**、tests/d3/rotorpy/test_dyn_parity.py
 |---|---|---|---|---|---|---|
 | M24-FR-076 | 缺省与排名约束：Run 规格缺省 `physics = realistic`、`physics_opts.export = physics`、`clock_mode = lockstep`；`awr.phys.validate` 对 `ranked = true` 的 Run 执行"只允许 Realistic 锁步 `physics` 导出档"约束，不满足时返回校验失败（M27 以 682、`why = ranked_requires_realistic` 发出） | P0 | P0a | V0.3 | M24-AC-025 | ADR-176 |
 | M24-FR-077 | 平台摘要：Realistic TierCaps 输出 `platform_digest`（`d3-gz` 镜像摘要、插件构建提交、导出器版本、物理参数、gz 发行版），供 M27 写入榜单版本并在每个正式 Run 校验一致；不一致时拒绝启动（630，`why = platform_mismatch`） | P0 | P0a | V0.3 | M24-AC-025 | ADR-177 |
-| M24-FR-078 | 故障恢复重放：gz 进程异常退出或步进超时后，重启实例并按控制日志从回合起点重放到故障 tick，逐步比对重放样本与已存样本，逐位一致后继续；不一致时返回 638 并由 M27 判为平台失败整体重跑（不计入提交方） | P0 | P0b | V0.3 | M24-AC-027 | ADR-177 |
-| M24-FR-079 | 看门狗：单 tick 等待 `step_done` 超过 `gz_step_timeout_s`（缺省 5 s 墙钟）触发 FR-078；同一 Run 连续触发 3 次即失败（632） | P0 | P0b | V0.3 | M24-AC-027 | 本文设定 |
+| M24-FR-078 | 故障恢复重放：gz 进程异常退出或步进超时后，重启实例并按控制日志从回合起点重放到故障 tick，逐步比对重放样本与已存样本，逐位一致后继续；不一致时返回 638 并由 M27 判为平台失败整体重跑（不计入提交方）。v1.2：宿主侧实现为 `awr.phys.gz.backend.SupervisedGzBackend`，逐 tick 比对控制消息与样本块的 sha256，不一致时返回 638 并附 `detail.platform_failure` | P0 | P0b | V0.3 | M24-AC-027 | ADR-177 |
+| M24-FR-079 | 看门狗：单 tick 等待 `step_done` 超过 `gz_step_timeout_s`（缺省 5 s 墙钟）触发 FR-078；同一 Run 连续触发 3 次即失败（632）；v1.2："连续 3 次"指同一故障码连续出现且中间没有成功 tick，632 与 638 同样适用 | P0 | P0b | V0.3 | M24-AC-027 | 本文设定 |
 | M24-FR-080 | 平台复现审计：`awr.phys.audit.replay(run_manifest)` 以存档的控制日志与同一 `platform_digest` 重放，比对 PoseHistory 存档 sha256；供 M27 每日审计作业调用 | P0 | P0b | V0.3 | M24-AC-029 | ADR-177 |
-| M24-FR-081 | DroneAdapter 一致性用例集 `tests/d3/phys/conformance/`：同一组用例（起降、悬停、速度阶跃、航点、环绕、接触与坠毁、恒风扰动）在 Realistic 与 Fast 两档运行，断言接口层行为一致（`VehicleStatus` 序列、指令生效步、限幅回执、PoseHistory 网格），动力学差异只以容差报告 `tier_compare.json` 给出 | P0 | P0b | V0.3 | M24-AC-028 | ADR-176 |
+| M24-FR-081 | DroneAdapter 一致性用例集 `tests/d3/phys/conformance/`：同一组用例（起降、悬停、速度阶跃、航点、环绕、接触与坠毁、恒风扰动）在 Realistic 与 Fast 两档运行，断言接口层行为一致（`VehicleStatus` 序列、指令生效步、限幅回执、PoseHistory 网格），动力学差异只以容差报告 `tier_compare.json` 给出；v1.6（P09）："指令生效步"指响应起点晚于生效时刻且在 3 tick（0.3 s）以内；实现于 `python/awr/phys/tier_compare.py`，Realistic 侧使用 RefTracker（§6.5.7） | P0 | P0b | V0.3 | M24-AC-028 | ADR-176 |
 | M24-FR-082 | 每实例资源：`physics` 实例 `--cpus 2`、`--memory 2g`、不挂载 GPU；`awr.phys.estimate` 按 §14.4 返回 CPU、内存、显存（只有 `xval`）与启动开销；`/phys/tick_stats` 增加实例 CPU 与 RSS 的 1 Hz 采样 | P0 | P0a | V0.3 | M24-AC-026 | ADR-178 |
-| M24-FR-083 | 标准基准机型：`p600_bench`（AWR-20 §15.16）映射为 `d4d_quad` 模板参数（质量、惯量、轴距、电机常数与限幅取 M21 同一来源），Realistic 与 Fast 两档使用同一参数源 | P0 | P0a | V0.3 | M24-AC-026 | AWR-20 §15.16 |
+| M24-FR-083 | 标准基准机型：`p600_bench`（AWR-20 §15.16）映射为 `d4d_quad` 模板参数（质量、惯量、轴距、电机常数与限幅取 M21 同一来源），Realistic 与 Fast 两档使用同一参数源。v1.2（P03）：当前映射（质量 3.935 kg，惯量 J_x500 · (m / 2.064) · (0.300 / 0.246)² = 0.061516 / 0.061516 / 0.113394 kg·m²，ω_max 1500）只在 `tools/bench/d3/gz_lockstep.py` 中实现，应移入 `configs/phys/quad_templates.yaml` 与 `compose/_GzTier`；该映射下最高速度约 9.8 m/s（指令 12 m/s） | P0 | P0a | V0.3 | M24-AC-026 | AWR-20 §15.16 |
 
 ### 14.4 每实例与每个正式 Run 的资源预算
 
@@ -1720,9 +1750,9 @@ tests/d3/phys/**、tests/d3/gz/**、tests/d3/rotorpy/test_dyn_parity.py
 | 编号 | 优先级 | 场景 | 度量与阈值 | 方法 | 环境 | D3-AC |
 |---|---|---|---|---|---|---|
 | M24-AC-025 | P0 | 缺省档与排名约束（P0a） | 未指定 `physics` 的 Run 规格解析为 `realistic` + `physics` 导出档；`ranked = true` 且 `physics = fast` 或 `sitl` 或 `xval` 的 Run 校验失败；`platform_digest` 与榜单版本不一致时拒绝启动 | `tests/d3/phys/test_tiers.py` | 本机 | 34 |
-| M24-AC-026 | P0 | 每 Run 重启与资源（P0a） | `physics` 实例启动 p95 ≤ 5 s；3 机 360 s 锁步中实例 CPU p95 ≤ 2 核、RSS ≤ 2 GB、无 GPU 设备；3 个正式 Run 并发时各自 PoseHistory 与单独运行逐位一致；`p600_bench` 参数在两档相同 | `tests/d3/gz/test_realistic.py`、`tools/bench/d3/gz_lockstep.py` | dmax | 34 |
-| M24-AC-027 | P0 | 故障恢复重放（P0b） | 在第 1,000 tick 注入 `kill -9` 与步进超时各 10 次：每次在重放后继续，最终 PoseHistory 存档与无故障运行 sha256 相同；连续 3 次超时的运行失败（632） | `tests/d3/gz/test_recovery.py` | dmax | 17、35 |
-| M24-AC-028 | P0 | 两档一致性用例集（P0b） | 一致性用例在两档全部通过；`tier_compare.json` 字段齐全且位置 RMS、到达时刻差在报告容差内 | `tests/d3/phys/conformance/` | dmax | 35 |
+| M24-AC-026 | P0 | 每 Run 重启与资源（P0a） | `physics` 实例启动 p95 ≤ 5 s（v1.6，AWR-05 ADR-216：统计样本为 ADR-033 协议下 ≥ 40 次冷启动加各 Run 实例，判定取 p95，同时报告最差实例；K04 实测 p95 3.15 s、最差 3.73 s）；3 机 360 s 锁步中实例 CPU p95 ≤ 2 核、RSS ≤ 2 GB、无 GPU 设备；3 个正式 Run 并发时各自 PoseHistory 与单独运行逐位一致；`p600_bench` 参数在两档相同 | `tools/bench/d3/gz_lockstep.py`、`tests/d3/phys/test_gz_lockstep_long.py`（v1.2；原写的 `tests/d3/gz/test_realistic.py` 不存在） | dmax | 34 |
+| M24-AC-027 | P0 | 故障恢复重放（P0b） | 在第 1,000 tick 注入 `kill -9` 与步进超时各 10 次：每次在重放后继续，最终 PoseHistory 存档与无故障运行 sha256 相同；连续 3 次超时的运行失败（632） | `tests/d3/phys/determinism/test_fault.py`（v1.2；原写 `tests/d3/gz/test_recovery.py`） | dmax | 17、35 |
+| M24-AC-028 | P0 | 两档一致性用例集（P0b） | 一致性用例在两档全部通过；`tier_compare.json` 字段齐全且位置 RMS、到达时刻差在报告容差内；v1.6（P09）：已满足（9/9 用例通过，`tier_compare.json` 字段齐全，AWR-05 §26.3 第 36 行） | `tests/d3/phys/conformance/` | dmax | 35 |
 | M24-AC-029 | P0 | 平台复现审计（P0b） | 审计重放 30 个抽样 Run 全部一致；人为替换插件构建后审计检出 `platform_digest` 不一致并发出冻结信号 | `tests/d3/phys/test_audit.py` | dmax | 17 |
 
 ### 14.7 D3-AC 映射变更
@@ -1734,3 +1764,35 @@ tests/d3/phys/**、tests/d3/gz/**、tests/d3/rotorpy/test_dyn_parity.py
 | D3-AC-35 | P2 | P0b | 两档一致性与 gz 健壮性 |
 | D3-AC-40 | P1 | P1 | 只含 Jetty 评估；链路实测与 reset 验证前移 |
 | D3-AC-47 | P-1 | P-1 | 增加 gz 链路 spike 与实例资源实测；RPE100 基线在 gz 锁步与 Fast 两种轨迹上各报一组 |
+
+## 15. D3-SEAL 修订（v1.2，依据 AWR-05 v1.6）
+
+依据 AWR-05 v1.6 的封板收尾批次（第一批 P02、P03、P04、B06；第二批 P07、P08）。阈值不变；实测数字登记在 AWR-05 §24.3 与 §25.3。
+
+| 条款 | 修订 | 来源 |
+|---|---|---|
+| §6.7.1、§6.7.4 | A2 在 physics 档的参照集与实现、导出器执行 A1 + A2 + A7、清单字段、`EXPORTER_VERSION` 0.1.1、`gz sdf` 的 `SDF_PATH` 前提 | P02 |
+| §10.1 | 新增 `tests/d3/phys/test_gz_export_checks.py`、`test_gz_lockstep_long.py`、`determinism/test_fault.py` | P02、P03、P04 |
+| §1 F7 | 以产品化实测替换 r9 依据（共享卡，开发参考） | P03 |
+| FR-083、M24-AC-026 | `p600_bench` 映射的现状与迁移去向；AC-026 测试路径 | P03 |
+| FR-060、§6.10.5 | `reuse_policy` 固定为 `per_run`，`same_seed` 返回 630 | P04 |
+| FR-078、FR-079 | `SupervisedGzBackend` 逐 tick 比对与 `detail.platform_failure`；"连续 3 次"的口径 | P04 |
+| M24-AC-013、M24-AC-027 | 测试路径为 `tests/d3/phys/determinism/test_fault.py` | P04 |
+| FR-071 | `GZ_PARTITION` 的缺省实现 | B06 |
+| §6.4.1、§9.1 | Fast 档实现为单模块 `python/awr/phys/fast.py`（`FastTier`），不分 `fast/{tier,capture,contact}.py`；`mesh_contact`、`pose_history` stage 与 `d3phys` 块注册在每个 FastTier 自己的 Registry 中，不进全局 `D3_PLUGINS`；D2 组合根与全局注册表不变 | P07 |
+| §6.4.4 | ESDF 层就绪前，闸门为网格距离下界：上一次精确净空 `clear_m` 减去其后的移动距离；每 5 次调用（10 Hz）做一次全量精确刷新；最近点取自新增的 `MeshWorldQuery.closest_points_batch`；`in_unknown` 尚未写出（需要 quality/occupancy 的 `unknown_at` 查询）；向下命中按 \|n_z\| ≥ cos45 判定，与三角形绕序无关 | P07 |
+| §6.3.1、§6.4.3 | Fast 档 PoseHistory 的位置与指令目标取机体原点，即 FleetSim 起落架底部参考点之上 `BODY_Z_M = 0.227 m`，与 gz `base_link` 和 KinematicTier 一致 | P07 |
+| §6.4、AWR-05 §8.1 第 1 项 | Benchmark 组合不加载 M09；速度模式不以网格自由距离限速（M08-FR-029 关闭）；风与湍流尚未接入，等同对照运行的零湍流设定 | P07 |
+| §6.2、FR-005 | Env 在构建档位前对 fast 与 realistic 一律按输出集合（camera、lidar、imu，L1 为 detections）校验时钟档；变体机型使用其基础机型的 L1 模板 | P07 |
+| §6.5.8 | `field` 模式在 P0b 实现：采样点改为环境网格点（子区间起点）并减 `GEAR_Z_M`；M07 调用次序与 env stage 相同；`composite` 只施加旋翼阻力增量；ρ 为每运行常数 | P08 |
+| §8、§9.1 | 风插件位于 `native/gz/plugins/wind/{Drone4DWindDrag.cc, WindLaw.hh, D4dWind.hh, law_probe.cc}`；`D4dWind` 组件在 `plugins/wind/D4dWind.hh` | P08 |
+| §7.4 | `WindSp` 的 `uav_index` 或 `apply_step` 越界返回 Error{635} | P08 |
+| M24-AC-017 | 证据增加 `tests/d3/phys/test_gz_wind.py` | P08 |
+
+v1.2 第二批（P07、P08）依据 AWR-05 §25；P07 另记：`python/awr/agentsdk/env/spec.py` 中 `EnvSpec` 的物理档注释仍为 `realistic|kinematic`，应补 `fast`（该文件归 S05）。
+
+D3-AC 映射：D3-AC-35 与 D3-AC-58 增加 `tests/d3/phys/test_fast.py`（P07）；D3-AC-34 的测试增加 `tests/d3/phys/test_gz_export_checks.py` 与 `test_gz_lockstep_long.py`（原登记 `tests/d3/gz/test_export_physics.py` 的实际路径为前者）；D3-AC-35 增加 `tests/d3/phys/determinism/test_fault.py`。控制日志落盘（FR-068 `control.bin`）与基于控制日志的复现审计尚未完成（AWR-05 §12.1 WP-D3-20）。
+
+v1.6 第八批（D01，AWR-05 §31）：M24-AC-026 的启动统计量按 ADR-216 明确为"≥ 40 次冷启动加各 Run 实例的 p95，同时报告最差实例"，不采用 3 次中位；`tools/bench/d3/gz_lockstep.py` 的启动条款待改为按 p95 判定（AWR-05 §31.5 F-82）。
+
+v1.6 第九批（K11，AWR-05 §32）：`gz_lockstep.py` 已按 M24-AC-026 的统计量实现（≥ 40 次冷启动加各 Run 实例的 p95 判定，冷启动不足 40 次时不计入；报告样本数、最差实例与分段计时；RTF 取 3 次中位并另报单次最低）；K04 重汇总：启动 p95 3.15 s、最差 3.731 s，RTF 中位 3.604（最低 3.133）；测试 `tests/d3/phys/test_gz_lockstep_long.py`。

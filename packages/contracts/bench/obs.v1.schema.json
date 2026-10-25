@@ -334,7 +334,7 @@
     "ThermalObs": {
       "type": "object",
       "additionalProperties": false,
-      "description": "v1.3 (P0b)",
+      "description": "v1.3 (P0b; M26-FR-124, API-FR-132). Projection of the M25 thermal frame record (drone4d.frame.v1, kind = thermal) agent_view; gimbal_reading carries encoder noise. Binary attachment rules as CameraObs (msgpack bin). Ranked runs only allow codec = radiometric_u16 (682 otherwise); nominal noise parameters only via agent_config.brief.nominal_noise. Golden vectors: bench/golden/thermal",
       "properties": {
         "sensor_id": {
           "type": "string"
@@ -381,7 +381,7 @@
         },
         "temp_ck": {
           "x-awr-bin": "u16le[W*H] (zstd when codec = radiometric_u16)",
-          "description": "Apparent temperature, 0.01 K per LSB (msgpack bin, little-endian; length given by the counts in the same object)"
+          "description": "Apparent temperature, 0.01 K per LSB (msgpack bin, little-endian; length given by the counts in the same object). radiometric_u16: one zstd frame (level 3) that decompresses to exactly 2*W*H bytes, byte-identical to the M25 delivered bytes and the raw.mcap archive (agent_view.temp_ck.sha256); agc_jpeg: 8-bit AGC JPEG preview"
         },
         "codec": {
           "enum": [

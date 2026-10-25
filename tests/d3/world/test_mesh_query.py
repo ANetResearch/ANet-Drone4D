@@ -45,8 +45,8 @@ def test_dispatch_and_inherited_2p5d(world, tmp_path: Path, monkeypatch: pytest.
 
     q, w, to_world = world
     assert isinstance(q, MeshWorldQuery) and isinstance(q, gq.DsmWorldQuery)
-    ev = q.ready_event()
-    assert ev["mesh"]["tiles"] >= 1 and ev["mesh"]["triangles"] == 16 * 16 * 2 + 10
+    info = q.mesh_info()
+    assert info["tiles"] >= 1 and info["triangles"] == 16 * 16 * 2 + 10 and "mesh" not in q.ready_event()
     monkeypatch.setenv("AWR_D3_ENABLED", "0")
     assert type(gq.open_world_query(w, tmp_path / "cache")) is gq.DsmWorldQuery                  # 开关关闭不分派
     box = to_world([40.0, 15.0, 40.0])

@@ -1,5 +1,9 @@
 """事件 DSL `drone4d.event.v1`（M23 §6.2）：解析、规范化与门 1 静态校验（§6.4 错误目录）。
 
+输入安全（M23-NFR-008）：YAML 以安全加载器解析，拒绝别名引用（别名展开放大攻击），节点数 ≤ 100,000、单个标量 ≤ 4 KiB、
+文本 ≤ 1 MiB。门 1 一次报出全部静态错误（M23-AC-002、D3-AC-06）：schema 只在结构性错误时提前返回；§6.16 限额类的 schema 违例
+（`maxItems`、`maximum`）不阻断跨字段检查，统一由跨字段检查报为 `E-LIMIT`（618）。
+
 规范化：时刻换算为整数毫秒（`floor(t·1000 + 0.5)`），补全缺省值（§6.16），类别模板写入尺寸、步态；结果为 `plan`（纯 JSON），
 后续门 2、生成与哈希只读取 `plan`。`event_sha256` 按 §6.7.5 的磁带输入子集求 JCS 哈希；`dsl_sha256` 覆盖规范化后的完整 DSL。
 """
@@ -9,16 +13,22 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from awr.sim.events.jcs import jcs
 
-__all__ = ["CLASS_DEFAULTS", "LIMITS", "Issue", "event_sha256", "gate1", "load_doc", "ms", "normalize"]
+__all__ = ["CARRY_DROP", "CARRY_PICKUP", "CLASS_DEFAULTS", "LIMITS", "YAML_LIMITS", "CarryStep", "Issue", "carry_schedule", "event_sha256", "gate1",
+           "load_doc", "ms", "normalize", "stop_windows"]
 
 LIMITS = {"actors": 30, "background": 1000, "route": 64, "annotations": 256, "relations": 512, "zones": 32, "keyframes": 256,
           "duration_s": 3600.0, "dsl_bytes": 1 << 20}
+YAML_LIMITS = {"nodes": 100_000, "scalar_bytes": 4096}          # M23-NFR-008
+# schema 中与 §6.16 限额对应的约束（validator, JSON 指针模式）：违例报 E-LIMIT 618，并由门 1 跨字段检查统一复报
+_LIMIT_RULES = (("maxItems", re.compile(r"^/(actors|annotations|relations|comms/zones|actors/\d+/route)$")),
+                ("maximum", re.compile(r"^/(duration_s|background/\d+/count)$")))
 # l × w × h（m）、NavMesh profile、步态 [lo, hi]、加速度、中值速度（§6.2.3、§6.16）
 CLASS_DEFAULTS: dict[str, dict[str, Any]] = {
     "person": {"size": (0.5, 0.3, 1.75), "profile": "person", "speed": (0.9, 1.8), "accel": 1.0, "median": 1.35, "asset": "person-proxy@1"},
@@ -29,8 +39,8 @@ CLASS_DEFAULTS: dict[str, dict[str, Any]] = {
 }
 P0A_CLASSES = frozenset(CLASS_DEFAULTS)
 STATIC_CLASSES = frozenset({"machine", "object"})
-ACTIONS_BY_CLASS = {"person": {"spawn", "pass", "wait", "enter_building", "exit_building", "board", "alight", "despawn"},
-                    "vehicle": {"spawn", "pass", "wait", "despawn"}, "dog": {"spawn", "pass", "wait", "despawn"},
+ACTIONS_BY_CLASS = {"person": {"spawn", "pass", "wait", "enter_building", "exit_building", "board", "alight", "despawn", "pickup", "drop"},
+                    "vehicle": {"spawn", "pass", "wait", "despawn", "stop", "park"}, "dog": {"spawn", "pass", "wait", "despawn"},
                     "machine": {"spawn", "despawn"}, "object": {"spawn", "despawn"}}
 ENV_DEFAULTS = {"wind_mps": 3.0, "wind_dir_deg": 270.0, "gust_sigma_mps": 0.5, "rain_mm_h": 0.0, "visibility_m": 30000.0, "fog": 0.0,
                 "cloud": 0.05}
@@ -61,8 +71,24 @@ def ms(t_s: float) -> int:
     return math.floor(float(t_s) * 1000.0 + 0.5)
 
 
+def _yaml_guard(text: str) -> None:
+    """按事件流扫描 YAML（不构造对象）：出现别名、节点数或标量长度超限时抛 ValueError。锚点定义本身无害，别名引用一律拒绝。"""
+    import yaml
+
+    n = 0
+    for ev in yaml.parse(text, Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader)):
+        if isinstance(ev, yaml.AliasEvent):
+            raise ValueError("YAML aliases are not allowed in event DSL")
+        if isinstance(ev, (yaml.ScalarEvent, yaml.SequenceStartEvent, yaml.MappingStartEvent)):
+            n += 1
+            if n > YAML_LIMITS["nodes"]:
+                raise ValueError(f"event DSL exceeds {YAML_LIMITS['nodes']} nodes")
+            if isinstance(ev, yaml.ScalarEvent) and len(ev.value.encode("utf-8")) > YAML_LIMITS["scalar_bytes"]:
+                raise ValueError("event DSL contains a string longer than 4 KiB")
+
+
 def load_doc(src: Path | str | dict) -> dict:
-    """事件文档：路径（.yaml、.yml、.json）、文本或已解析对象。"""
+    """事件文档：路径（.yaml、.yml、.json）、文本或已解析对象。文本先经 M23-NFR-008 输入安全检查。"""
     import yaml
 
     if isinstance(src, dict):
@@ -71,6 +97,7 @@ def load_doc(src: Path | str | dict) -> dict:
                                                                               and Path(src).exists()) else str(src)
     if len(text.encode("utf-8")) > LIMITS["dsl_bytes"]:
         raise ValueError("event DSL exceeds 1 MiB")
+    _yaml_guard(text)
     doc = yaml.safe_load(text)
     if not isinstance(doc, dict):
         raise ValueError("event DSL is not a mapping")
@@ -88,6 +115,9 @@ def _schema_issues(doc: dict) -> list[Issue]:
     out = []
     for e in sorted(v.iter_errors(doc), key=lambda e: (list(map(str, e.absolute_path)), e.message)):
         ptr = "/" + "/".join(str(p) for p in e.absolute_path)
+        if any(e.validator == kw and rx.match(ptr) for kw, rx in _LIMIT_RULES):
+            out.append(Issue("E-LIMIT", 618, ptr, f"超出 §6.16 限额：{e.message}", f"Exceeds the §6.16 limit: {e.message}"))
+            continue
         out.append(Issue("E-SCHEMA", 611, ptr, f"不符合 drone4d.event.v1：{e.message}", f"Does not match drone4d.event.v1: {e.message}"))
     return out
 
@@ -105,16 +135,26 @@ def normalize(doc: dict) -> dict:
         if "length_m" in ap:
             size[0] = float(ap["length_m"])
         gait = a.get("gait") or {}
-        sp = gait.get("speed_mps", c["speed"])
+        sp, median = gait.get("speed_mps", c["speed"]), c["median"]
+        look = {"asset": ap.get("asset") or ap.get("preset") or c["asset"],
+                **{k: list(ap[k]) for k in ("top_rgb", "bottom_rgb", "body_rgb") if k in ap},
+                **({"height_mm": ms(size[2])} if a["class"] in ("person", "dog") else {}),
+                **({"accessories": list(ap["accessories"])} if ap.get("accessories") else {})}
+        if a.get("appearance_ref"):                               # appearance_lib@1：外观、尺寸与步态档取自外观库（门 1 已解析）
+            from awr.sim.events.appearance import plan_fields
+
+            pf = plan_fields(a["appearance_ref"])
+            look, size = pf["appearance"], pf["size_m"]
+            if pf["gait"] and "speed_mps" not in gait:
+                sp, median = pf["gait"]["speed_mps"], pf["gait"]["median_mps"]
         actors.append({
             "id": a["id"], "class": a["class"], "profile": c["profile"],
             "size_mm": [ms(s) for s in size],
-            "appearance": {"asset": ap.get("asset") or ap.get("preset") or c["asset"],
-                           **{k: list(ap[k]) for k in ("top_rgb", "bottom_rgb", "body_rgb") if k in ap},
-                           **({"height_mm": ms(size[2])} if a["class"] in ("person", "dog") else {}),
-                           **({"accessories": list(ap["accessories"])} if ap.get("accessories") else {})},
+            "appearance": look,
+            **({"roles": list(a["roles"])} if a.get("roles") else {}),
+            **({"drive": json.loads(json.dumps(a["drive"]))} if a.get("drive") is not None else {}),     # 车道图驾驶（M23 §15.4，E09）
             "gait": None if sp is None else {"speed_mps": [float(sp[0]), float(sp[1])], "accel_mps2": float(gait.get("accel_mps2", c["accel"])),
-                                             "median_mps": float(c["median"] if c["median"] else (sp[0] + sp[1]) / 2)},
+                                             "median_mps": float(median if median else (sp[0] + sp[1]) / 2)},
             "route": [{"t_ms": ms(w["t"]), "at": w["at"], "do": w.get("do", "pass"), "dwell_ms": ms(w.get("dwell_s", 0)),
                        "via": list(w.get("via", [])), "target": w.get("target"), "tol_ms": ms(w.get("tol_s", 3))} for w in a["route"]],
         })
@@ -156,16 +196,140 @@ def event_sha256(plan: dict, anchors_sha256: str) -> str:
     return hashlib.sha256(jcs(sub)).hexdigest()
 
 
+def stop_windows(route: list[dict], dur_s: float) -> list[tuple[float, float, bool]]:
+    """车辆路线的声明停靠窗口（门 1 静态检查，只用作者给出的时刻）：`wait` 或 `dwell_s > 0` 的路点 k 给出 `(t_k, hi, closed)`。
+    中间路点的 hi 为下一路点的声明时刻（车辆须在该时刻已到达下一锚点，开区间）；末路点与门 2 一致：`pass`、`wait` 停留到事件结束，
+    其余（如带停留的 `despawn`）停留到 `t_k + dwell_s`（闭区间）。门 2 以实际到达时刻与 8 m 距离再判 `I-BOARD`。
+    车道图车辆（E09）：`park` 与末路点的 `stop` 同 `wait`（停在终点直至事件结束）。"""
+    out = []
+    for k, v in enumerate(route):
+        do, dwell = v.get("do", "pass"), float(v.get("dwell_s", 0))
+        last = k + 1 == len(route)
+        if do != "wait" and dwell <= 0 and not (last and do in ("stop", "park")):
+            continue
+        lo = float(v["t"])
+        if not last:
+            out.append((lo, float(route[k + 1]["t"]), False))
+        elif do in ("pass", "wait", "stop", "park"):
+            out.append((lo, max(float(dur_s), lo), True))
+        else:
+            out.append((lo, lo + dwell, True))
+    return out
+
+
+CARRY_DROP, CARRY_PICKUP = 0, 1
+CARRY_TICK_MS = 100
+
+
+@dataclass(frozen=True)
+class CarryStep:
+    """物体携带日程的一步（M23-FR-058，P0b）：`t_ms` 为行人路点时刻向上取整到 100 ms 帧，`kind` 为 `CARRY_DROP` 或 `CARRY_PICKUP`。"""
+    t_ms: int
+    kind: int
+    actor: str
+    waypoint: int
+    actor_index: int
+
+
+def carry_schedule(actors: list[dict]) -> dict[str, list[CarryStep]]:
+    """物体携带日程：object id → 按 (帧, 先放下后拾取, 行人 id) 排序的 `CarryStep` 列表。行人路点 `do: pickup | drop` 的 `target`
+    为物体；同一帧内 A 放下、B 拾取即为直接交接（容器在相邻两帧由 A 变为 B）。`actors` 可为 DSL 文档（`t`，秒）或规范化 plan
+    （`t_ms`）的演员表；门 1、门 2、生成与门 3（`verify.rendezvous`）共用本函数，保证四处的帧时刻一致。"""
+    out: dict[str, list[CarryStep]] = {}
+    for ai, a in enumerate(actors):
+        for j, w in enumerate(a.get("route", [])):
+            do = w.get("do", "pass")
+            if do not in ("pickup", "drop") or not w.get("target"):
+                continue
+            t = int(w["t_ms"]) if "t_ms" in w else ms(w["t"])
+            t = (t + CARRY_TICK_MS - 1) // CARRY_TICK_MS * CARRY_TICK_MS
+            out.setdefault(w["target"], []).append(CarryStep(t, CARRY_PICKUP if do == "pickup" else CARRY_DROP, a["id"], j, ai))
+    return {k: sorted(v, key=lambda s: (s.t_ms, s.kind, s.actor, s.waypoint)) for k, v in sorted(out.items())}
+
+
+def _carry_issues(acts: list[dict], cls_of: dict[str, str]) -> list[Issue]:
+    """门 1 携带次序（M23-FR-058）：拾取时物体未被携带、已出现且未消失；放下者为当前携带者；物体在被携带期间不得 despawn。"""
+    errs = []
+    by_id = {a["id"]: a for a in acts}
+    for oid, steps in carry_schedule(acts).items():
+        if cls_of.get(oid) != "object":
+            continue                                              # 目标类别错误已由 E-CARRY-TARGET 报出
+        r = by_id[oid]["route"]
+        t_spawn = ms(r[0]["t"]) if r else 0
+        t_gone = next((ms(w["t"]) for w in r[1:] if w.get("do") == "despawn"), None)
+        holder, t_hold = None, 0
+        for s in steps:
+            p = f"/actors/{s.actor_index}/route/{s.waypoint}"
+            t_s = s.t_ms / 1000.0
+            if s.kind == CARRY_PICKUP:
+                why = ("carried" if holder is not None else "before_spawn" if s.t_ms < t_spawn else
+                       "after_despawn" if t_gone is not None and s.t_ms >= t_gone else None)
+                if why:
+                    errs.append(_e("E-CARRY-ORDER", 611, p, f"{s.actor} 在 {t_s:g} s 无法拾取物体 {oid}（{why}）",
+                                   f"{s.actor} cannot pick up object {oid} at {t_s:g} s ({why})", object=oid, why=why,
+                                   holder=holder))
+                    continue
+                holder, t_hold = s.actor, s.t_ms
+            elif holder != s.actor:
+                errs.append(_e("E-CARRY-ORDER", 611, p, f"{s.actor} 在 {t_s:g} s 未携带物体 {oid}，不能放下",
+                               f"{s.actor} does not carry object {oid} at {t_s:g} s and cannot drop it", object=oid, why="not_holder",
+                               holder=holder))
+            else:
+                holder = None
+        if holder is not None and t_gone is not None and t_gone > t_hold:
+            errs.append(_e("E-CARRY-ORDER", 611, f"/actors/{acts.index(by_id[oid])}/route", f"物体 {oid} 在被 {holder} 携带期间 despawn",
+                           f"Object {oid} despawns while carried by {holder}", object=oid, why="despawn_carried", holder=holder))
+    return errs
+
+
+def _drive_issues(acts: list[dict]) -> list[Issue]:
+    """门 1 车道图驾驶（M23 §15.2、§15.4，E09）：`drive` 只对 `vehicle`，IDM 参数可解析（`vehicle.drive_params`）；`stop`、`park`
+    只对给出 `drive` 的车辆；`park` 须为末路点。问题码 `E-DRIVE`（611），`detail.why` 为 `class`、`params`、`needs_drive`、
+    `park_not_last`。"""
+    errs = []
+    for i, a in enumerate(acts):
+        drive, route = a.get("drive"), a.get("route", [])
+        if drive is not None and a["class"] != "vehicle":
+            errs.append(_e("E-DRIVE", 611, f"/actors/{i}/drive", f"drive 只适用于车辆，{a['id']} 为 {a['class']}",
+                           f"drive applies to vehicles only; {a['id']} is a {a['class']}", actor=a["id"], why="class"))
+            continue
+        if drive is not None:
+            from awr.sim.events.vehicle import drive_params
+
+            try:
+                drive_params(drive)
+            except ValueError as ex:
+                errs.append(_e("E-DRIVE", 611, f"/actors/{i}/drive", f"{a['id']} 的驾驶参数无效：{ex}", f"Invalid drive parameters of {a['id']}: {ex}",
+                               actor=a["id"], why="params"))
+        for j, w in enumerate(route):
+            do = w.get("do", "pass")
+            if do in ("stop", "park") and a["class"] == "vehicle" and drive is None:
+                errs.append(_e("E-DRIVE", 611, f"/actors/{i}/route/{j}/do", f"{a['id']} 的 {do} 动作需要 drive（车道图驾驶）",
+                               f"The {do} action of {a['id']} requires drive (lane-graph driving)", actor=a["id"], why="needs_drive"))
+            if do == "park" and j != len(route) - 1:
+                errs.append(_e("E-DRIVE", 611, f"/actors/{i}/route/{j}/do", f"{a['id']} 的 park 须为末路点", f"park must be the last waypoint of {a['id']}",
+                               actor=a["id"], why="park_not_last"))
+    return errs
+
+
+def _covers(win: tuple[float, float, bool], t: float, board: bool) -> bool:
+    """上车：乘客可先到并等候，只要求车辆尚未离开（t 不晚于窗口终点）；下车：t 须落在窗口内。"""
+    lo, hi, closed = win
+    return (board or t >= lo) and (t <= hi if closed else t < hi)
+
+
 def _e(code: str, reason: int | None, path: str, zh: str, en: str, **detail) -> Issue:
     return Issue(code, reason, path, zh, en, detail)
 
 
 def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list[Issue], list[Issue]]:
-    """门 1：schema、id、引用、时间、类别与动作、上车目标、限额、模式。`anchors` 为解析后的锚点表（id → 锚点；None 表示
-    世界无锚点层且无覆盖层，锚点引用一律报未知）。返回 (plan 或 None, errors, warnings)。"""
-    errs = _schema_issues(doc)
-    if errs:
-        return None, errs, []
+    """门 1：schema、id、引用、时间、类别与动作、上车目标、限额、模式、外观引用与可区分性（`appearance.gate1_issues`）、
+    类型必备配置（`verify.registry.type_issues`）。
+    `anchors` 为解析后的锚点表（id → 锚点；None 表示世界无锚点层且无覆盖层，锚点引用一律报未知）。返回 (plan 或 None, errors, warnings)。"""
+    sch = _schema_issues(doc)
+    if any(e.code != "E-LIMIT" for e in sch):                     # 结构性错误：后续检查依赖结构，提前返回
+        return None, sch, []
+    errs: list[Issue] = []                                        # 限额类违例由下方跨字段检查统一报为 E-LIMIT（不重复）
     warns: list[Issue] = []
     anchors = anchors or {}
     dur_s = float(doc["duration_s"])
@@ -196,13 +360,13 @@ def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list
     cls_of = {a["id"]: a["class"] for a in acts}
     for i, a in enumerate(acts):
         base = f"/actors/{i}"
+        route = a["route"]
+        if len(route) > LIMITS["route"]:
+            errs.append(_e("E-LIMIT", 618, f"{base}/route", "路点超过 64 个", "More than 64 waypoints"))
         if a["class"] not in P0A_CLASSES:
             errs.append(_e("E-CLASS-UNSUPPORTED", 619, f"{base}/class", f"类别 {a['class']} 在当前阶段不支持",
                            f"Class {a['class']} is not supported in this phase"))
             continue
-        route = a["route"]
-        if len(route) > LIMITS["route"]:
-            errs.append(_e("E-LIMIT", 618, f"{base}/route", "路点超过 64 个", "More than 64 waypoints"))
         prof = CLASS_DEFAULTS[a["class"]]["profile"]
         last_t = -1.0
         for j, w in enumerate(route):
@@ -230,10 +394,18 @@ def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list
                 if cls_of.get(tgt) != "vehicle":
                     errs.append(_e("E-BOARD-TARGET", 611, f"{p}/target", "上下车目标须为车辆演员", "Board/alight target must be a vehicle actor"))
                 else:
-                    vr = acts[ids[tgt]]["route"]
-                    cover = any(v.get("do", "pass") == "wait" or v.get("dwell_s", 0) > 0 for v in vr)
-                    if not cover:
-                        errs.append(_e("E-BOARD-TARGET", 611, f"{p}/target", f"车辆 {tgt} 没有等待路点", f"Vehicle {tgt} has no waiting waypoint"))
+                    wins = stop_windows(acts[ids[tgt]]["route"], dur_s)
+                    t_p, zh = float(w["t"]), "上" if do == "board" else "下"
+                    if not wins:
+                        errs.append(_e("E-BOARD-TARGET", 611, f"{p}/target", f"车辆 {tgt} 没有等待路点", f"Vehicle {tgt} has no waiting waypoint",
+                                       vehicle=tgt, why="no_wait"))
+                    elif not any(_covers(win, t_p, do == "board") for win in wins):
+                        errs.append(_e("E-BOARD-TARGET", 611, f"{p}/t", f"{zh}车时刻 {t_p:g} s 不在车辆 {tgt} 的等待窗口内",
+                                       f"The {do} time {t_p:g} s is outside the waiting windows of vehicle {tgt}", vehicle=tgt, why="window",
+                                       t_s=t_p, windows_s=[[lo, hi] for lo, hi, _c in wins]))
+            if do in ("pickup", "drop") and cls_of.get(w.get("target")) != "object":
+                errs.append(_e("E-CARRY-TARGET", 611, f"{p}/target", "拾取与放下的目标须为物体演员", "Pickup/drop target must be an object actor",
+                               target=w.get("target")))
         if route:
             first = route[0].get("do", "pass")
             if first not in ("spawn", "exit_building"):
@@ -243,6 +415,8 @@ def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list
                 if w.get("do") in ("despawn",) or (w.get("do") == "enter_building" and route[j + 1].get("do") != "exit_building"):
                     errs.append(_e("E-FIRST-WAYPOINT", 611, f"{base}/route/{j + 1}", "despawn 或 enter_building 之后仍有路点",
                                    "Waypoints follow despawn or enter_building"))
+    errs.extend(_carry_issues(acts, cls_of))                      # 物体携带次序（M23-FR-058，P0b）
+    errs.extend(_drive_issues(acts))                              # 车道图驾驶（M23 §15.2、§15.4，P0b）
     for gi, g in enumerate(doc.get("background", [])):
         if g["class"] == "dog":
             errs.append(_e("E-CLASS-UNSUPPORTED", 619, f"/background/{gi}/class", "背景狗在 P1 提供", "Background dogs are available from P1"))
@@ -253,10 +427,9 @@ def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list
     kf = env.get("keyframes", [])
     if kf and kf[0]["t"] != 0:
         errs.append(_e("E-TIME-ORDER", 611, "/environment/keyframes/0/t", "首个关键帧须在 t = 0", "The first keyframe must be at t = 0"))
-    for j in range(1, len(kf)):
-        if kf[j]["t"] <= kf[j - 1]["t"] or kf[j]["t"] > dur_s:
-            errs.append(_e("E-TIME-ORDER", 611, f"/environment/keyframes/{j}/t", "关键帧时刻须严格递增且不超出时长",
-                           "Keyframe times must be strictly increasing within the duration"))
+    errs.extend(_e("E-TIME-ORDER", 611, f"/environment/keyframes/{j}/t", "关键帧时刻须严格递增且不超出时长",
+                   "Keyframe times must be strictly increasing within the duration")
+                for j in range(1, len(kf)) if kf[j]["t"] <= kf[j - 1]["t"] or kf[j]["t"] > dur_s)
     if len(kf) > LIMITS["keyframes"]:
         errs.append(_e("E-LIMIT", 618, "/environment/keyframes", "关键帧超过 256 个", "More than 256 keyframes"))
     cloud_given = any("cloud" in k for k in kf)
@@ -277,10 +450,14 @@ def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list
             ref = (an.get("params") or {}).get(pk)
             if isinstance(ref, str) and ref not in anchors:
                 errs.append(_e("E-ANCHOR-UNKNOWN", 611, f"/annotations/{j}/params/{pk}", f"未知锚点：{ref}", f"Unknown anchor: {ref}", anchor=ref))
-    for j, r in enumerate(doc.get("relations", [])):
-        for side in ("src", "dst"):
-            if r[side] not in ann_ids:
-                errs.append(_e("E-RELATION-REF", 611, f"/relations/{j}/{side}", f"关系引用未知注释：{r[side]}", f"Relation references unknown annotation: {r[side]}"))
+    from awr.sim.events.appearance import gate1_issues as appearance_issues
+
+    errs.extend(appearance_issues(doc))                           # 外观引用与可区分性（M23-FR-072，appearance_lib@1）
+    from awr.sim.events.verify.registry import type_issues
+
+    errs.extend(type_issues(doc, anchors))                        # 类型必备配置（M23-FR-071，§15.3 第 2 列，E-TYPE）
+    errs.extend(_e("E-RELATION-REF", 611, f"/relations/{j}/{side}", f"关系引用未知注释：{r[side]}", f"Relation references unknown annotation: {r[side]}")
+                for j, r in enumerate(doc.get("relations", [])) for side in ("src", "dst") if r[side] not in ann_ids)
     if errs:
         return None, errs, warns
     return normalize(doc), errs, warns

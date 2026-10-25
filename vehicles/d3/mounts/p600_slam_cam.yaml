@@ -1,0 +1,8 @@
+# vehicles/d3/mounts/p600_slam_cam.yaml：p600_mid360_inv 新增槽位 slam_cam 的挂载文件（AWR-20 §15.5.1；M25 §6.20；r1 §4.2）。
+# 机体固连、无云台：xyz [0.12, 0, −0.08] m、rpy [0, 45, 0]°（下俯 45°）；父帧 base_link（FLU），rpy 按 ZYX。
+schema: awr.sensor.camera_fixed.v1
+spec_ref: gs_cam640@1.0.0
+mount: {xyz_m: [0.12, 0.0, -0.08], rpy_deg: [0, 45, 0]}
+output: vga512
+conf: D
+src: "AWR-20 §15.5.1（ADR-157）；挂点与下俯角取 r1 sim_livo_bag.py 的 T_B_C（--cam-pitch 45）"

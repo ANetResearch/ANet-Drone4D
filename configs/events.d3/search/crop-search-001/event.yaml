@@ -1,0 +1,53 @@
+# crop-search-001：目标搜索类 dev 事件（M23 §15.2 search 段、§15.3 第 4 行，D3-AC-62；E10）。走失人员（person-05）静止于先验抽样位置：
+# 先验为两分量高斯混合（报亭附近 sigma 12 m、广场西北侧 sigma 10 m），任务区为广场及其南侧街区；实际位置由事件种子确定性抽样，
+# 只写入锚点表、磁带与真值，brief.json 与 task.v1 只含先验。关键事件按 60 s 窗口切分（3 个 target_window 与 1 个 target_present）。
+schema: drone4d.event.v1
+event_id: crop-search-001
+version: 1
+event_type: target_search
+world: {id: oryahovo-crop1}
+anchors_ref: event:anchors.json
+seed: 20261024
+duration_s: 180
+mode: exogenous
+time_origin_utc: "2026-06-16T17:40:00Z"
+actors:
+  - id: target_p
+    class: person
+    roles: [target]
+    appearance_ref: person-05
+    route:
+      - {t: 0, at: search_target, do: spawn}
+  - id: walker_a
+    class: person
+    appearance_ref: person-16
+    route:
+      - {t: 0, at: ev_nw_street, do: spawn}
+      - {t: 90, at: ev_south_walk}
+  - id: walker_b
+    class: person
+    appearance_ref: person-20
+    route:
+      - {t: 20, at: ev_ne_street, do: spawn}
+      - {t: 120, at: ev_south_corner, do: wait}
+search:
+  target: target_p
+  prior:
+    type: gmm
+    components:
+      - {anchor: ev_plaza_kiosk, sigma_m: 12, weight: 0.6}
+      - {xy: [5.0, -30.0], sigma_m: 10, weight: 0.4}
+  area_polygon: [[-20.0, -100.0], [60.0, -100.0], [60.0, -10.0], [-20.0, -10.0]]
+  motion: static
+  window_s: 60
+background:
+  - {class: person, count: 18, zone: ev_town_center, speed_mps: [0.8, 1.6], pause_s: [0, 20], stream: 1}
+environment:
+  interpolation: smooth
+  keyframes:
+    - {t: 0, wind_mps: 3.0, wind_dir_deg: 220, gust_sigma_mps: 0.6, rain_mm_h: 0, visibility_m: 20000}
+    - {t: 180, wind_mps: 3.5, wind_dir_deg: 230, gust_sigma_mps: 0.7, rain_mm_h: 0, visibility_m: 20000}
+brief:
+  public_anchors: [ev_plaza, ev_plaza_kiosk]
+  targets:
+    - {actor: target_p, description_zh: "身高约 1.62 m，体型偏壮；上身绿色格纹上衣，下身藏青色长裤；无明显配饰；步速较快", description_en: "Approx. 1.62 m, sturdy build; checked green top, navy trousers; no visible accessories; brisk gait"}
