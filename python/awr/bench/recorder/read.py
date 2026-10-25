@@ -21,9 +21,11 @@
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import struct
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -76,7 +78,7 @@ class Frame:
     width: int | None = None
     height: int | None = None
 
-    @property
+    @functools.cached_property
     def sha256(self) -> str:
         return hashlib.sha256(self.payload).hexdigest()
 
@@ -126,6 +128,20 @@ class FrameStore:
         if k not in self._digest:
             self._frame(uav, sensor, r)
         return self._digest[k]
+
+    def scan_frames(self, channels: list[tuple[str, str]] | None = None) -> Iterator[tuple[str, str, Frame]]:
+        """按文件顺序逐帧读出（逐帧摘要用）：所选通道（缺省为帧索引中的全部通道）的帧按 (chunk 偏移, 消息偏移) 升序产出
+        `(uav, sensor, Frame)`，每个 chunk 只解压一次（按通道逐页读取时，通道交错的 chunk 被每个通道各解压一次，读放大约为通道数）。
+        产出次序不是 (uav, sensor, seq) 序，调用方自行排序。"""
+        want = set(self.idx.channels() if channels is None else channels)
+        names_u, names_s = self.idx.header["uavs"], self.idx.header["sensors"]
+        rec = self.idx.rec
+        order = np.lexsort((rec["msg_offset"], rec["chunk_offset"]))
+        for i in order.tolist():
+            r = rec[i]
+            key = (names_u[int(r["uav_no"])], names_s[int(r["sensor_no"])])
+            if key in want and key in self.meta:
+                yield key[0], key[1], self._frame(key[0], key[1], r)
 
     def frame(self, uav: str, sensor: str, seq: int) -> Frame | None:
         r = self.idx.find(uav, sensor, seq)

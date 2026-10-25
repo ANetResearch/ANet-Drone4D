@@ -33,6 +33,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -298,7 +299,8 @@ def reference_digest(board_dir: Path, cfg: dict, row: dict, runs_root: Path | No
         return load_digest(snap), "snapshot"
     for d in _run_dir_candidates(board_dir, cfg, row, runs_root):
         if (d / DIGEST_NAME).is_file():
-            return load_digest(d / DIGEST_NAME), "run_dir"
+            with contextlib.suppress(ValueError):            # 精简后的 ranked_eval 运行目录中为保留摘要（retention 文本格式）：改由运行目录现算
+                return load_digest(d / DIGEST_NAME), "run_dir"
         if (d / "manifest.json").is_file():
             return frames_digest(d), "run_dir"
     return None

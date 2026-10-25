@@ -203,6 +203,20 @@ def test_full_round_two_groups_board_and_submission(env: dict) -> None:
     assert len(rep["submission_runs"]) == 4 and {x["kind"] for x in rep["submission_runs"]} == {"smoke", "submission"}
     assert rep["checks"][7]["detail"]["totals"]["unknown_fields"] == 0 and rep["checks"][7]["detail"]["totals"]["schema_checked"] > 0
     assert len(rep["representative_runs"]) == 6 and rep["repeat_pose_identical"] == {"groups": 18, "identical": 18}
+    # ranked_eval 保留（K17，D3-AC-22）：每组 3 基线 × 1 事件各抽 1 个 Run 保留完整录制，其余精简；同种子两次重复摘要相同即去重
+    st_board = json.loads((out / "e2e_state.json").read_text())["stages"]["board"]["result"]
+    for lv in ("L1", "L2"):
+        t = st_board[lv]["retention"]["totals"]
+        assert t["runs"] == 18 and t["sampled"] == 3 and t["compacted"] == 15 and t["dup"] == 9 and t["errors"] == 0
+        assert st_board[lv]["retention"]["unresolved"] == []
+    phases = {}
+    for r in rep["runs"]:
+        rr = json.loads((out / "runs" / r["key"] / "retention.json").read_text())["ranked_eval"]
+        phases[rr["phase"]] = phases.get(rr["phase"], 0) + 1
+        assert rr["submission_id"] == f"t-mbl-{r['group'].lower()}:std3-{r['group'].lower()}:baseline/{r['policy']}" and rr["seed_index"] == r["seed_index"]
+    assert phases == {"sampled": 6, "compacted": 30}
+    sret = json.loads((data / "submissions" / sub["submission_id"] / "retention.json").read_text())
+    assert sret["totals"] == {"compacted": 2, "sampled": 1}                             # 提交 Run：评分后同样精简
     # 续跑：已完成的阶段与 Run 全部跳过；强制重新发布榜单时保留内部提交的评测行与条目
     n0, c0 = len(rj.calls), comp.calls
     assert _main(env, "--force", "board", run_job=rj, compile_event=comp) == 0
@@ -394,5 +408,18 @@ def test_end_to_end_real_run_job(synth_event, tmp_path: Path, monkeypatch, reque
     assert {e["entry_id"] for e in b["entries"]} == {"baseline/static_guard", "baseline/coverage_scan", "baseline/track_share",
                                                      f"t1/{rep['submission']['submission_id']}"}
     assert not (data / "boards" / "current").exists()                                    # 开发榜不设为当前版本
-    seeds = json.loads((out / "evalstore" / "secrets.json").read_text())["seeds"][event]
+    sec = json.loads((out / "evalstore" / "secrets.json").read_text())
+    seeds = sec["seeds"][event]
     assert rep["checks"][-1]["passed"] and not _scan([out / "e2e.log", out / "mbl_e2e.json", data / "boards" / "e2e-l1" / "details.json"], seeds)
+    # 提交 Run 的运行清单（K17）：attempt、restart_count 与 timing；种子承诺值由本轮 EvalStore（榜单配置 evalstore）签发，不含明文
+    sid = rep["submission"]["submission_id"]
+    mans = sorted((data / "dataset" / event / "runs").glob(f"{sid}-r*/run_manifest.json"))
+    assert len(mans) == 2
+    for k, p in enumerate(mans):
+        m = json.loads(p.read_text())
+        want = hmac.new(bytes.fromhex(sec["k_eval"]), f"{sid}-r{k}:{seeds[k]}".encode(), hashlib.sha256).hexdigest()
+        assert m["run_id"] == f"{sid}-r{k}" and m["attempt"] == 1 and m["restart_count"] == 0 and m["seed_commit"] == want
+        assert m["timing"]["queued_unix_ns"] <= m["timing"]["started_unix_ns"] < m["timing"]["ended_unix_ns"] and m["timing"]["wall_s"] > 0
+        assert "seed" not in m and m["ranked"] is True and m["experiment_id"] == "board-e2e-l1"
+    assert not _scan(mans, seeds)
+    assert not list((data / "dataset").glob("*/runs/*/retention.json"))                 # 开发轮（Fast 档）：不做 ranked_eval 精简

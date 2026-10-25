@@ -327,8 +327,9 @@ def test_ranked_eval_sample_compact_dedup(ranked, seed: int, want: str) -> None:
     if pick != "sub-x-s0r1":
         rec = R.load_record(dup)["ranked_eval"]
         assert rec["dup_of"] == "sub-x-s0r0" and rec["phase"] == "compacted"
-        assert not (dup / "frames.digest").exists() and not (dup / "truth").exists() and not (dup / "preview").exists()
-        assert not (dup / "truth_min.json").exists()
+        assert not (dup / "frames.digest").exists() and not (dup / "preview").exists()
+        # K17：去重的 Run 仍保留精简真值（评测器输入逐 Run 保留，可复评）
+        assert {q.name for q in (dup / "truth").iterdir() if q.is_file()} == set(R.TRUTH_MIN_FILES) and (dup / "truth_min.json").exists()
     if first is not None:
         _check_full_compact(first, rid="sub-x-s0r0")
         assert R.load_record(first)["ranked_eval"]["frames_digest_sha256"] == hashlib.sha256((first / "frames.digest").read_bytes()).hexdigest()

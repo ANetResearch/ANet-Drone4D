@@ -19,7 +19,8 @@ FR-166、FR-177 至 FR-183；ADR-182、ADR-191、ADR-195；B21）。
 3. `submit`（Evaluator 服务用户）：登记一个内部提交（`bench/submission.v1`，所选分轨的全部赛道，可见性 board），由
    `awr.bench.subworker.process_one` 逐阶段处理（扫描 → 冒烟 → v1 正式评测 → 评分并上榜）；队列中排在前面的提交由各自的进程领取。
 4. `board`（Evaluator 服务用户）：基线评测行写入 `rows.jsonl`（幂等：已写入的与记录不符即报错），重算并发布榜单，再连算一次核对
-   `board.json`、`details.json`、`listing.json` 逐字节一致。
+   `board.json`、`details.json`、`listing.json` 逐字节一致；随后对基线排名 Run 执行 `ranked_eval` 保留（`retention.finalize_board`，
+   可重入；K17，D3-AC-22）。
 5. `seal-truth`（管理员）：test 事件 Run 目录中的真值层（`dataset/<eid>/runs/<run_id>/truth/`，含 `run_seed.json`）移入
    `hidden/<eid>/truth/runs/<run_id>/`（目录 0700、文件 0600、属主为 Evaluator 服务用户），写审计 `hidden_seal`；之后 `misplaced` 须为空。
 6. `report`（管理员）：逐项判定并写 `<out>/board_v1_formal.json`（`drone4d.bench.board_v1_formal.v1`）：条目与 Run 完整性、全部 Run 为
@@ -615,6 +616,13 @@ def publish_board(data_root: Path, out: Path, *, board_version: str, n_boot: int
     log(f"[board] {board_version}: {len(b['entries'])} entries, byte-identical twice {same}")
     if not all(same.values()):
         raise FormalError(f"board {board_version} is not byte-identical when computed twice: {same}")
+    from awr.bench.retention import finalize_board
+
+    # 评分后步骤：基线排名 Run 的 ranked_eval 保留（K17，D3-AC-22；提交 Run 由 subworker 在评分后处理）
+    ret = finalize_board(data_root, bdir, entries={r["entry_id"] for r in want})
+    res["retention"] = {"totals": ret["totals"], "unresolved": ret["unresolved"]}
+    E.write_json(out / "board_publish.json", res)
+    log(f"[board] {board_version}: ranked_eval retention {json.dumps(ret['totals'], sort_keys=True)}")
     return res
 
 

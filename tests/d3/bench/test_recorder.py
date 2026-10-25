@@ -381,13 +381,24 @@ def test_env_l2_lidar_frame_index_digest_and_ranked_compaction(synth_event, tmp_
     rows = [ln.split("\t") for ln in body.decode().splitlines()[1:]]
     lrows = {(u, int(q)): (h, int(b)) for u, s, q, h, b in rows if s == "lidar0"}
     assert len(lrows) == len(lid)
+    from awr.bench.recorder.lidar import canonical_lidar_frame, unpack_lidar_frame
+
     fs = FrameStore(run)
     try:
-        for (u, _sid, q) in lid:
+        for (u, _sid, q) in lid:                       # LiDAR 行取去 run 规范形式（存档帧头 frame_id 含 run 段，Agent 收到的帧不含）
             f = fs.frame(u, "lidar0", q)
-            assert lrows[(u, q)] == (f.sha256, len(f.payload))
+            c = canonical_lidar_frame(f.payload)
+            assert lrows[(u, q)] == (hashlib.sha256(c).hexdigest(), len(c))
+            h, pts = unpack_lidar_frame(c)
+            h0, pts0 = unpack_lidar_frame(f.payload)
+            assert h0["frame_id"] == f"t-rec/{u}/lidar0/{q}" and h["frame_id"] == f"{u}/lidar0/{q}"
+            assert {k: v for k, v in h.items() if k != "frame_id"} == {k: v for k, v in h0.items() if k != "frame_id"}
+            assert pts.tobytes() == pts0.tobytes()
+        eo = {int(r["seq"]): fs.frame("uav-01", "eo", int(r["seq"])) for r in fs.idx.span("uav-01", "eo", 0, 2 ** 32 - 1)}
     finally:
         fs.close()
+    erows = {int(q): (h, int(b)) for u, s, q, h, b in rows if (u, s) == ("uav-01", "eo")}
+    assert erows == {q: (f.sha256, len(f.payload)) for q, f in eo.items()}   # 相机行仍为交付字节
     assert {s for _u, s, *_ in rows} >= {"eo", "lidar0"}
 
     out = R.compact_ranked(run, root=root)

@@ -12,9 +12,13 @@
    `awr.bench.runner.run_job`（隔离容器 + 线协议 + `bench/obs.v1` 逐帧审计）运行并评测；每个 Run 记录 `wall_s`（Env 构造至关闭，
    含 gz 与 Agent 容器启动）、Env 主循环墙钟、仿真时长、墙钟比、锁步核对与 `manifest.json.obs_audit`，另写
    `run_manifest.json`（`bench/run_manifest.v1`，排名运行只含 `seed_commit`）；平台原因失败自动重跑 `platform_retries` 次；
+   Run 结束后清理运行目录中残留的 AF_UNIX 套接字（`retention.clean_run_sockets`，如 gz 的 `phys/sock/ctl.sock`）；
 5. `board`：聚合评测并发布原型榜：每个观测档组一个榜单版本 `<board.version>-<l1|l2>`（`config.json` 与 `rows.jsonl` 写入
    `<data_root>/boards/<ver>/`，`awr.bench.boardstore.publish` 重算 `board.json`、`details.json`），3 个基线为参考行；
-   `board.current` 所指组设为当前版本（开发榜除外）；
+   `board.current` 所指组设为当前版本（开发榜除外）；Realistic 档轮次随后对基线排名 Run 执行 `ranked_eval` 保留
+   （`awr.bench.retention.finalize_board`：每个"基线 × 事件"抽 1 个 Run 保留完整录制 30 天，其余精简为逐帧摘要与 `truth_min`，
+   同种子重复运行摘要相同时去重；D3-AC-22），各组结果记入本阶段结果的 `retention`；`config.json` 另记本轮 EvalStore 路径
+   `evalstore`（服务端读取，内部提交流水线据此为提交 Run 签发种子承诺值并写运行清单）；
 6. `submit`：触发 1 个内部提交：解析镜像摘要，按 `bench/submission.v1` 登记到所选组的榜单版本并设为上榜，再由
    `awr.bench.subworker.process_one` 逐阶段处理（扫描 → 冒烟 → 正式评测 → 评分），DONE 后核对条目出现在 `board.json`；
    `submission.worker = external` 时只登记并等待常驻流水线处理；
@@ -387,6 +391,9 @@ def execute_run(job: dict, run_job: Callable | None = None, log: Callable[[str],
                          "trace": redact(traceback.format_exc()[-2000:], seeds)})
             log(f"{job['key']}: attempt {attempt} failed: {msg}")
     t1 = time.time_ns()
+    from awr.bench.retention import clean_run_sockets
+
+    clean_run_sockets(run_dir)                                           # gz 控制套接字等（残留时 copytree 失败）
     rec.update(attempts=len(errs) + (r is not None), errors=errs, started_unix_ns=t0, ended_unix_ns=t1, ended_utc=utc_now())
     if r is None:
         rec["status"] = "FAILED"
@@ -794,7 +801,7 @@ class Round:
                    "track": {"fleet_ref": f"{len(rs['fleet'])}x-{'+'.join(vehicles)}", "obs_level": lv, "dev": dev, "prototype": True,
                              "gpu_class": "shared"},
                    "track_id": tr, "lane": plan["event_type"], "event_type": plan["event_type"], "event": self.event_id,
-                   "seed_set_commit": self.store.seed_set_commit(self.event_id),
+                   "seed_set_commit": self.store.seed_set_commit(self.event_id), "evalstore": str(self.store.path.resolve()),
                    "mbl_round": {"round": self.cfg["round"], "fingerprint": self.fp, "out": str(self.out.resolve())}}
             local = self.out / "board" / ver
             write_json(local / "config.json", cfg, mode=0o600)
@@ -819,7 +826,22 @@ class Round:
             out[lv] = {"board_version": ver, "board_dir": str(dst), "track": tr, "lane": plan["event_type"], "rows": len(rows),
                        "kept_submission_rows": len(keep), "entries": len(board["entries"]), "current": current, "dev": dev}
             self.log(f"[board] {ver}: {len(board['entries'])} entries, {len(rows)} baseline rows, current={current}")
+            if not dev:
+                out[lv]["retention"] = self._retain(dst, {x["entry_id"] for x in rows})
         return out
+
+    def _retain(self, board_dir: Path, entries: set[str]) -> dict:
+        """基线排名 Run 的 `ranked_eval` 保留（模块文档第 5 步）；失败只记日志与结果，不使本阶段失败（`retention finalize` 可补做）。"""
+        from awr.bench.retention import finalize_board
+
+        try:
+            res = finalize_board(self.data_root, board_dir, runs_roots=[self.out / "runs"], entries=entries)
+        except Exception as e:
+            self.log(f"[board] {board_dir.name}: ranked_eval retention failed: {type(e).__name__}: {e}")
+            return {"error": f"{type(e).__name__}: {e}"[:600]}
+        self.log(f"[board] {board_dir.name}: ranked_eval retention {json.dumps(res['totals'], sort_keys=True)}"
+                 + (f", unresolved {res['unresolved'][:5]}" if res["unresolved"] else ""))
+        return {"totals": res["totals"], "unresolved": res["unresolved"]}
 
     # -------------------------------------------------------------- 6 内部提交
     def st_submit(self) -> dict:

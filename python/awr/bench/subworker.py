@@ -31,6 +31,23 @@
 
 运行目录 `dataset/<event>/runs/<submission_id>-r<k>`（k 为种子序号，不暴露种子值）。
 
+运行收尾（K17；D3-AC-22、M27-FR-171、M27 §7.3）：
+- 每个正式 Run 结束后清理运行目录中残留的 AF_UNIX 套接字（`retention.clean_run_sockets`），并写运行清单 `run_manifest.json`
+  （`bench/run_manifest.v1`）：`attempt`（1 起，平台原因重跑为 2）、`restart_count`、`timing{queued_unix_ns, started_unix_ns,
+  ended_unix_ns}`（另有 Env 墙钟、仿真时长与实时因子）；排名运行只含 `seed_commit`。旧版榜单配置（非 v1）只有在配置给出
+  `evalstore`（含 `k_eval` 的服务端文件，`mbl_e2e` 原型榜写入）时才签发种子承诺值并写清单，否则排名运行不写清单（不以明文种子代替）；
+- 评分完成（DONE）后对本提交的排名 Run 执行 `ranked_eval` 保留（`retention.finalize_ranked_eval`：每个"提交 × test 事件"抽 1 个
+  Run 保留完整录制 30 天，其余精简为逐帧摘要与 `truth_min`，重复运行摘要相同时去重），结果写 `submissions/<id>/retention.json`；
+  开发榜（`track.dev`）与非排名运行不处理；保留步骤失败只记日志与该文件，不改变提交状态。
+
+租约与孤立提交的恢复（K17；B21 遗留 2）：领取提交时取得 `submissions/<id>/worker.lock` 的排他文件锁（非阻塞，取不到即视为已由
+其他进程领取），处理期间持有，并由心跳线程每 `heartbeat_s`（缺省 60 s）刷新租约 `submissions/<id>/lease.json`
+（`drone4d.bench.subworker_lease.v1`：worker、主机、进程号、心跳与到期时刻，租期 `lease_s` 缺省 600 s）。每次领取新提交之前先
+检查停在 EVALUATING 的提交：文件锁可取得且租约已到期（无租约文件时以提交文档的最后更新时刻起算）即视为处理进程已不存在，按
+`board_v1_formal.py resume_submission` 同一语义自动恢复：已完成且已记 GPU 用量的 Run 沿用其评测结果（墙钟超限的按 `termination.json`
+复原为无效行），其余 Run 删除残留后重新运行（中断的 Run 计入平台重跑），再评分并上榜；已记 GPU 用量却没有评测结果与终止记录的
+Run 无法判定，提交 FAILED 320 `orphan_unresolved`（需人工处理）。恢复记入 `_meta.recovered[]`。
+
 排行榜 v1（`aggregate.is_v1`：`drone4d.bench.board_config.v1`，`d3-score-1`；D3-AC-43、57；M27-FR-160、FR-166、FR-183）：
 
 - 领取时的版本衔接（B18 决定）：登记的榜单版本已不是当前版本时，当前版本为 v1 且接收该分轨与所选赛道（`aggregate.admits`）
@@ -52,13 +69,17 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime as dt
+import fcntl
 import hashlib
 import hmac
 import json
 import os
 import re
+import shutil
+import socket
 import subprocess
 import sys
+import threading
 import time
 import traceback
 from dataclasses import dataclass
@@ -66,14 +87,24 @@ from pathlib import Path
 
 from awr.agentsdk.env.containers import check_launch, host_path, parse_docker_run
 from awr.bench.boardstore import append_rows, current_version, gz_row, load_config, publish, slim_evaluation, versions
-from awr.bench.eval.aggregate import BoardConfigError, admits, board_key, expand_runs, is_v1, run_spec_for, verify_lock
+from awr.bench.eval.aggregate import (
+    BoardConfigError,
+    admits,
+    board_key,
+    expand_runs,
+    is_v1,
+    rng_scope,
+    run_spec_for,
+    verify_lock,
+)
 from awr.bench.platform_audit import is_frozen
+from awr.bench.retention import RankedRun, clean_run_sockets, finalize_ranked_eval
 from awr.bench.spec_rules import check_ranked_eval, check_submission_eval, reason
 from awr.bench.submissions import SubmissionStore, WallLimitExceeded, guarded_run, run_duration_s, wall_limit_s
 
-__all__ = ["IMAGE_MAX_B", "REGISTRY_GATES", "REGISTRY_READY", "REGISTRY_WAIT_S", "SCAN_SEVERITIES", "V1_EVENT_KEYS", "ScanError",
-           "ScannerUnavailable", "TrivyScanner", "process_one", "registry_gate", "scan_image", "seed_commit", "v1_problems",
-           "vulnerability_findings"]
+__all__ = ["HEARTBEAT_S", "IMAGE_MAX_B", "LEASE_S", "REGISTRY_GATES", "REGISTRY_READY", "REGISTRY_WAIT_S", "SCAN_SEVERITIES", "V1_EVENT_KEYS",
+           "Lease", "ScanError", "ScannerUnavailable", "TrivyScanner", "process_one", "recover_orphans", "registry_gate", "scan_image",
+           "seed_commit", "v1_problems", "vulnerability_findings"]
 
 IMAGE_MAX_B = 4 * 1000 ** 3              # D3-AC-59"体积 > 4 GB 拒绝"：十进制 GB，按 `docker image inspect` 的 Size（未压缩）计（ADR-204 (4)）
 SCAN_SEVERITIES = ("HIGH", "CRITICAL")   # "HIGH 及以上"
@@ -84,6 +115,9 @@ REGISTRY_REJECT = ("foreign_image", "digest_is_manifest")   # 提交方原因、
 REGISTRY_WAIT_S = 1800.0                 # 自提交起等待镜像接入的上限
 REGISTRY_GATES = ("off", "invited", "all")
 V1_EVENT_KEYS = ("world_id", "version", "starts")   # 排行榜 v1 配置 `events.<test 事件>` 的必备键（服务端运行参数，不含秘密）
+LEASE_S = 600.0                          # 租期：心跳超过此时长未刷新视为处理进程已不存在
+HEARTBEAT_S = 60.0                       # 心跳间隔
+LEASE_SCHEMA = "drone4d.bench.subworker_lease.v1"
 _RFC3339 = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?(Z|[+-]\d\d:\d\d)$")
 
 
@@ -316,6 +350,124 @@ def _write_json(path: Path, doc: dict) -> None:
     tmp.replace(path)
 
 
+# ------------------------------------------------------------------------------------------------------------ 租约
+class Lease:
+    """一个提交的处理租约（模块文档"租约与孤立提交的恢复"）：`acquire()` 以非阻塞排他文件锁领取（取不到返回 False），
+    成功后写租约并启动心跳线程；`release()` 停止心跳、删除租约并释放文件锁。可作上下文管理器使用。"""
+
+    def __init__(self, data_root: Path, sid: str, *, lease_s: float = LEASE_S, heartbeat_s: float = HEARTBEAT_S,
+                 clock=time.time_ns) -> None:
+        self.dir = Path(data_root) / "submissions" / sid
+        self.sid, self.lease_s, self.heartbeat_s, self.clock = sid, float(lease_s), float(heartbeat_s), clock
+        self.worker = f"{socket.gethostname()}:{os.getpid()}"
+        self._f = None
+        self._stop = threading.Event()
+        self._t: threading.Thread | None = None
+        self.claimed_unix_ns: int | None = None
+
+    @property
+    def path(self) -> Path:
+        return self.dir / "lease.json"
+
+    def acquire(self) -> bool:
+        self.dir.mkdir(parents=True, exist_ok=True)
+        f = (self.dir / "worker.lock").open("a")
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            f.close()
+            return False
+        self._f = f
+        self.claimed_unix_ns = self.clock()
+        self.beat()
+        self._t = threading.Thread(target=self._run, name=f"lease-{self.sid}", daemon=True)
+        self._t.start()
+        return True
+
+    def beat(self) -> None:
+        now = self.clock()
+        _write_json(self.path, {"schema": LEASE_SCHEMA, "submission_id": self.sid, "worker": self.worker, "host": socket.gethostname(),
+                                "pid": os.getpid(), "claimed_unix_ns": self.claimed_unix_ns, "heartbeat_unix_ns": now,
+                                "expires_unix_ns": now + int(self.lease_s * 1e9)})
+
+    def _run(self) -> None:
+        while not self._stop.wait(self.heartbeat_s):
+            with contextlib.suppress(OSError):
+                self.beat()
+
+    def release(self) -> None:
+        self._stop.set()
+        if self._t is not None:
+            self._t.join(timeout=5.0)
+        with contextlib.suppress(OSError):
+            self.path.unlink()
+        if self._f is not None:
+            with contextlib.suppress(OSError):
+                fcntl.flock(self._f, fcntl.LOCK_UN)
+            self._f.close()
+            self._f = None
+
+    def __enter__(self) -> Lease:
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self.release()
+
+    @staticmethod
+    def expired(data_root: Path, doc: dict, *, now_ns: int, lease_s: float = LEASE_S) -> bool:
+        """租约是否已到期：租约文件的 `expires_unix_ns` ≤ now；无租约文件时以提交文档的 `_meta.updated_unix_ns` + 租期判定。"""
+        try:
+            lease = json.loads((Path(data_root) / "submissions" / doc["submission_id"] / "lease.json").read_text(encoding="utf-8"))
+            return int(lease["expires_unix_ns"]) <= now_ns
+        except (OSError, ValueError, KeyError, TypeError):
+            return int(doc["_meta"].get("updated_unix_ns") or 0) + int(lease_s * 1e9) <= now_ns
+
+
+# ------------------------------------------------------------------------------------------------------------ 运行收尾
+def _write_submission_manifest(run_dir: Path, rs: dict, policy: dict, *, run_id: str, seed: int, seed_commit: str | None, worlds_root: Path,
+                               events_root: Path, physics: str | None, gz: dict | None, experiment_id: str, split: str, attempt: int,
+                               timing: dict, log) -> bool:
+    """提交 Run 的运行清单（模块文档"运行收尾"）；→ 是否写出。排名运行缺种子承诺值时不写；清单缺陷只记日志（种子明文已脱敏）。"""
+    from awr.agentsdk.env.spec import EnvSpec
+    from awr.bench.eval.evaluator import run_manifest, write_run_manifest
+
+    run_dir = Path(run_dir)
+    if rs.get("ranked") and not seed_commit:
+        log(f"{run_id}: run_manifest not written (ranked run without a seed commitment: the board config has no evalstore)")
+        return False
+    try:
+        ev = json.loads((run_dir / "evaluation.json").read_text(encoding="utf-8")) if (run_dir / "evaluation.json").is_file() else None
+        rs_p = {**rs, "policy": {k: v for k, v in policy.items() if k in ("kind", "name", "image_digest", "params")}}
+        spec = EnvSpec.from_run_spec(rs_p, run_id=run_id, seed=int(seed), worlds_root=Path(worlds_root), events_root=Path(events_root),
+                                     out_dir=run_dir, physics=physics, gz=gz or None, seed_commit=seed_commit)
+        doc = run_manifest(spec, run_dir, ev, experiment_id=experiment_id, attempt=int(attempt), restart_count=int(attempt) - 1, split=split,
+                           timing=timing)
+        write_run_manifest(run_dir, doc)
+        return True
+    except Exception as e:                                   # 清单缺陷不改变 Run 状态
+        log(_scrub(f"{run_id}: run_manifest not written: {type(e).__name__}: {e}"[:600], seed))
+        return False
+
+
+def _retain(data_root: Path, d: dict, runs: list[tuple[Path, str, int, int]], *, log) -> dict | None:
+    """DONE 之后的 `ranked_eval` 保留（模块文档"运行收尾"）：`runs` 为 (运行目录, 事件, 种子序号, 重复序号)；结果写
+    `submissions/<id>/retention.json`。失败只记日志。"""
+    sid = d["submission_id"]
+    try:
+        out = finalize_ranked_eval([RankedRun(Path(rd), sid, ev, int(k), int(rep)) for rd, ev, k, rep in runs], root=Path(data_root),
+                                   tenant=d["_meta"]["team"])
+        ph = [x.get("phase") for x in out.values()]
+        res = {"submission_id": sid, "t_utc": _now(), "runs": out, "totals": {p: ph.count(p) for p in sorted(set(ph), key=str)},
+               "dup": sum(1 for x in out.values() if x.get("dup_of"))}
+    except Exception as e:                                   # 保留步骤失败不改变提交状态（retention_gc 与回填可补做）
+        res = {"submission_id": sid, "t_utc": _now(), "error": f"{type(e).__name__}: {e}"[:600]}
+        log(f"{sid}: ranked_eval retention failed: {res['error']}")
+    _write_json(Path(data_root) / "submissions" / sid / "retention.json", res)
+    if "totals" in res:
+        log(f"{sid}: ranked_eval retention {json.dumps(res['totals'])}, dup {res['dup']}")
+    return res
+
+
 # ------------------------------------------------------------------------------------------------------------ 排行榜 v1
 def seed_commit(k_eval: bytes, run_id: str, seed: int) -> str:
     """排名运行的种子承诺值 `HMAC-SHA256(K_eval, run_id ‖ ":" ‖ seed)`（M27-FR-005）。"""
@@ -418,25 +570,34 @@ def _v1_runs(cfg: dict, d: dict, policy: dict) -> list[dict]:
     return out
 
 
+def _v1_base(d: dict, it: dict) -> dict:
+    """排行榜 v1 提交 Run 的评测行（不含 evaluation）。"""
+    sid, team = d["submission_id"], d["_meta"]["team"]
+    return {"entry_id": f"{team}/{sid}", "team": team, "display_name": sid, "baseline": False, "track": d["track"], "lane": it["lane"],
+            "event_type": it["event_type"], "event": it["event"], "seed": it["seed_index"], "rep": it["rep"], "run_id": it["run_id"],
+            "submission_id": sid}
+
+
 def _evaluate_v1(data_root: Path, st: SubmissionStore, d: dict, cfg: dict, runs: list[dict], *, policy: dict, common: dict, run_job,
                  log) -> tuple[list[dict], int] | None:
     """EVALUATING（排行榜 v1）：逐 Run 正式运行并生成评测行；→ (评测行, 平台原因重跑次数)，平台原因两次失败时 FAILED 并返回 None。"""
-    sid, team = d["submission_id"], d["_meta"]["team"]
+    sid = d["submission_id"]
     store = _evalstore(cfg)
     k_eval = bytes.fromhex(store["k_eval"])
     rows, reruns = [], 0
     for it in runs:
         seed = int(store["seeds"][it["lane"]][it["event"]][it["seed_index"]])
         run_id, run_dir = it["run_id"], data_root / "dataset" / it["event"] / "runs" / it["run_id"]
-        base = {"entry_id": f"{team}/{sid}", "team": team, "display_name": sid, "baseline": False, "track": d["track"], "lane": it["lane"],
-                "event_type": it["event_type"], "event": it["event"], "seed": it["seed_index"], "rep": it["rep"], "run_id": run_id,
-                "submission_id": sid}
+        base = _v1_base(d, it)
         wall = None
+        sc = seed_commit(k_eval, run_id, seed)
+        t_q = time.time_ns()
         for attempt in (0, 1):
+            t0 = time.time_ns()
             try:
                 guarded_run(run_job, st, sid, it["rs"], limit_s=wall_limit_s(run_duration_s(it["rs"], it["events_root"])), policy=policy, seed=seed,
                             run_id=run_id, run_dir=run_dir, physics=cfg["physics"], gz=cfg.get("gz") or None,
-                            seed_commit=seed_commit(k_eval, run_id, seed), **{**common, "events_root": it["events_root"]})
+                            seed_commit=sc, **{**common, "events_root": it["events_root"]})
                 break
             except WallLimitExceeded as e:                   # 超墙钟上限：终止（693），记为无效行，不重跑
                 wall = e
@@ -445,13 +606,19 @@ def _evaluate_v1(data_root: Path, st: SubmissionStore, d: dict, cfg: dict, runs:
             except Exception:                               # 平台原因：重跑一次（日志不含种子明文）
                 log(_scrub(f"{sid}: run {run_id} attempt {attempt} failed\n{traceback.format_exc()[-1500:]}", seed))
                 if attempt == 1:
+                    clean_run_sockets(run_dir)
                     st.transition(sid, "FAILED", reason={"code": 320, "name": "INTERNAL", "detail": {"why": "platform", "run": run_id}})
                     return None
                 reruns += 1
+        clean_run_sockets(run_dir)
         if wall is not None:
             rows.append({**base, "evaluation": {"components": dict.fromkeys(("ec", "eu", "ao", "ce")), "ranked": True, "ranked_valid": False,
                                                 "invalid_reasons": ["wall_limit"], "physics": cfg["physics"]}, "termination": wall.reason()})
             continue
+        _write_submission_manifest(run_dir, it["rs"], policy, run_id=run_id, seed=seed, seed_commit=sc, worlds_root=common["worlds_root"],
+                                   events_root=it["events_root"], physics=cfg["physics"], gz=cfg.get("gz") or None,
+                                   experiment_id=f"board-{cfg.get('board_version')}", split="test", attempt=attempt + 1,
+                                   timing={"queued_unix_ns": t_q, "started_unix_ns": t0, "ended_unix_ns": time.time_ns()}, log=log)
         ev = json.loads((run_dir / "evaluation.json").read_text(encoding="utf-8"))
         rows.append({**base, "evaluation": slim_evaluation(ev, physics=_run_physics(run_dir))})
     return rows, reruns
@@ -478,7 +645,7 @@ def _score_v1(st: SubmissionStore, d: dict, cfg: dict, bdir: Path, rows: list[di
     for lane in dict.fromkeys(r["lane"] for r in rows):
         rs = sorted((r for r in rows if r["lane"] == lane), key=lambda r: (r["event"], r["seed"], r["rep"], r["run_id"]))
         valid = [r for r in rs if r["evaluation"]["ranked_valid"]]
-        met = (lane_metrics(valid, key=(eid, bdir.name, lane), n_boot=n_boot, secret=secret)[0] if valid
+        met = (lane_metrics(valid, key=(eid, rng_scope(cfg), lane), n_boot=n_boot, secret=secret)[0] if valid
                else {m: {"value": None, "ci95": [0.0, 0.0]} for m in ("ec", "eu", "ao", "ce")})
         lanes.append({"lane": lane, "metrics": met, "runs": {"total": len(rs), "valid": len(valid), "invalid": len(rs) - len(valid),
                                                              "platform_rerun": reruns},
@@ -497,21 +664,127 @@ def _score_v1(st: SubmissionStore, d: dict, cfg: dict, bdir: Path, rows: list[di
         doc["result"] = {"lanes": lanes}
         st._put(doc)
     log(f"{sid}: DONE " + json.dumps({ln["lane"]: {m: v["value"] for m, v in ln["metrics"].items()} for ln in lanes}))
+    data_root = Path(st.root).parent
+    _retain(data_root, st.get(sid), [(data_root / "dataset" / r["event"] / "runs" / r["run_id"], r["event"], r["seed"], r.get("rep", 0))
+                                     for r in rows], log=log)
+
+
+# ------------------------------------------------------------------------------------------------------------ 孤立提交的恢复
+def _common(cfg: dict, docker: str) -> dict:
+    return {"worlds_root": Path(cfg["worlds_root"]), "events_root": Path(cfg["events_root"]), "agent_image": cfg.get("agent_image", "d3-agent-py:dev"),
+            "docker": docker}
+
+
+def _resume(data_root: Path, st: SubmissionStore, d: dict, *, docker: str, n_boot: int, run_job, log, worker: str) -> None:
+    """恢复一个孤立的 EVALUATING 提交（模块文档"租约与孤立提交的恢复"；与 `board_v1_formal.py resume_submission` 同语义）。"""
+    sid = d["submission_id"]
+    bdir = data_root / "boards" / d["_meta"]["board_version"]
+    cfg = load_config(bdir)
+    v1 = is_v1(cfg)
+    policy = {"kind": "image", "image_digest": d["image_digest"], "entry": d["entry"]}
+    common = _common(cfg, docker)
+    charged = {g["run_id"] for g in d["_meta"].get("gpu", [])}
+    if v1:
+        items = [(it, data_root / "dataset" / it["event"] / "runs" / it["run_id"], it["run_id"]) for it in _v1_runs(cfg, d, policy)]
+    else:
+        ev = cfg["run_spec"]["event"]["id"]
+        items = [(k, data_root / "dataset" / ev / "runs" / rid, rid) for k, _seed, rid in _legacy_runs(cfg, d)]
+    done: dict[str, dict] = {}
+    todo, aborted = [], []
+    for it, run_dir, rid in items:
+        term = run_dir / "termination.json"
+        if rid in charged:                                   # guarded_run 已返回（含墙钟超限）：沿用其结果
+            if term.is_file():
+                t = json.loads(term.read_text(encoding="utf-8"))
+                tr = {"code": t.get("code", 693), "name": t.get("name", "RUN_WALL_LIMIT_EXCEEDED"),
+                      "detail": {k: v for k, v in (t.get("detail") or {}).items() if k != "stage"}}
+                if v1:
+                    done[rid] = {**_v1_base(d, it), "evaluation": {"components": dict.fromkeys(("ec", "eu", "ao", "ce")), "ranked": True,
+                                                                   "ranked_valid": False, "invalid_reasons": ["wall_limit"], "physics": cfg["physics"]},
+                                 "termination": tr}
+                else:
+                    done[rid] = _wall_row(cfg, d, it, tr)
+            elif (run_dir / "evaluation.json").is_file():
+                evd = json.loads((run_dir / "evaluation.json").read_text(encoding="utf-8"))
+                done[rid] = ({**_v1_base(d, it), "evaluation": slim_evaluation(evd, physics=_run_physics(run_dir))} if v1
+                             else _legacy_row(cfg, d, it, slim_evaluation(evd)))
+            else:
+                st.transition(sid, "FAILED", reason={"code": 320, "name": "INTERNAL", "detail": {"why": "orphan_unresolved", "run": rid}})
+                log(f"{sid}: FAILED orphan_unresolved (run {rid} was charged but has no evaluation or termination record)")
+                return
+            continue
+        if run_dir.exists():
+            shutil.rmtree(run_dir)                           # 中断 Run 的残留（含运行真值），重新运行
+            aborted.append(rid)
+        todo.append(it)
+    doc = st.get(sid)
+    doc["_meta"].setdefault("recovered", []).append({"t_unix_ns": time.time_ns(), "worker": worker, "reused": len(done), "interrupted": aborted,
+                                                     "rerun": len(todo)})
+    st._put(doc)
+    log(f"{sid}: recovering orphaned EVALUATING submission: {len(done)} runs reused, {len(aborted)} interrupted, {len(todo)} to run")
+    if v1:
+        got = _evaluate_v1(data_root, st, d, cfg, todo, policy=policy, common=common, run_job=run_job, log=log)
+        if got is not None:
+            by_id = {**done, **{r["run_id"]: r for r in got[0]}}
+            _score_v1(st, st.get(sid), cfg, bdir, [by_id[rid] for _it, _rd, rid in items], got[1] + len(aborted), n_boot=n_boot, log=log)
+        return
+    got = _evaluate_legacy(data_root, st, d, cfg, cfg["run_spec"], policy=policy, common=common, run_job=run_job, log=log,
+                           experiment_id=f"board-{bdir.name}", only=set(todo))
+    if got is not None:
+        by_k = {k: r for (k, _rd, rid) in items for r in [done.get(rid)] if r is not None}
+        _score_legacy(st, st.get(sid), cfg, bdir, {**by_k, **got[0]}, got[1] + len(aborted), n_boot=n_boot, log=log)
+
+
+def recover_orphans(data_root: Path, *, docker: str = "docker", n_boot: int = 10_000, run_job=None, log=print, lease_s: float = LEASE_S,
+                    heartbeat_s: float = HEARTBEAT_S) -> str | None:
+    """恢复一个孤立的 EVALUATING 提交（租约到期且文件锁可取得；所属榜单版本被冻结的跳过）；→ submission_id 或 None。
+    停在 SCORING 的孤立提交只记日志（评测行可能已写入，需人工核对）。"""
+    if run_job is None:
+        from awr.bench.runner import run_job
+    data_root = Path(data_root)
+    st = SubmissionStore(data_root / "submissions")
+    now = time.time_ns()
+    for x in st.all():
+        if x["state"] not in ("EVALUATING", "SCORING") or not Lease.expired(data_root, x, now_ns=now, lease_s=lease_s):
+            continue
+        if is_frozen(data_root / "boards" / x["_meta"]["board_version"]):
+            continue
+        sid = x["submission_id"]
+        lease = Lease(data_root, sid, lease_s=lease_s, heartbeat_s=heartbeat_s)
+        if not lease.acquire():                              # 原进程仍持有文件锁：未孤立
+            continue
+        try:
+            x = st.get(sid)
+            if x["state"] == "SCORING":
+                log(f"warning: {sid} is orphaned in SCORING (rows may already be appended); resolve by hand")
+                continue
+            if x["state"] != "EVALUATING":
+                continue
+            _resume(data_root, st, x, docker=docker, n_boot=n_boot, run_job=run_job, log=log, worker=lease.worker)
+            return sid
+        finally:
+            lease.release()
+    return None
 
 
 def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.0, n_boot: int = 10_000, run_job=None,
-                trivy: TrivyScanner | None = None, log=print, registry: str = "invited", registry_wait_s: float = REGISTRY_WAIT_S) -> str | None:
-    """处理一个 RECEIVED 提交；→ submission_id 或 None（队列为空或全部在等待镜像接入）。
+                trivy: TrivyScanner | None = None, log=print, registry: str = "invited", registry_wait_s: float = REGISTRY_WAIT_S,
+                lease_s: float = LEASE_S, heartbeat_s: float = HEARTBEAT_S) -> str | None:
+    """先恢复一个孤立的 EVALUATING 提交（`recover_orphans`），否则处理一个 RECEIVED 提交；→ submission_id 或 None（队列为空或全部在
+    等待镜像接入）。
 
     `trivy` 为 None 时不做漏洞扫描（测试替身与开发自检；命令行入口缺省要求扫描器，见 `main`）；扫描器不可用时抛
-    ScannerUnavailable，提交保持 RECEIVED。`registry`、`registry_wait_s`：镜像接入门（`registry_gate`）。"""
-    from awr.bench.eval.aggregate import lane_metrics
+    ScannerUnavailable，提交保持 RECEIVED。`registry`、`registry_wait_s`：镜像接入门（`registry_gate`）；`lease_s`、`heartbeat_s`：
+    处理租约（模块文档"租约与孤立提交的恢复"）。"""
     if run_job is None:
         from awr.bench.runner import run_job
 
     data_root = Path(data_root)
+    got = recover_orphans(data_root, docker=docker, n_boot=n_boot, run_job=run_job, log=log, lease_s=lease_s, heartbeat_s=heartbeat_s)
+    if got is not None:
+        return got
     st = SubmissionStore(data_root / "submissions")
-    d = None
+    d = lease = None
     for x in st.all():                                       # 平台复现审计冻结的榜单版本：其提交留在 RECEIVED，解冻后继续
         if x["state"] != "RECEIVED" or is_frozen(data_root / "boards" / x["_meta"]["board_version"]):
             continue
@@ -521,11 +794,24 @@ def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.
             log(f"{x['submission_id']}: REJECTED registry {why['detail']}")
             return x["submission_id"]
         if gate == "ready":
+            lease = Lease(data_root, x["submission_id"], lease_s=lease_s, heartbeat_s=heartbeat_s)
+            if not lease.acquire():                          # 已由其他进程领取
+                continue
+            if st.get(x["submission_id"])["state"] != "RECEIVED":
+                lease.release()
+                continue
             d = x
             break
     if d is None:
         return None
-    sid, team = d["submission_id"], d["_meta"]["team"]
+    with lease:
+        return _process(data_root, st, d, docker=docker, smoke_s=smoke_s, n_boot=n_boot, run_job=run_job, trivy=trivy, log=log)
+
+
+def _process(data_root: Path, st: SubmissionStore, d: dict, *, docker: str, smoke_s: float, n_boot: int, run_job, trivy: TrivyScanner | None,
+             log) -> str:
+    """一个已领取的 RECEIVED 提交的全部阶段（模块文档第 0 至 4 步）。"""
+    sid = d["submission_id"]
     db = trivy.ready() if trivy is not None else None       # 库缺失或过期：抛 ScannerUnavailable，不领取
     if db is not None and db["warning"]:
         log(f"warning: trivy db is {db['age_days']:.1f} days old (> {trivy.warn_days:g}); refresh with tools/deploy/dmax/images/trivy/fetch.sh --db-only")
@@ -562,8 +848,7 @@ def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.
         st.transition(sid, "REJECTED", reason=bad, expect="RECEIVED")
         log(f"{sid}: REJECTED config {bad['code']} {bad['detail']['why']}")
         return sid
-    common = {"worlds_root": Path(cfg["worlds_root"]), "events_root": Path(cfg["events_root"]), "agent_image": cfg.get("agent_image", "d3-agent-py:dev"),
-              "docker": docker}
+    common = _common(cfg, docker)
     work = data_root / "submissions" / sid
     st.transition(sid, "SCANNING", expect="RECEIVED")
     rec: dict = {"submission_id": sid, "image_digest": d["image_digest"], "started_at": _now(), "db": db,
@@ -601,6 +886,8 @@ def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.
         return sid
     except Exception as e:                                   # 握手超时、容器启动失败等均归为冒烟失败
         fail = {"error": getattr(e, "code", None) or type(e).__name__}
+    finally:
+        clean_run_sockets(work / "smoke")
     if fail:
         st.transition(sid, "REJECTED", reason=_reason("smoke", agents=sorted(fail)))
         log(f"{sid}: REJECTED smoke {fail}")
@@ -613,36 +900,95 @@ def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.
         if got is not None:
             _score_v1(st, d, cfg, bdir, *got, n_boot=n_boot, log=log)
         return sid
-    rows, reruns = [], 0
+    got = _evaluate_legacy(data_root, st, d, cfg, rs, policy=policy, common=common, run_job=run_job, log=log, experiment_id=f"board-{bdir.name}")
+    if got is not None:
+        _score_legacy(st, d, cfg, bdir, *got, n_boot=n_boot, log=log)
+    return sid
+
+
+# ------------------------------------------------------------------------------------------------------------ 旧版榜单配置（非 v1）
+def _legacy_k_eval(cfg: dict) -> bytes | None:
+    """旧版榜单配置的评测密钥：配置给出 `evalstore`（含 `k_eval` 的服务端文件）时读取，否则 None。"""
+    p = cfg.get("evalstore")
+    if not p:
+        return None
+    try:
+        return bytes.fromhex(json.loads(Path(str(p)).read_text(encoding="utf-8"))["k_eval"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def _legacy_runs(cfg: dict, d: dict) -> list[tuple[int, int, str]]:
+    """旧版配置的提交 Run：→ [(种子序号 k, 种子, run_id)]。"""
+    return [(k, int(seed), f"{d['submission_id']}-r{k}") for k, seed in enumerate(cfg["seeds"])]
+
+
+def _legacy_row(cfg: dict, d: dict, k: int, evaluation: dict, **extra) -> dict:
+    sid, team = d["submission_id"], d["_meta"]["team"]
+    return {"entry_id": f"{team}/{sid}", "team": team, "display_name": sid, "baseline": False, "track": cfg["track_id"], "lane": cfg["lane"],
+            "event_type": cfg.get("event_type", cfg["lane"]), "event": cfg["run_spec"]["event"]["id"], "seed": k, "submission_id": sid,
+            "evaluation": evaluation, **extra}
+
+
+def _wall_row(cfg: dict, d: dict, k: int, termination: dict) -> dict:
+    return _legacy_row(cfg, d, k, {"components": dict.fromkeys(("ec", "eu", "ao", "ce")), "ranked": True, "ranked_valid": False,
+                                   "invalid_reasons": ["wall_limit"]}, termination=termination)
+
+
+def _evaluate_legacy(data_root: Path, st: SubmissionStore, d: dict, cfg: dict, rs: dict, *, policy: dict, common: dict, run_job, log,
+                     experiment_id: str, only: set[int] | None = None) -> tuple[dict[int, dict], int] | None:
+    """EVALUATING（旧版配置）：逐种子正式运行；`only` 给出时只运行所列种子序号（恢复）。→ ({k: 评测行}, 平台原因重跑次数)，
+    平台原因两次失败时 FAILED 并返回 None。"""
+    sid = d["submission_id"]
     event = rs["event"]["id"]
-    for k, seed in enumerate(cfg["seeds"]):
-        run_dir = data_root / "dataset" / event / "runs" / f"{sid}-r{k}"
+    k_eval = _legacy_k_eval(cfg)
+    rows: dict[int, dict] = {}
+    reruns = 0
+    for k, seed, run_id in _legacy_runs(cfg, d):
+        if only is not None and k not in only:
+            continue
+        run_dir = data_root / "dataset" / event / "runs" / run_id
+        sc = seed_commit(k_eval, run_id, seed) if k_eval is not None else None
         wall = None
+        t_q = time.time_ns()
         for attempt in (0, 1):
+            t0 = time.time_ns()
             try:
-                res = guarded_run(run_job, st, sid, rs, limit_s=wall_limit_s(run_duration_s(rs, common["events_root"])), policy=policy, seed=int(seed),
-                                  run_id=f"{sid}-r{k}", run_dir=run_dir, physics=cfg.get("physics"), gz=cfg.get("gz") or None, **common)
+                guarded_run(run_job, st, sid, rs, limit_s=wall_limit_s(run_duration_s(rs, common["events_root"])), policy=policy, seed=int(seed),
+                            run_id=run_id, run_dir=run_dir, physics=cfg.get("physics"), gz=cfg.get("gz") or None,
+                            **({"seed_commit": sc} if sc else {}), **common)
                 break
             except WallLimitExceeded as e:                   # 超墙钟上限：终止（693），记为无效行，不重跑
                 wall = e
                 log(f"{sid}: run r{k} exceeded the wall limit {e.limit_s:g} s")
                 break
             except Exception:                               # 平台原因：重跑一次
-                log(f"{sid}: run r{k} attempt {attempt} failed\n{traceback.format_exc()[-1500:]}")
+                log(_scrub(f"{sid}: run r{k} attempt {attempt} failed\n{traceback.format_exc()[-1500:]}", seed))
                 if attempt == 1:
+                    clean_run_sockets(run_dir)
                     st.transition(sid, "FAILED", reason={"code": 320, "name": "INTERNAL", "detail": {"why": "platform", "run": k}})
-                    return sid
+                    return None
                 reruns += 1
+        clean_run_sockets(run_dir)
         if wall is not None:
-            rows.append({"entry_id": f"{team}/{sid}", "team": team, "display_name": sid, "baseline": False, "track": cfg["track_id"],
-                         "lane": cfg["lane"], "event_type": cfg.get("event_type", cfg["lane"]), "event": event, "seed": k, "submission_id": sid,
-                         "evaluation": {"components": dict.fromkeys(("ec", "eu", "ao", "ce")), "ranked": True, "ranked_valid": False,
-                                        "invalid_reasons": ["wall_limit"]}, "termination": wall.reason()})
+            rows[k] = _wall_row(cfg, d, k, wall.reason())
             continue
-        ev = json.loads((Path(res["run_dir"]) / "evaluation.json").read_text(encoding="utf-8"))
-        rows.append({"entry_id": f"{team}/{sid}", "team": team, "display_name": sid, "baseline": False, "track": cfg["track_id"],
-                     "lane": cfg["lane"], "event_type": cfg.get("event_type", cfg["lane"]), "event": event, "seed": k, "submission_id": sid,
-                     "evaluation": slim_evaluation(ev)})
+        _write_submission_manifest(run_dir, rs, policy, run_id=run_id, seed=seed, seed_commit=sc, worlds_root=common["worlds_root"],
+                                   events_root=common["events_root"], physics=cfg.get("physics"), gz=cfg.get("gz") or None,
+                                   experiment_id=experiment_id,
+                                   split=str(cfg.get("split") or "dev"), attempt=attempt + 1,
+                                   timing={"queued_unix_ns": t_q, "started_unix_ns": t0, "ended_unix_ns": time.time_ns()}, log=log)
+        ev = json.loads((run_dir / "evaluation.json").read_text(encoding="utf-8"))
+        rows[k] = _legacy_row(cfg, d, k, slim_evaluation(ev))
+    return rows, reruns
+
+
+def _score_legacy(st: SubmissionStore, d: dict, cfg: dict, bdir: Path, by_k: dict[int, dict], reruns: int, *, n_boot: int, log) -> None:
+    """SCORING（旧版配置）→ DONE，上榜时重算榜单并回填名次与层级；排名运行随后执行 `ranked_eval` 保留（开发榜除外）。"""
+    from awr.bench.eval.aggregate import lane_metrics
+
+    sid, team = d["submission_id"], d["_meta"]["team"]
+    rows = [by_k[k] for k in sorted(by_k)]
     st.transition(sid, "SCORING", expect="EVALUATING")
     append_rows(bdir, rows)
     met, _boots = lane_metrics(rows, key=(f"{team}/{sid}", bdir.name, cfg["lane"]), n_boot=n_boot)
@@ -661,7 +1007,11 @@ def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.
             doc["result"] = {"lanes": [lane]}
             st._put(doc)
     log(f"{sid}: DONE {json.dumps({m: v['value'] for m, v in met.items()})}")
-    return sid
+    if (cfg.get("track") or {}).get("dev") or not cfg["run_spec"].get("ranked"):
+        return
+    data_root = Path(st.root).parent
+    event = cfg["run_spec"]["event"]["id"]
+    _retain(data_root, st.get(sid), [(data_root / "dataset" / event / "runs" / f"{sid}-r{r['seed']}", event, r["seed"], 0) for r in rows], log=log)
 
 
 def main(argv: list[str] | None = None) -> int:

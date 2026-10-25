@@ -16,8 +16,28 @@
 Run 立即精简：只保留逐帧摘要 `frames.digest`（每帧 `(uav, sensor, seq, sha256, bytes)`，只含交付给 Agent 的通道）、精简真值
 `truth_min`（`truth/` 下的真值位姿 `fleet.npz`、`objects[]` 行 `l1.jsonl` 与 `l2.jsonl`、接触、运行种子，以及 report 证据帧的
 实例图 `truth/evidence/<uav>/<cam>/<seq>.gt`，清单为 `truth_min.json`）、动作与配置（`agents/`）、消息（`net/`）、report、
-`evaluation.json` 与 2 Hz 预览（`preview/`）。同一"提交 × 事件 × 种子"的重复运行，逐帧摘要与首次运行相同时去重：只登记
-`dup_of`，不再保存摘要、精简真值与预览。抽样 Run 到期后由 `retention_gc` 按同一规则精简。
+`evaluation.json`（含评测器升级前另存的 `evaluation.<版本>.json`）、墙钟超限记录 `termination.json` 与 2 Hz 预览（`preview/`）。
+同一"提交 × 事件 × 种子"的重复运行，逐帧摘要与首次运行相同时去重：只登记 `dup_of`，不再保存摘要与预览；精简真值仍保留
+（K17：评测器读取的运行真值逐 Run 保留，去重的 Run 同样可以复评，`board_v1_formal.py rescore` 逐行重评不依赖首次运行的真值；
+`truth_min` 每 Run 约 1–30 MB，相对 `raw.mcap` 可忽略）。抽样 Run 到期后由 `retention_gc` 按同一规则精简。精简保留的文件覆盖评测器读取的全部输入（`awr.bench.eval.truth.RUN_TRUTH_FILES` ⊆
+`TRUTH_MIN_FILES`，另有 `manifest.json`、`task.json`、`reports.jsonl`、`net/`、`agents/`），精简后复评 `evaluation.json` 逐字节一致。
+
+- 已移入隐藏区的 test 运行真值（`<root>/hidden/<event>/truth/runs/<run_id>/`，`board_v1_formal.py seal-truth`）按同一规则精简：
+  `TRUTH_MIN_FILES` 之外的文件（真值录制 `run_<id>.mcap` 等）删除，`truth_min.json` 只登记其文件名与字节数（`store = hidden`，
+  不读取内容、不写摘要）；无权限删除时记入 `errors`，不中断精简。
+- 逐帧摘要（`frames.digest`，`drone4d.bench.frames_digest.v1`）：`raw.mcap` 按文件顺序单遍读取（`FrameStore.scan_frames`，每个
+  chunk 只解压一次；原按通道逐页读取约为 5 倍读放大，B33 遗留 4）；LiDAR 行（`lidar-v2`）的 sha256 与 bytes 取去 run 规范形式
+  （`recorder.lidar.canonical_lidar_frame`：帧头 `frame_id` 的 `<run>/` 段去掉；Agent 收到的 LiDAR 帧本不含 run_id，run 段由录制端
+  存档时加入），使摘要符合"不含 run_id"的定义、同一帧流的重复运行摘要逐字节相同（此前 LiDAR 行含 run_id，去重不成立；B33 遗留 2）。
+  其余通道不变（交付字节）。
+- `finalize_ranked_eval` 可重入：已登记为 sampled 或 compacted 的 Run 沿用登记的摘要与抽样结论，不重读、不重抽；pinned 的 Run
+  不改类别、不精简；单个 Run 的摘要失败只记该 Run（`phase = error`），不影响其余。`dry_run` 只返回计划（逐 Run 的摘要、去重与
+  可释放字节），不写运行目录与数据根（显式给出的摘要缓存目录 `digest_dir` 除外，`cached_frames_digest`）。精简结束时清理运行目录中残留的 AF_UNIX 套接字（`clean_run_sockets`，如 `phys/sock/ctl.sock`，
+  其存在使 `shutil.copytree` 失败）。
+- 运行目录不在数据根标准布局（`dataset/<event>/runs/<id>`、`scratch/<id>`）下时（`mbl_e2e` 的 `<out>/runs/<key>`），首次登记即写入
+  `<root>/bench/retention_runs.txt`，`retention_gc` 与 `sync_references` 一并扫描，抽样录制到期后同样精简。
+- `finalize_board`：按榜单版本的评测行（`rows.jsonl` 中 `evaluation.ranked` 为真的行）定位运行目录并调用 `finalize_ranked_eval`
+  （提交行以 submission_id、基线行以 `<版本>:<entry_id>` 为"提交"键），供正式榜单流程的评分后步骤与历史产物回填使用。
 
 配额（M27-FR-060）：`/data/d3` 10 TB；占用 ≥ 80% 告警；≥ 95% 停止准入新 Run 与新派生作业（685，`blocked_by = storage`，
 新运行保持 QUEUED），运行中作业不中断；每租户软配额 2 TB，超出时该租户的新运行排队并告警（685 `tenant_soft_quota`）。
@@ -25,8 +45,8 @@ Run 立即精简：只保留逐帧摘要 `frames.digest`（每帧 `(uav, sensor,
 审计：删除前逐项写 `<data_root>/audit/retention-<UTC 日期>.jsonl`（路径、字节数、原因）；685 与 80% 告警同写。`--dry-run`
 只返回计划，不删除、不写审计。
 
-命令行：`python -m awr.bench.retention gc [--dry-run]`、`usage`、`pin <run_id> --ref R [--derived K]`、`unpin …`；数据根取
-`AWR_BENCH_DATA_ROOT`（缺省 /data/d3）。测试以 `RetentionPolicy(day_ns=60 * 10**9)`（1 天 = 1 min）缩短时钟。
+命令行：`python -m awr.bench.retention gc [--dry-run]`、`usage`、`pin <run_id> --ref R [--derived K]`、`unpin …`、
+`finalize --board V [--runs-root DIR …] [--entry E …] [--skip-run RUN_ID …] [--dry-run] [--digest-dir DIR [--jobs N]] [--out FILE]`；数据根取 `AWR_BENCH_DATA_ROOT`（缺省 /data/d3）。测试以 `RetentionPolicy(day_ns=60 * 10**9)`（1 天 = 1 min）缩短时钟。
 """
 
 from __future__ import annotations
@@ -41,6 +61,7 @@ import random
 import re
 import secrets
 import shutil
+import stat
 import sys
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -49,11 +70,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 __all__ = ["DERIVED_KINDS", "POLICY", "RETENTION_FILE", "Admission", "RankedRun", "RetentionPolicy", "StorageGate", "Usage",
-           "compact_ranked", "expired_reason", "finalize_ranked_eval", "frames_digest", "load_record", "main", "pin", "register_derived",
-           "register_run", "retention_gc", "run_bytes", "sync_references", "unpin"]
+           "cached_frames_digest", "clean_run_sockets", "compact_ranked", "expired_reason", "finalize_board", "finalize_ranked_eval", "frames_digest", "load_record",
+           "main", "pin", "register_derived", "register_run", "retention_gc", "run_bytes", "sync_references", "unpin"]
 
 SCHEMA = "drone4d.bench.retention.v1"
 DIGEST_SCHEMA = "drone4d.bench.frames_digest.v1"
+EXTERNAL_INDEX = "bench/retention_runs.txt"                 # 不在标准布局下的 ranked_eval 运行目录（每行一个绝对路径）
 RETENTION_FILE = "retention.json"
 DAY_NS = 86_400 * 10 ** 9
 TB = 10 ** 12
@@ -67,7 +89,8 @@ FAILED_STATES = ("FAILED", "CANCELLED")
 REF = re.compile(r"^(release|leaderboard|static):[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 
 KEEP_ON_EXPIRE = frozenset({"run_manifest.json", "manifest.json", "task.json", "evaluation.json", RETENTION_FILE})
-RANKED_KEEP_FILES = frozenset(KEEP_ON_EXPIRE | {"frames.digest", "truth_min.json", "reports.jsonl"})
+RANKED_KEEP_FILES = frozenset(KEEP_ON_EXPIRE | {"frames.digest", "truth_min.json", "reports.jsonl", "termination.json"})
+RANKED_KEEP_PATTERN = re.compile(r"^evaluation\.[0-9A-Za-z._-]+\.json$")    # 评测器升级前另存的评测（board_v1_formal.py rescore）
 RANKED_KEEP_DIRS = ("agents", "net", "preview")
 TRUTH_MIN_FILES = frozenset({"fleet.npz", "l1.jsonl", "l2.jsonl", "contacts.jsonl", "run_seed.json"})
 REASON_685 = "STORAGE_QUOTA_EXCEEDED"
@@ -214,9 +237,31 @@ def unpin(run_dir: Path, ref: str, *, derived: str | None = None) -> dict:
     return rec
 
 
+def _external_dirs(root: Path) -> list[Path]:
+    p = Path(root) / EXTERNAL_INDEX
+    try:
+        lines = p.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    return [Path(x) for x in dict.fromkeys(ln.strip() for ln in lines if ln.strip())]
+
+
+def _register_external(root: Path, dirs: Iterable[Path]) -> None:
+    """不在标准布局下的运行目录登记到 `EXTERNAL_INDEX`（已登记的不重复写；调用方持有 `_locked`）。"""
+    have = {str(d) for d in _external_dirs(root)}
+    new = [str(Path(d).resolve()) for d in dirs if _root_of(Path(d)) is None]
+    new = [x for x in dict.fromkeys(new) if x not in have]
+    if new:
+        p = Path(root) / EXTERNAL_INDEX
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("a", encoding="utf-8") as f:
+            f.write("".join(x + "\n" for x in new))
+
+
 def _run_dirs(root: Path) -> list[Path]:
     root = Path(root)
-    return sorted(d for d in [*root.glob("dataset/*/runs/*"), *root.glob("scratch/*")] if d.is_dir())
+    std = [*root.glob("dataset/*/runs/*"), *root.glob("scratch/*")]
+    return sorted(dict.fromkeys(d for d in [*std, *_external_dirs(root)] if d.is_dir()))
 
 
 def sync_references(root: Path, ref: str, targets: Iterable[tuple[str, str | None]]) -> dict:
@@ -430,23 +475,24 @@ class StorageGate:
 def frames_digest(run_dir: Path) -> bytes:
     """逐帧摘要 `frames.digest` 的字节：首行 `#drone4d.bench.frames_digest.v1`，其后每帧一行
     `uav\\tsensor\\tseq\\tsha256\\tbytes`，按 (uav, sensor, seq) 排序。帧取自 `raw.mcap` + `frames.idx` 中交付给 Agent 的通道
-    （sha256 与 bytes 为交付字节）；Env 运行另含 `agents/<uav>/obs.sha256` 的观测摘要（sensor = `obs`，bytes 记 `-`）。
-    不含 run_id，同一帧流的两个 Run 摘要逐字节相同。"""
+    （sha256 与 bytes 为交付字节；LiDAR 为去 run 规范形式，模块说明），`raw.mcap` 按文件顺序单遍读取；Env 运行另含
+    `agents/<uav>/obs.sha256` 的观测摘要（sensor = `obs`，bytes 记 `-`）。不含 run_id，同一帧流的两个 Run 摘要逐字节相同。"""
     run_dir = Path(run_dir)
     rows: list[tuple[str, str, int, str, str]] = []
     if (run_dir / "raw.mcap").exists() and (run_dir / "frames.idx").exists():
+        from awr.bench.recorder.lidar import LIDAR_CODEC, canonical_lidar_frame
         from awr.bench.recorder.read import FrameStore
 
         fs = FrameStore(run_dir)
         try:
-            for uav, sensor in fs.idx.channels():
-                if fs.channel_info(uav, sensor).get("agent_delivered", "true") == "false":
-                    continue
-                seq: int | None = 0
-                while seq is not None:
-                    page = fs.index_page(uav, sensor, seq)
-                    rows += [(uav, sensor, it["seq"], it["sha256"], str(it["bytes"])) for it in page["items"]]
-                    seq = page["next_seq"]
+            chans = [c for c in fs.idx.channels() if (fs.channel_info(*c) or {}).get("agent_delivered", "true") != "false"]
+            lidar = {c for c in chans if (fs.channel_info(*c) or {}).get("codec") == LIDAR_CODEC}
+            for uav, sensor, f in fs.scan_frames(chans):
+                if (uav, sensor) in lidar:
+                    b = canonical_lidar_frame(f.payload)
+                    rows.append((uav, sensor, f.seq, hashlib.sha256(b).hexdigest(), str(len(b))))
+                else:
+                    rows.append((uav, sensor, f.seq, f.sha256, str(len(f.payload))))
         finally:
             fs.close()
     for p in sorted((run_dir / "agents").glob("*/obs.sha256")):
@@ -456,6 +502,69 @@ def frames_digest(run_dir: Path) -> bytes:
                 rows.append((p.parent.name, "obs", int(k), h.strip(), "-"))
     rows.sort(key=lambda r: (r[0], r[1], r[2]))
     return ("#" + DIGEST_SCHEMA + "\n" + "".join(f"{u}\t{s}\t{q}\t{h}\t{n}\n" for u, s, q, h, n in rows)).encode()
+
+
+def _digest_stamp(run_dir: Path) -> dict:
+    """逐帧摘要的输入标识（`raw.mcap`、`frames.idx` 与各 `obs.sha256` 的字节数与修改时刻）：缓存命中的判据。"""
+    run_dir = Path(run_dir)
+    out = {}
+    for p in [run_dir / "raw.mcap", run_dir / "frames.idx", *sorted((run_dir / "agents").glob("*/obs.sha256"))]:
+        with contextlib.suppress(OSError):
+            st = p.stat()
+            out[str(p.relative_to(run_dir))] = [st.st_size, st.st_mtime_ns]
+    return {"schema": DIGEST_SCHEMA, "run_dir": str(run_dir.resolve()), "inputs": out}
+
+
+def cached_frames_digest(run_dir: Path, digest_dir: Path | None) -> bytes:
+    """`frames_digest`，以 `digest_dir/<运行目录名>-<路径摘要>.digest` 缓存（输入标识不变时直接读取）：回填的 dry-run 与执行、
+    中断后续做不重复读取 `raw.mcap`。`digest_dir` 为 None 时不缓存。"""
+    if digest_dir is None:
+        return frames_digest(run_dir)
+    run_dir = Path(run_dir)
+    tag = hashlib.sha256(str(run_dir.resolve()).encode()).hexdigest()[:12]
+    p = Path(digest_dir) / f"{run_dir.name}-{tag}.digest"
+    m = p.with_suffix(".stamp.json")
+    stamp = _digest_stamp(run_dir)
+    if p.is_file() and _read_json(m) == stamp:
+        return p.read_bytes()
+    body = frames_digest(run_dir)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_bytes(body)
+    os.replace(tmp, p)
+    _write_json(m, stamp)
+    return body
+
+
+def _digest_job(args: tuple[str, str]) -> tuple[str, str | None]:
+    """进程池单元：→ (运行目录, 错误或 None)。"""
+    try:
+        cached_frames_digest(Path(args[0]), Path(args[1]))
+        return args[0], None
+    except Exception as e:
+        return args[0], f"{type(e).__name__}: {e}"[:300]
+
+
+def clean_run_sockets(run_dir: Path) -> list[str]:
+    """删除运行目录中残留的 AF_UNIX 套接字（gz 控制套接字 `phys/sock/ctl.sock` 等）与随之变空的 `sock/` 目录；→ 删除的相对路径。
+    套接字在 Run 结束后不再被使用，残留时 `shutil.copytree` 报错（B33 遗留 5）。"""
+    run_dir = Path(run_dir)
+    out: list[str] = []
+    if not run_dir.is_dir():
+        return out
+    for dp, _ds, fs in os.walk(run_dir):
+        for f in fs:
+            q = Path(dp) / f
+            with contextlib.suppress(OSError):
+                if stat.S_ISSOCK(q.lstat().st_mode):
+                    q.unlink()
+                    out.append(str(q.relative_to(run_dir)))
+    for rel in sorted({str(Path(x).parent) for x in out}, key=len, reverse=True):
+        d = run_dir / rel
+        if d.name == "sock":
+            with contextlib.suppress(OSError):
+                d.rmdir()
+    return sorted(out)
 
 
 def _evidence_list(x) -> list[dict]:
@@ -484,14 +593,39 @@ def _evidence_frames(run_dir: Path) -> set[tuple[str, int]]:
     return out
 
 
+def _hidden_run_truth(run_dir: Path, root: Path | None) -> Path | None:
+    """已移入隐藏区的运行真值目录 `<root>/hidden/<event>/truth/runs/<run_id>/`（不存在或无权访问时为 None）。"""
+    ev = _event_of(run_dir)
+    if root is None or ev is None:
+        return None
+    p = Path(root) / "hidden" / ev / "truth" / "runs" / Path(run_dir).name
+    try:
+        return p if p.is_dir() else None
+    except OSError:
+        return None
+
+
+def _hidden_files(hdir: Path | None) -> list[Path]:
+    if hdir is None:
+        return []
+    try:
+        return sorted(q for q in hdir.iterdir() if q.is_file() or q.is_symlink())
+    except OSError:
+        return []
+
+
 def _truth_min(run_dir: Path, root: Path | None) -> dict:
-    """写出证据帧实例图并返回 `truth_min.json` 内容（不删除任何文件）。"""
+    """写出证据帧实例图并返回 `truth_min.json` 内容（不删除任何文件）。隐藏区的运行真值只登记文件名与字节数。"""
     files = []
     tdir = run_dir / "truth"
     for name in sorted(TRUTH_MIN_FILES):
         p = tdir / name
         if p.exists():
             files.append({"path": f"truth/{name}", "bytes": p.stat().st_size, "sha256": hashlib.sha256(p.read_bytes()).hexdigest()})
+    for q in _hidden_files(_hidden_run_truth(run_dir, root)):
+        if q.name in TRUTH_MIN_FILES:
+            with contextlib.suppress(OSError):
+                files.append({"path": f"truth/{q.name}", "bytes": q.stat().st_size, "store": "hidden"})
     evid = []
     ext = [p for p in _external_truth(run_dir, root) if p.suffix == ".mcap"]
     frames = _evidence_frames(run_dir)
@@ -521,10 +655,12 @@ def _truth_min(run_dir: Path, root: Path | None) -> dict:
 def _ranked_keep(rel: Path, *, dup: bool) -> bool:
     parts = rel.parts
     if len(parts) == 1:
-        return parts[0] in RANKED_KEEP_FILES and not (dup and parts[0] in ("frames.digest", "truth_min.json"))
+        if dup and parts[0] == "frames.digest":
+            return False
+        return parts[0] in RANKED_KEEP_FILES or bool(RANKED_KEEP_PATTERN.match(parts[0]))
     if parts[0] in RANKED_KEEP_DIRS:
         return not (dup and parts[0] == "preview")
-    if parts[0] == "truth" and not dup:
+    if parts[0] == "truth":
         return (len(parts) == 2 and parts[1] in TRUTH_MIN_FILES) or parts[1] == "evidence"
     return False
 
@@ -538,7 +674,8 @@ class _Plan:
     errors: list[dict] = field(default_factory=list)
     gone: dict[Path, int] = field(default_factory=dict)              # dry-run 中已计划删除的路径（与实际清理的计划逐项一致）
 
-    def delete(self, p: Path, reason: str, run_id: str | None, **extra) -> int:
+    def delete(self, p: Path, reason: str, run_id: str | None, *, tolerant: bool = False, **extra) -> int:
+        """删除一项并审计；`tolerant` 时删除失败（隐藏区无权限等）记入 `errors` 而不抛出。"""
         if not p.exists() and not p.is_symlink():
             return 0
         if any(q == p or q in p.parents for q in self.gone):
@@ -547,13 +684,19 @@ class _Plan:
         if self.dry_run:
             self.gone = {q: b for q, b in self.gone.items() if p not in q.parents} | {p: n + sum(b for q, b in self.gone.items() if p in q.parents)}
         item = {"path": str(p), "bytes": n, "reason": reason, "run_id": run_id, **extra}
-        self.deleted.append(item)
         if not self.dry_run:
+            try:
+                if p.is_dir() and not p.is_symlink():
+                    shutil.rmtree(p)
+                else:
+                    p.unlink()
+            except OSError as e:
+                if not tolerant:
+                    raise
+                self.errors.append({"path": str(p), "run_id": run_id, "error": f"{type(e).__name__}: {e.strerror or e}"})
+                return 0
             _audit(self.root, self.now, action="delete", **item)
-            if p.is_dir() and not p.is_symlink():
-                shutil.rmtree(p)
-            else:
-                p.unlink()
+        self.deleted.append(item)
         return n
 
 
@@ -561,8 +704,11 @@ def _prune_ranked(run_dir: Path, plan: _Plan, *, dup: bool, reason: str) -> None
     root = plan.root
     for p in _external_truth(run_dir, root):
         plan.delete(p, reason, run_dir.name)
+    for q in _hidden_files(_hidden_run_truth(run_dir, root)):         # 隐藏区运行真值：同一保留规则
+        if q.name not in TRUTH_MIN_FILES:
+            plan.delete(q, reason, run_dir.name, tolerant=True, store="hidden")
     for p in sorted(run_dir.rglob("*"), key=lambda q: len(q.parts)):
-        if not p.exists():
+        if not p.exists() and not p.is_symlink():
             continue
         rel = p.relative_to(run_dir)
         if p.is_dir() and not p.is_symlink():
@@ -576,24 +722,25 @@ def _prune_ranked(run_dir: Path, plan: _Plan, *, dup: bool, reason: str) -> None
 def compact_ranked(run_dir: Path, *, root: Path | None = None, dup_of: tuple[str, str] | None = None, now: int | None = None,
                    dry_run: bool = False, reason: str = "ranked_eval_compact", digest: bytes | None = None, _plan: _Plan | None = None) -> dict:
     """把一个已评分的 `ranked_eval` Run 精简为逐帧摘要 + 精简真值 + Agent 输出 + 评测（FR-171）；`dup_of = (首次 run_id,
-    摘要 sha256)` 时按重复运行去重；`digest` 为已算好的 `frames_digest` 字节（省去重读 `raw.mcap`）。pinned 的 Run 不精简。→ `{compacted, deleted[], frames_digest_sha256, bytes_after}`。"""
+    摘要 sha256)` 时按重复运行去重（不存摘要与预览）；`digest` 为已算好的 `frames_digest` 字节（省去重读 `raw.mcap`）。pinned 的 Run 不精简。
+    → `{compacted, deleted[], errors[], frames_digest_sha256, bytes_after}`。"""
     run_dir = Path(run_dir)
     root = Path(root) if root is not None else (_root_of(run_dir) or run_dir.parent)
     now = now or _now()
     rec = load_record(run_dir)
     if _pinned(rec):
-        return {"compacted": False, "why": "pinned", "deleted": []}
+        return {"compacted": False, "why": "pinned", "deleted": [], "errors": []}
     plan = _plan or _Plan(dry_run, root, now)
-    n0 = len(plan.deleted)
+    n0, e0 = len(plan.deleted), len(plan.errors)
     if dup_of is None:
         body = digest if digest is not None else frames_digest(run_dir)
         sha = hashlib.sha256(body).hexdigest()
-        tm = _truth_min(run_dir, root) if not dry_run else None
         if not dry_run:
             (run_dir / "frames.digest").write_bytes(body)
-            _write_json(run_dir / "truth_min.json", tm)
     else:
         sha = dup_of[1]
+    if not dry_run:
+        _write_json(run_dir / "truth_min.json", _truth_min(run_dir, root))
     _prune_ranked(run_dir, plan, dup=dup_of is not None, reason=reason)
     if not dry_run:
         rr = rec.setdefault("ranked_eval", {})
@@ -602,7 +749,13 @@ def compact_ranked(run_dir: Path, *, root: Path | None = None, dup_of: tuple[str
             rr["dup_of"] = dup_of[0]
         rec["retention"] = "ranked_eval"
         _save(run_dir, rec)
-    return {"compacted": True, "deleted": plan.deleted[n0:], "frames_digest_sha256": sha, "bytes_after": None if dry_run else run_bytes(run_dir, root)["total"]}
+    return {"compacted": True, "deleted": plan.deleted[n0:], "errors": plan.errors[e0:], "frames_digest_sha256": sha,
+            "bytes_after": None if dry_run else _run_total(run_dir, root)}
+
+
+def _run_total(run_dir: Path, root: Path | None) -> int:
+    """保留处理口径的 Run 字节：`run_bytes` 合计加隐藏区运行真值（seal-truth 布局，精简会删除其中非最小集文件）。"""
+    return run_bytes(run_dir, root)["total"] + sum(_size(p) for p in _hidden_files(_hidden_run_truth(run_dir, root)))
 
 
 @dataclass(frozen=True)
@@ -614,31 +767,81 @@ class RankedRun:
     rep: int
 
 
+def _choose_samples(groups: Mapping[tuple[str, str], list[RankedRun]], recs: Mapping[Path, dict], rng: random.Random) -> set[Path]:
+    """每个"提交 × 事件"抽 1 个保留完整录制的 Run：已登记为抽样的沿用；组内已有 Run 精简过而无抽样记录时（重入）不再补抽。"""
+    out: set[Path] = set()
+    for g in groups.values():
+        g = sorted(g, key=lambda r: (r.seed_index, r.rep, str(r.run_dir)))
+        rr = [(r, (recs[Path(r.run_dir)].get("ranked_eval") or {})) for r in g]
+        prev = [r for r, x in rr if x.get("phase") == "sampled" or x.get("sample")]
+        if prev:
+            out.add(Path(prev[0].run_dir))
+            continue
+        if any(x.get("phase") == "compacted" for _r, x in rr):
+            continue
+        cand = [r for r in g if not _pinned(recs[Path(r.run_dir)])]
+        if cand:
+            out.add(Path(cand[rng.randrange(len(cand))].run_dir))
+    return out
+
+
 def finalize_ranked_eval(runs: Sequence[RankedRun], *, root: Path, policy: RetentionPolicy = POLICY, now: int | None = None,
-                         rng: random.Random | None = None, tenant: str | None = None) -> dict:
+                         rng: random.Random | None = None, tenant: str | None = None, dry_run: bool = False,
+                         log: Callable[[str], None] | None = None, digest_dir: Path | None = None) -> dict:
     """提交评分完成后调用：按"提交 × test 事件"抽 1 个 Run 保留完整录制 `sample_days` 天（缺省以 CSPRNG 抽取），其余立即精简；
-    同一"提交 × 事件 × 种子"的重复运行与首次运行（rep 最小者）逐帧摘要相同时去重。→ 每 Run 的处理结果。"""
+    同一"提交 × 事件 × 种子"的重复运行与首次运行（rep 最小者）逐帧摘要相同时去重（重入、pinned、失败与 `dry_run` 见模块说明）。
+    `digest_dir` 给出时逐帧摘要经 `cached_frames_digest` 缓存。→ 每 Run（运行目录名）的处理结果
+    `{phase, frames_digest_sha256, dup_of, bytes_before, bytes_after | bytes_freed, …}`。"""
     now = now or _now()
     rng = rng or secrets.SystemRandom()
     root = Path(root)
-    by_ev: dict[tuple[str, str], list[RankedRun]] = {}
-    for r in runs:
-        by_ev.setdefault((r.submission_id, r.event_id), []).append(r)
-    sampled = {sorted(g, key=lambda r: (r.seed_index, r.rep))[rng.randrange(len(g))].run_dir for g in by_ev.values()}
-    first: dict[tuple[str, str, int], tuple[str, str]] = {}
+    log = log or (lambda _m: None)
     out: dict[str, dict] = {}
+    present = []
+    for r in runs:
+        if Path(r.run_dir).is_dir():
+            present.append(r)
+        else:
+            out[Path(r.run_dir).name] = {"phase": "missing"}
     with _locked(root):
-        for r in sorted(runs, key=lambda r: (r.submission_id, r.event_id, r.seed_index, r.rep)):
+        recs = {Path(r.run_dir): load_record(Path(r.run_dir)) for r in present}
+        by_ev: dict[tuple[str, str], list[RankedRun]] = {}
+        for r in present:
+            by_ev.setdefault((r.submission_id, r.event_id), []).append(r)
+        sampled = _choose_samples(by_ev, recs, rng)
+        first: dict[tuple[str, str, int], tuple[str, str]] = {}
+        if not dry_run:
+            _register_external(root, [Path(r.run_dir) for r in present])
+        for r in sorted(present, key=lambda r: (r.submission_id, r.event_id, r.seed_index, r.rep, str(r.run_dir))):
             d = Path(r.run_dir)
-            body = frames_digest(d)
-            sha = hashlib.sha256(body).hexdigest()
+            rec = recs[d]
             key = (r.submission_id, r.event_id, r.seed_index)
+            prev = rec.get("ranked_eval") or {}
+            if _pinned(rec):                                  # pinned：不改类别、不精简（发布包或榜单引用）
+                out[d.name] = {"phase": "pinned", "pinned_by": rec.get("pinned_by", [])}
+                continue
+            if prev.get("phase") in ("sampled", "compacted") and prev.get("frames_digest_sha256"):
+                sha = prev["frames_digest_sha256"]              # 重入：沿用登记的摘要与结论
+                if prev.get("dup_of") is None:
+                    first.setdefault(key, (d.name, sha))
+                out[d.name] = {"phase": prev["phase"], "frames_digest_sha256": sha, "dup_of": prev.get("dup_of") or prev.get("dup_candidate"),
+                               "reused": True}
+                if not dry_run:
+                    clean_run_sockets(d)
+                continue
+            b0 = _run_total(d, root)
+            try:
+                body = cached_frames_digest(d, digest_dir)
+            except Exception as e:                            # 单个 Run 的录制损坏或不可读：只记该 Run
+                out[d.name] = {"phase": "error", "error": f"{type(e).__name__}: {e}"[:300], "bytes_before": b0}
+                log(f"{d.name}: frames_digest failed: {type(e).__name__}: {e}")
+                continue
+            sha = hashlib.sha256(body).hexdigest()
             dup = first.get(key)
             if dup is None:
                 first[key] = (d.name, sha)
             elif dup[1] != sha:
                 dup = None                                        # 摘要不同：独立保存（平台复现审计据此告警）
-            rec = load_record(d)
             rec.update(retention="ranked_eval", state=rec.get("state") or "COMPLETED", t0_unix_ns=rec.get("t0_unix_ns") or now)
             if tenant is not None:
                 rec["tenant"] = tenant
@@ -646,14 +849,89 @@ def finalize_ranked_eval(runs: Sequence[RankedRun], *, root: Path, policy: Reten
                                   "frames_digest_sha256": sha, **({"dup_candidate": dup[0]} if dup else {})}
             if d in sampled:
                 rec["ranked_eval"].update(phase="sampled", sample=True, sample_until_unix_ns=now + policy.sample_days * policy.day_ns)
-                _save(d, rec)
-                out[d.name] = {"phase": "sampled", "frames_digest_sha256": sha, "dup_of": dup[0] if dup else None}
+                if not dry_run:
+                    _save(d, rec)
+                    clean_run_sockets(d)
+                out[d.name] = {"phase": "sampled", "frames_digest_sha256": sha, "dup_of": dup[0] if dup else None, "bytes_before": b0,
+                               "bytes_after": b0}
                 continue
-            _save(d, rec)
-            res = compact_ranked(d, root=root, dup_of=dup, now=now, digest=body)
-            out[d.name] = {"phase": "compacted" if res["compacted"] else res.get("why"), "frames_digest_sha256": sha,
-                           "dup_of": dup[0] if dup else None, "bytes_after": res.get("bytes_after")}
+            if not dry_run:
+                _save(d, rec)
+            res = compact_ranked(d, root=root, dup_of=dup, now=now, digest=body, dry_run=dry_run)
+            freed = sum(x["bytes"] for x in res["deleted"])
+            out[d.name] = {"phase": ("planned" if dry_run else "compacted") if res["compacted"] else res.get("why"), "frames_digest_sha256": sha,
+                           "dup_of": dup[0] if dup else None, "bytes_before": b0, "bytes_freed": freed,
+                           "bytes_after": res.get("bytes_after") if not dry_run else b0 - freed, "errors": res.get("errors", [])}
+            log(f"{d.name}: {out[d.name]['phase']} digest {sha[:12]}{' dup of ' + dup[0] if dup else ''} freed {freed / 1e6:.1f} MB")
     return out
+
+
+def _board_run_dir(root: Path, cfg: dict, row: dict, runs_roots: Sequence[Path]) -> Path | None:
+    """评测行 → 运行目录：`row.run_dir`、数据根 `dataset/<event>/runs/<run_id>`、`runs_roots/<run_id>`，以及 mbl_e2e 原型榜的
+    `<mbl_round.out>/runs/<key>`（key 为去掉轮次前缀的 run_id）。"""
+    rid = str(row.get("run_id") or "")
+    if not rid and row.get("submission_id"):                 # 旧版榜单配置的提交行不带 run_id：`<submission_id>-r<k>`
+        rid = f"{row['submission_id']}-r{int(row.get('seed', 0))}"
+    if not rid:
+        return None
+    rnd = (cfg.get("mbl_round") or {}).get("round")
+    names = [rid] + ([rid[len(rnd) + 1:]] if rnd and rid.startswith(f"{rnd}-") else [])
+    cands = [Path(row["run_dir"])] if row.get("run_dir") else []
+    cands.append(Path(root) / "dataset" / str(row.get("event")) / "runs" / rid)
+    mo = (cfg.get("mbl_round") or {}).get("out")
+    roots = [*map(Path, runs_roots), *([Path(mo) / "runs"] if mo else [])]
+    cands += [r / n for r in roots for n in names]
+    return next((c for c in cands if c.is_dir()), None)
+
+
+def finalize_board(root: Path, board_dir: Path, *, runs_roots: Sequence[Path] = (), dry_run: bool = False, now: int | None = None,
+                   rng: random.Random | None = None, policy: RetentionPolicy = POLICY, entries: set[str] | None = None,
+                   log: Callable[[str], None] | None = None, digest_dir: Path | None = None, jobs: int = 1,
+                   exclude: set[str] | None = None) -> dict:
+    """榜单版本的 `ranked_eval` 保留（模块说明）：`rows.jsonl` 中 `evaluation.ranked` 为真的评测行逐行定位运行目录并按条目分组调用
+    `finalize_ranked_eval`；`entries` 给出时只处理所列 entry_id；`exclude` 所列 run_id 本次不处理（登记为 `excluded`，例如待平台
+    原因重跑的运行，其完整录制留作判定证据）。`digest_dir` 给出时逐帧摘要缓存于此，`jobs > 1` 时先以进程池
+    并行算出尚未登记的 Run 的摘要（回填用）。→ `{board_version, runs{名: 结果}, unresolved[], totals}`。"""
+    from awr.bench.boardstore import load_config, load_rows
+
+    root, board_dir = Path(root), Path(board_dir)
+    cfg = load_config(board_dir)
+    ver = str(cfg.get("board_version") or board_dir.name)
+    by_tenant: dict[str | None, list[RankedRun]] = {}
+    unresolved, excluded = [], []
+    for row in load_rows(board_dir):
+        ev = row.get("evaluation") or {}
+        if not ev.get("ranked") or (entries is not None and row.get("entry_id") not in entries):
+            continue
+        if exclude and row.get("run_id") in exclude:
+            excluded.append(str(row["run_id"]))
+            continue
+        d = _board_run_dir(root, cfg, row, runs_roots)
+        if d is None:
+            unresolved.append(row.get("run_id"))
+            continue
+        # 基线条目在不同分轨下同名（B21：`baseline/track_share` 同时在 std3-l1 与 std3-l2），分组须带分轨，否则跨分轨比对重复与抽样
+        sub = row.get("submission_id") or (f"{ver}:{row['track']}:{row['entry_id']}" if row.get("track") else f"{ver}:{row['entry_id']}")
+        by_tenant.setdefault(row.get("team"), []).append(RankedRun(d, str(sub), str(row["event"]), int(row.get("seed", 0)), int(row.get("rep", 0))))
+    if digest_dir is not None and jobs > 1:
+        from concurrent.futures import ProcessPoolExecutor
+
+        todo = [str(r.run_dir) for rs in by_tenant.values() for r in rs
+                if not _pinned(load_record(r.run_dir)) and (load_record(r.run_dir).get("ranked_eval") or {}).get("phase") not in ("sampled", "compacted")]
+        with ProcessPoolExecutor(max_workers=jobs) as ex:
+            for d, err in ex.map(_digest_job, [(x, str(digest_dir)) for x in todo]):
+                if err is not None and log is not None:
+                    log(f"{Path(d).name}: frames_digest failed: {err}")
+    runs: dict[str, dict] = {rid: {"phase": "excluded"} for rid in excluded}
+    for team, rs in sorted(by_tenant.items(), key=lambda x: str(x[0])):
+        runs.update(finalize_ranked_eval(rs, root=root, policy=policy, now=now, rng=rng, tenant=team, dry_run=dry_run, log=log,
+                                         digest_dir=digest_dir))
+    ph = [x.get("phase") for x in runs.values()]
+    totals = {"runs": len(runs), **{p: ph.count(p) for p in sorted(set(ph), key=str)},
+              "dup": sum(1 for x in runs.values() if x.get("dup_of")), "bytes_before": sum(x.get("bytes_before", 0) for x in runs.values()),
+              "bytes_freed": sum(x.get("bytes_freed", 0) for x in runs.values()),
+              "errors": sum(len(x.get("errors") or []) + (x.get("phase") == "error") for x in runs.values())}
+    return {"board_version": ver, "dry_run": dry_run, "runs": runs, "unresolved": unresolved, "totals": totals}
 
 
 # ------------------------------------------------------------------ 697
@@ -794,8 +1072,27 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("run_id")
         p.add_argument("--ref", required=True)
         p.add_argument("--derived", choices=DERIVED_KINDS)
+    f = sub.add_parser("finalize", help="ranked_eval retention for the ranked rows of a board version (sample, compact, dedupe)")
+    f.add_argument("--board", required=True, help="board version under <data_root>/boards/")
+    f.add_argument("--runs-root", type=Path, action="append", default=[], help="extra directory holding run dirs (repeatable)")
+    f.add_argument("--entry", action="append", default=None, help="only these entry_id values (repeatable)")
+    f.add_argument("--skip-run", action="append", default=None, help="leave this run_id untouched (repeatable)")
+    f.add_argument("--dry-run", action="store_true")
+    f.add_argument("--digest-dir", type=Path, default=None, help="cache frames digests here (reused by a later run)")
+    f.add_argument("--jobs", type=int, default=1, help="parallel digest workers (needs --digest-dir)")
+    f.add_argument("--out", type=Path, default=None, help="write the full result JSON here")
     a = ap.parse_args(argv)
     root = a.data_root or BenchSettings.from_env().data_root
+    if a.cmd == "finalize":
+        res = finalize_board(root, Path(root) / "boards" / a.board, runs_roots=a.runs_root, dry_run=a.dry_run,
+                             entries=set(a.entry) if a.entry else None, log=lambda m: print(m, flush=True), digest_dir=a.digest_dir,
+                             jobs=a.jobs, exclude=set(a.skip_run) if a.skip_run else None)
+        if a.out is not None:
+            a.out.parent.mkdir(parents=True, exist_ok=True)
+            a.out.write_text(json.dumps(res, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+        print(json.dumps({"board_version": res["board_version"], "dry_run": res["dry_run"], "unresolved": res["unresolved"][:20],
+                          "totals": res["totals"]}, ensure_ascii=False, indent=1))
+        return 1 if res["unresolved"] or res["totals"]["errors"] else 0
     if a.cmd == "gc":
         res = retention_gc(root, dry_run=a.dry_run)
         print(json.dumps({"dry_run": res["dry_run"], "n_deleted": len(res["deleted"]), "bytes": res["bytes"], "errors": res["errors"],
