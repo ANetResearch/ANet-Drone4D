@@ -3,6 +3,9 @@
 // Owner: M06.
 //   1. test switches: a production build (no VITE_AWR_TEST_SWITCHES) must not contain the identifiers of the test switches
 //      nor a `tier` query parsing branch: TEST_SWITCHES is a compile-time constant and every switch is read behind it.
+//      Exception: the LiDAR comparison route `/lab/runs/:rid/lidar` has its own documented `tier ∈ {S, B}` parameter
+//      (AWR-14 §21.2.3, parseCompareSearch in ui/lab/lidar-compare/compare.ts reads `rep` and then `tier`); a hit whose
+//      preceding text is that `rep` read is not a test switch (TIER_ROUTE_CONTEXT).
 //   2. REL-04 in the bundle (AWR-04 §15.9.5 item 2): when this machine has the deployment admin secret (the internal
 //      identity passphrase: --secret-file, else AWR_ADMIN_SECRET_FILE, else ~/.config/awr/admin.secret, the rule and the
 //      reader of tools/lint/check-release.mjs), its first line must not appear verbatim in any text file of the build;
@@ -28,6 +31,8 @@ const ROOT = resolve(HERE, '../../../../..')
 
 /** identifiers that must not survive in a production bundle (M06-AC-010) */
 export const FORBIDDEN = ['allowFallback', 'finishForBench', 'perfInject', 'fixedB', 'pcInject', 'selftestNoFix', 'get(`tier`)', 'get("tier")', "get('tier')"]
+/** text right before a `tier` read of the LiDAR comparison route: `<x>=Number(<q>.get(`rep`)),<y>=<q>.` (minified) */
+export const TIER_ROUTE_CONTEXT = /\.get\([`'"]rep[`'"]\)\)(?:\s*[,;]\s*|\s+)(?:(?:const|let|var)\s+)?[\w$]+\s*=\s*[\w$]+\.$/
 /** markers of a test build (test hooks of M06 and M05) */
 export const TEST_MARKERS = ['__vp', '__pc']
 /** the identity endpoint (stores/identity.ts IDENTITY_PATH, R79 and R80) */
@@ -43,7 +48,8 @@ export function scanText(text) {
   for (const id of FORBIDDEN) {
     let i = text.indexOf(id)
     while (i >= 0 && hits.length < 50) {
-      hits.push([id, text.slice(Math.max(0, i - 60), i + id.length + 40).replace(/\s+/g, ' ')])
+      if (!(id.includes('tier') && TIER_ROUTE_CONTEXT.test(text.slice(Math.max(0, i - 60), i))))
+        hits.push([id, text.slice(Math.max(0, i - 60), i + id.length + 40).replace(/\s+/g, ' ')])
       i = text.indexOf(id, i + id.length)
     }
   }

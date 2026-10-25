@@ -25,6 +25,11 @@ describe('production bundle scan (M06-AC-010)', () => {
   it('finds forbidden identifiers and tier parsing', () => {
     expect(scanText('let a=q.get(`tier`);b.allowFallback=1').map((h: [string, string]) => h[0]).sort()).toEqual(['allowFallback', 'get(`tier`)'])
     expect(scanText('this.tier=e;let t=e.tier===`S`')).toEqual([])
+    // the LiDAR comparison route parameter (AWR-14 §21.2.3) is not a test switch; the device tier switch still is
+    expect(scanText('let r=Number(e.get(`rep`)),i=e.get(`tier`),a=Number(e.get(`size`))')).toEqual([])
+    expect(scanText('const rep = Number(s.get(\'rep\'))\n  const tier = s.get(\'tier\')')).toEqual([])
+    expect(scanText('let r=Number(e.get(`rep`));if(x)i=e.get(`tier`)').map((h: [string, string]) => h[0])).toEqual(['get(`tier`)'])
+    expect(scanText('function z(q){let t=q.get(`tier`);return t}').map((h: [string, string]) => h[0])).toEqual(['get(`tier`)'])
     // M05 switches (?fixedB, ?pcInject) and the M06 injection are test-build only too (M06-to-M05 item 2; FX-WEB1)
     expect(scanText('p.fixedB=1;p.pcInject=.1;f.perfInject=`busyMs:5`').map((h: [string, string]) => h[0]).sort()).toEqual(['fixedB', 'pcInject', 'perfInject'])
   })
