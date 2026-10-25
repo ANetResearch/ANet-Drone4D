@@ -239,7 +239,7 @@ def merge_slices(draft: dict, manifests: list[dict]) -> None:
 
 
 def _fill(entry: dict, key: str, sums: dict[str, tuple[int, str]], where: str, *, bytes_key: str = "bytes",
-          sha_key: str = "sha256") -> None:
+          sha_key: str = "sha256", ext_key: str = "external") -> None:
     path = entry.get(key)
     if path is None:
         return
@@ -253,7 +253,7 @@ def _fill(entry: dict, key: str, sums: dict[str, tuple[int, str]], where: str, *
             raise LabError(f"{where}.{key}：目录 {path} 为空或不存在")
         if bytes_key == "bytes" and key == "pointcloud":
             entry["bytes"] = sum(sub)
-    elif entry.get("external"):
+    elif entry.get(ext_key):
         if bytes_key not in entry or sha_key not in entry:
             raise LabError(f"{where}.{key}：经分发渠道提供的制品须在草稿中给出 {bytes_key} 与 {sha_key}")
     else:
@@ -287,7 +287,7 @@ def build_index(vdir: Path, draft: dict, *, version: str | None = None, lab_buil
                 _fill(s, "rrd", sums, f"{wr}.slices[{k}]")
                 any_slice = True
             if r.get("basemap"):
-                _fill(r, "basemap", sums, wr, bytes_key="basemap_bytes", sha_key="basemap_sha256")
+                _fill(r, "basemap", sums, wr, bytes_key="basemap_bytes", sha_key="basemap_sha256", ext_key="basemap_external")
             for k in ("metrics", "tracks_obs"):
                 if r.get(k) and r[k] not in sums:
                     raise LabError(f"{wr}.{k}：版本目录中没有 {r[k]}")
@@ -313,6 +313,8 @@ def build_index(vdir: Path, draft: dict, *, version: str | None = None, lab_buil
         if not BUILD_RE.match(lab_build):
             raise LabError(f"构建名 {lab_build!r} 不合法")
         doc["lab_build"] = lab_build
+    if draft.get("viewer_wasm"):
+        doc["viewer_wasm"] = dict(draft["viewer_wasm"])         # ADR-221：Rerun Viewer Wasm 的 ModelScope 副本
     write_json_atomic(vdir / INDEX_IN_VERSION, doc)
     return doc
 
@@ -355,8 +357,8 @@ def _index_problems(doc: Any, vdir: Path, sums: dict[str, str], max_file: int) -
                 if not isinstance(external, dict) or external.get("channel") != "modelscope" or \
                         not EXTERNAL_URL_RE.match(str(external.get("url", ""))):
                     probs.append(f"{where}：external 须为 ModelScope 链接（ADR-201）")
-                elif not isinstance(bytes_, int) or bytes_ <= max_file:
-                    probs.append(f"{where}：≤ 64 MB 的制品应放在版本目录中，而不是只经分发渠道")
+                elif not isinstance(bytes_, int) or not isinstance(sha, str):
+                    probs.append(f"{where}：只经分发渠道提供的制品须在索引中给出 bytes 与 sha256")
                 return
             probs.append(f"{where}：版本目录中没有 {path}")
             return
@@ -392,12 +394,17 @@ def _index_problems(doc: Any, vdir: Path, sums: dict[str, str], max_file: int) -
                 ref(v.get("path"), f"{wr}.videos[{k}]", bytes_=v.get("bytes"), sha=v.get("sha256"), external=v.get("external"))
             for k, s in enumerate(r.get("slices") or []):
                 ref(s.get("rrd"), f"{wr}.slices[{k}]", bytes_=s.get("bytes"), sha=s.get("sha256"), external=s.get("external"))
-            ref(r.get("basemap"), f"{wr}.basemap", bytes_=r.get("basemap_bytes"), sha=r.get("basemap_sha256"), required=False)
+            ref(r.get("basemap"), f"{wr}.basemap", bytes_=r.get("basemap_bytes"), sha=r.get("basemap_sha256"),
+                external=r.get("basemap_external"), required=False)
             ref(r.get("tracks_obs"), f"{wr}.tracks_obs", required=False)
             ref(r.get("lidar_compare"), f"{wr}.lidar_compare", required=False)
             if r.get("metrics"):
                 ref(r.get("metrics"), f"{wr}.metrics", required=False)
                 warns.append(f"{wr}.metrics：公开静态目录含指标文件；样例页不得显示主得分与分量数值（AWR-05 §7.9）")
+    vw = doc.get("viewer_wasm")
+    if vw is not None and (not isinstance(vw, dict) or vw.get("channel") != "modelscope" or not EXTERNAL_URL_RE.match(str(vw.get("url", "")))
+                           or not isinstance(vw.get("bytes"), int) or not isinstance(vw.get("sha256"), str)):
+        probs.append("viewer_wasm 须为 ModelScope 链接并给出 bytes 与 sha256（ADR-221）")
     return probs, warns
 
 

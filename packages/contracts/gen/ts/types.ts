@@ -776,6 +776,16 @@ export type Inputlog = InputlogHeader | InputlogEntry
  */
 export type WorldCommonRunId = string
 /**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "LabStaticIndexV1Bytes".
+ */
+export type LabStaticIndexV1Bytes = number
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "LabStaticIndexV1Sha256".
+ */
+export type LabStaticIndexV1Sha256 = string
+/**
  * Path relative to the version directory: no scheme, no leading slash, no backslash, no . or .. segment, no empty segment (a trailing slash marks a directory)
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -784,19 +794,9 @@ export type WorldCommonRunId = string
 export type LabStaticIndexV1Relpath = string
 /**
  * This interface was referenced by `AwrContracts`'s JSON-Schema
- * via the `definition` "LabStaticIndexV1Bytes".
- */
-export type LabStaticIndexV1Bytes = number
-/**
- * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "LabStaticIndexV1EventId".
  */
 export type LabStaticIndexV1EventId = string
-/**
- * This interface was referenced by `AwrContracts`'s JSON-Schema
- * via the `definition` "LabStaticIndexV1Sha256".
- */
-export type LabStaticIndexV1Sha256 = string
 /**
  * Path relative to the version directory: no scheme, no leading slash, no backslash, no . or .. segment, no empty segment (a trailing slash marks a directory)
  */
@@ -6947,7 +6947,7 @@ export interface Keys {
   pool_namespace?: string
 }
 /**
- * Public-site static artifact index /lab-static/index.json (drone4d.lab_static_index.v1). M27 §7.8 + AWR-17 §18.8.5; M27-FR-134, FR-138; D3-AC-21 (contracts 1.3.0, d1 V0.3). The only file of the public static artifact set that lives outside the version directory; served no-cache with ETag and replaced atomically (write temporary file, then rename). Every artifact path is relative to /lab-static/v/<version>/ and must not escape it. Artifacts are immutable. features.leaderboard and features.submit are always false on the public site (R-D3-46). Files larger than 64 MiB are not hosted on emax: they carry an external ModelScope link instead (ADR-201). Written by tools/deploy/emax/d3-public/labctl.py index; parsed by apps/web/src/app/lab-public/staticIndex.ts, which tolerates unknown fields.
+ * Public-site static artifact index /lab-static/index.json (drone4d.lab_static_index.v1). M27 §7.8 + AWR-17 §18.8.5; M27-FR-134, FR-138; D3-AC-21 (contracts 1.3.0, d1 V0.3). The only file of the public static artifact set that lives outside the version directory; served no-cache with ETag and replaced atomically (write temporary file, then rename). Every artifact path is relative to /lab-static/v/<version>/ and must not escape it. Artifacts are immutable. features.leaderboard and features.submit are always false on the public site (R-D3-46). Files larger than 64 MiB are not hosted on emax: they carry an external ModelScope link instead (ADR-201). v1.6 (ADR-221): an artifact of any size may be distributed only through ModelScope because the emax public egress is about 3 Mbps; it then carries `external`, is absent from the version directory, and the page plays and downloads it from that link; `viewer_wasm` names the ModelScope copy of the Rerun Viewer Wasm of `lab_build`. Written by tools/deploy/emax/d3-public/labctl.py index; parsed by apps/web/src/app/lab-public/staticIndex.ts, which tolerates unknown fields.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "LabStaticIndexV1".
@@ -6963,6 +6963,15 @@ export interface LabStaticIndexV1 {
    * Directory name of the /lab/ static build this index was published with
    */
   lab_build?: string
+  /**
+   * ModelScope copy of the Rerun Viewer Wasm (re_viewer_bg.wasm) of lab_build (ADR-221); the page fetches the Wasm from this link instead of /lab/assets/
+   */
+  viewer_wasm?: {
+    channel: 'modelscope'
+    url: string
+    bytes: LabStaticIndexV1Bytes
+    sha256: LabStaticIndexV1Sha256
+  }
   license: {
     files: LabStaticIndexV1Relpath[]
     attribution: string[]
@@ -7012,6 +7021,7 @@ export interface LabStaticIndexV1Run {
   basemap?: LabStaticIndexV1Relpath
   basemap_bytes?: LabStaticIndexV1Bytes
   basemap_sha256?: LabStaticIndexV1Sha256
+  basemap_external?: LabStaticIndexV1External
   lidar_compare?: LabStaticIndexV1Relpath
 }
 /**
@@ -7028,7 +7038,7 @@ export interface LabStaticIndexV1Video {
   external?: LabStaticIndexV1External
 }
 /**
- * Distribution-channel copy of an artifact larger than 64 MiB (ADR-201: ModelScope)
+ * Distribution-channel copy of an artifact (ADR-201: larger than 64 MiB; ADR-221: any size, emax egress); the artifact is then not in the version directory
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "LabStaticIndexV1External".

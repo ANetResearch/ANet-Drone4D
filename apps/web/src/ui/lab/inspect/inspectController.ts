@@ -100,6 +100,7 @@ export class InspectController {
       try {
         const v = await (this.d.start ?? startViewer)(parent, {
           onBytes: (n) => g === this.gen && this.set({ receivedBytes: Math.min(n, this.snap.totalBytes) }),
+          wasmUrl: this.d.source.kind === 'static' ? this.d.source.wasmUrl ?? null : null,
         })
         if (g !== this.gen) {
           v.stop()

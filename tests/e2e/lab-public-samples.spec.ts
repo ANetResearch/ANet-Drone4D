@@ -48,11 +48,14 @@ function recordRequests(page: Page): { reqs: BrowserReq[]; ws: string[] } {
   return r
 }
 
-/** 只读静态：浏览器发出的请求全为同源 /lab/、/lab-static/ 的 GET（data:、blob: 除外），服务器日志同样只有 GET/HEAD */
+/** 分发渠道（ADR-221）：索引外链指向的 ModelScope 与其 CDN 跳转目标 */
+const MODELSCOPE_RE = /^https:\/\/((www\.)?modelscope\.cn|cdn-lfs-[a-z0-9-]+\.modelscope\.cn)\//
+
+/** 只读静态：浏览器发出的请求全为同源 /lab/、/lab-static/ 的 GET 或 ModelScope 分发渠道的 GET（data:、blob: 除外），服务器日志同样只有 GET/HEAD */
 function checkStaticOnly(rec: { reqs: BrowserReq[]; ws: string[] }): { total: number; offsite: string[]; nonGet: string[]; catalog: string[] } {
   const origin = new URL(site.url).origin
   const net = rec.reqs.filter((r) => !r.u.startsWith('data:') && !r.u.startsWith('blob:'))
-  const offsite = net.filter((r) => !r.u.startsWith(`${origin}/lab/`) && !r.u.startsWith(`${origin}/lab-static/`)).map((r) => r.u)
+  const offsite = net.filter((r) => !r.u.startsWith(`${origin}/lab/`) && !r.u.startsWith(`${origin}/lab-static/`) && !MODELSCOPE_RE.test(r.u)).map((r) => r.u)
   const nonGet = net.filter((r) => r.m !== 'GET').map((r) => `${r.m} ${r.u}`)
   const catalog = net.filter((r) => /rerun\+|\/rerun[/.]|\/api\/|catalog/i.test(r.u)).map((r) => r.u)
   const srv = site.requests()

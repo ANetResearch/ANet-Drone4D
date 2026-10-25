@@ -423,6 +423,7 @@ __all__ = [
     "LabStaticIndexV1Sha256",
     "LabStaticIndexV1Slice",
     "LabStaticIndexV1Video",
+    "LabStaticIndexV1ViewerWasm",
     "LabStaticIndexV1Worlds",
     "Layouts",
     "LayoutsSchemas",
@@ -4920,6 +4921,7 @@ class LabStaticIndexV1(TypedDict):
     version: str
     built_unix_ns: str
     lab_build: NotRequired[str]
+    viewer_wasm: NotRequired[LabStaticIndexV1ViewerWasm]
     license: LabStaticIndexV1License
     worlds: list[LabStaticIndexV1Worlds]
     events: list[LabStaticIndexV1Events]
@@ -4974,6 +4976,7 @@ class LabStaticIndexV1Run(TypedDict):
     basemap: NotRequired[LabStaticIndexV1Relpath]
     basemap_bytes: NotRequired[LabStaticIndexV1Bytes]
     basemap_sha256: NotRequired[LabStaticIndexV1Sha256]
+    basemap_external: NotRequired[LabStaticIndexV1External]
     lidar_compare: NotRequired[LabStaticIndexV1Relpath]
 
 
@@ -4997,6 +5000,14 @@ class LabStaticIndexV1Video(TypedDict):
     bytes: NotRequired[LabStaticIndexV1Bytes]
     sha256: NotRequired[LabStaticIndexV1Sha256]
     external: NotRequired[LabStaticIndexV1External]
+
+
+# bench/lab_static_index.v1.schema.json#/properties/viewer_wasm
+class LabStaticIndexV1ViewerWasm(TypedDict):
+    channel: Literal["modelscope"]
+    url: str
+    bytes: LabStaticIndexV1Bytes
+    sha256: LabStaticIndexV1Sha256
 
 
 # bench/lab_static_index.v1.schema.json#/properties/worlds/items

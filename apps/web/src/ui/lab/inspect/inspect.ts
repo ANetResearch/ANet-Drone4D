@@ -105,6 +105,8 @@ export interface StaticSource {
   recordingId: string
   slices: readonly StaticFile[]
   basemap: StaticFile | null
+  /** Rerun Viewer Wasm 的 ModelScope 副本（ADR-221：emax 出口约 3 Mbps）；缺省从 /lab/assets/ 自托管加载 */
+  wasmUrl?: string | null
 }
 export interface CatalogSource {
   kind: 'catalog'
@@ -114,8 +116,13 @@ export interface CatalogSource {
 }
 export type InspectSource = StaticSource | CatalogSource
 
-/** 公开静态制品的路径（相对路径，或本站 /lab-static/ 与 /lab/ 前缀下的 .rrd）；拒绝 catalog、bench-api、rerun-proxy 与外站地址 */
+/** ModelScope 上的公开静态制品（lab_static_index.v1 `external`，ADR-201、ADR-221） */
+export const MODELSCOPE_URL_RE = /^https:\/\/(www\.)?modelscope\.cn\/[^\s"'<>\\]*$/
+
+/** 公开静态制品的路径（相对路径，本站 /lab-static/ 与 /lab/ 前缀下的 .rrd，或 ModelScope 上的 .rrd）；拒绝 catalog、bench-api、
+ * rerun-proxy 与其他外站地址 */
 export function isStaticRrd(url: string): boolean {
+  if (MODELSCOPE_URL_RE.test(url)) return /\.rrd(?:[?#]|$)/.test(url) && !url.includes('..')
   if (/^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith('//')) return false        // 任何协议（http、rerun+http …）与协议相对地址
   if (/^\/(?!lab-static\/|lab\/)/.test(url)) return false                            // 站内只允许静态制品前缀
   if (/(^|\/)(api|rerun)(\/|$)/.test(url) || url.includes('..')) return false
@@ -128,6 +135,7 @@ export function checkStaticSource(s: StaticSource): InspectError | null {
   for (const f of files) {
     if (!isStaticRrd(f.url)) return { kind: 'static', detail: f.url }
   }
+  if (s.wasmUrl && !(MODELSCOPE_URL_RE.test(s.wasmUrl) && /\.wasm(?:[?#]|$)/.test(s.wasmUrl))) return { kind: 'static', detail: s.wasmUrl }
   for (const f of s.slices) if (typeof f.bytes === 'number' && f.bytes > SLICE_MAX_BYTES) return { kind: 'static', detail: f.url }
   if (s.basemap && typeof s.basemap.bytes === 'number' && s.basemap.bytes > BASEMAP_MAX_BYTES) return { kind: 'static', detail: s.basemap.url }
   return null

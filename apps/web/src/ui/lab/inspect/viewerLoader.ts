@@ -84,12 +84,15 @@ export function parseMemoryLimit(s: string): number {
 const WASM_RE = /re_viewer_bg[^/?#]*\.wasm(?:[?#]|$)/
 type Fetch = typeof globalThis.fetch
 
-/** 计数包装：fn 执行期间对 Viewer Wasm 的响应按已收字节回调；fn 结束后恢复原 fetch */
-export async function withWasmProgress<T>(onBytes: (received: number) => void, fn: () => Promise<T>): Promise<T> {
+/** 计数包装：fn 执行期间对 Viewer Wasm 的响应按已收字节回调；给出 wasmUrl 时把对 Viewer Wasm 的请求改到该地址（ADR-221：
+ * ModelScope 副本，CORS 模式）；fn 结束后恢复原 fetch */
+export async function withWasmProgress<T>(onBytes: (received: number) => void, fn: () => Promise<T>, wasmUrl?: string | null): Promise<T> {
   const orig: Fetch = globalThis.fetch
   const wrapped: Fetch = async (input, init) => {
-    const r = await orig(input, init)
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    const asked = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    const redirect = !!wasmUrl && WASM_RE.test(asked)
+    const r = await orig(redirect ? wasmUrl : input, redirect ? { ...init, mode: 'cors', credentials: 'omit' } : init)
+    const url = redirect ? wasmUrl : asked
     if (!WASM_RE.test(url) || !r.body) return r
     let got = 0
     const reader = r.body.getReader()
@@ -138,6 +141,8 @@ export interface StartViewerOptions {
   theme?: HostTheme
   /** Wasm 已收字节 */
   onBytes?: (received: number) => void
+  /** Viewer Wasm 的替代地址（ADR-221：ModelScope 副本）；缺省自托管 */
+  wasmUrl?: string | null
   load?: ViewerModuleLoader
 }
 
@@ -146,7 +151,7 @@ export async function startViewer(parent: HTMLElement, o: StartViewerOptions = {
   const mod = await (o.load ?? importViewer)()
   const wv = new mod.WebViewer()
   try {
-    await withWasmProgress(o.onBytes ?? (() => {}), () => wv.start(null, parent, viewerStartOptions(o.theme ?? hostTheme())))
+    await withWasmProgress(o.onBytes ?? (() => {}), () => wv.start(null, parent, viewerStartOptions(o.theme ?? hostTheme())), o.wasmUrl)
   } catch (e) {
     try {
       wv.stop()
