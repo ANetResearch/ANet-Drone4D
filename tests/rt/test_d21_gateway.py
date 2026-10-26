@@ -180,7 +180,7 @@ def test_server_info_power_identity_and_health(power_stack) -> None:
     assert si["power"]["viewer_idle_s"] == 2 and si["power"]["presence_min_s"] == 1 and si["identity"] == {"tier": "public"}
     assert rtc.ops_errors(si) == []
     h = httpx.get(power_stack.base + "/api/health", timeout=5).json()
-    assert h["status"] == "ok" and set(h["build"]) == {"version", "channel", "release"} and h["build"]["version"] == "0.3.2"
+    assert h["status"] == "ok" and set(h["build"]) == {"version", "channel", "release"} and h["build"]["version"] == "0.3.3"
 
 
 def test_idle_viewer_is_reclaimed_with_518_and_4430(power_stack) -> None:
