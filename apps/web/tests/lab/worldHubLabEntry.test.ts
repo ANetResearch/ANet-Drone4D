@@ -9,8 +9,11 @@ const read = (p: string): string => readFileSync(resolve(WEB, p), 'utf8')
 
 describe('World Hub Event Lab entry', () => {
   const src = read('src/ui/views/WorldHub.tsx')
-  it('is gated by LAB_PUBLIC and links to LAB_PUBLIC_ENTRY with a plain anchor', () => {
-    expect(src).toMatch(/\{LAB_PUBLIC \? \(\s*<Button[^>]*render=\{<a href=\{LAB_PUBLIC_ENTRY\} data-world-hub-lab="" \/>\}/)
+  it('is gated by the build switch read in place and links to /lab/ with a plain anchor', () => {
+    // read in place, not imported from lab-public/flags: a cross-chunk import keeps /lab/ in the build without the switch (K9 D3)
+    expect(src).toMatch(/const HUB_LAB_ENTRY: string \| null = import\.meta\.env\.VITE_AWR_LAB_PUBLIC === '1' \? '\/lab\/' : null/)
+    expect(src).not.toMatch(/from '@\/app\/lab-public\/flags'/)
+    expect(src).toMatch(/\{HUB_LAB_ENTRY \? \(\s*<Button[^>]*render=\{<a href=\{HUB_LAB_ENTRY\} data-world-hub-lab="" \/>\}/)
     expect(src).not.toMatch(/navigate\(['"`]\/lab/)
   })
   it('has the label in both locales', () => {

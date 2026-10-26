@@ -55,7 +55,8 @@ describe('landing page Event Lab entries (VITE_AWR_LAB_PUBLIC, V0.3.1)', () => {
     expect([idx('event-lab'), idx('showcase'), idx('open-source')]).toEqual(['01', '03', '05'])
     const sec = html.slice(html.indexOf('id="event-lab"'), html.indexOf('id="story"'))
     const imgs = [...sec.matchAll(/<img [^>]*>/g)].map((m) => m[0])
-    expect(imgs).toHaveLength(6) // the five frames and the gallery thumbnail
+    const { LAB_SAMPLES } = await import('@/app/demo/LandingContent')
+    expect(imgs).toHaveLength(5 + LAB_SAMPLES.length) // the five frames and one gallery thumbnail per sample run
     for (const f of ['lab-oblique', 'lab-junction', 'lab-thermal', 'lab-residential', 'lab-blocks']) {
       const img = imgs.find((i) => i.includes(`src="/demo/lab/${f}.webp"`))
       expect(img, f).toBeDefined()
@@ -112,7 +113,8 @@ describe('landing page Event Lab entries (VITE_AWR_LAB_PUBLIC, V0.3.1)', () => {
     const img = /<img [^>]*>/.exec(gallery)?.[0] ?? ''
     expect(img).toMatch(/loading="lazy"/)
     expect(img).toMatch(/decoding="async"/)
-    expect(img).toMatch(/width="1600" height="900"/)
+    expect(img).toMatch(new RegExp(`width="${LAB_SAMPLES[0]!.thumbW}" height="${LAB_SAMPLES[0]!.thumbH}"`))
+    expect(img).toContain(`src="${LAB_SAMPLES[0]!.thumb}"`)
     expect(gallery).toContain('Policy track_share')
     expect(gallery).toContain('3 UAVs')
     expect(gallery).toContain('Observation L2')
