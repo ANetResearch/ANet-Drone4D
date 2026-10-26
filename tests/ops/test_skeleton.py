@@ -101,7 +101,7 @@ def test_awr_version_matches_pyproject() -> None:
     meta = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     web = json.loads((ROOT / "apps" / "web" / "package.json").read_text(encoding="utf-8"))["version"]
     top = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
-    assert meta["project"]["version"] == web == top == "0.3.2"
+    assert meta["project"]["version"] == web == top == "0.3.3"
     assert re.fullmatch(r"\d+\.\d+\.\d+", web) and re.fullmatch(r"\d+\.\d+\.\d+", awr.__version__)
 
 

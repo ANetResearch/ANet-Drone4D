@@ -17,6 +17,7 @@
  "lab.public.catalog.col.files": "Artifacts",
  "lab.public.catalog.fleet": "{n, plural, one {# UAV} other {# UAVs}}",
  "lab.public.catalog.files": "{n, plural, one {# file} other {# files}}",
+ "lab.public.catalog.eventMeta": "Version {version} · world {world} · {n, plural, one {# run} other {# runs}}",
  "lab.public.catalog.aria": "Sample runs",
  "lab.public.catalog.emptyTitle": "No public samples",
  "lab.public.catalog.emptyHint": "The current static artifact version contains no sample runs.",

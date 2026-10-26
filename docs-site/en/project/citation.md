@@ -11,7 +11,7 @@ root. BibTeX:
   author  = {{Agent Network Research}},
   year    = {2026},
   version = {0.3.2},
-  url     = {https://github.com/ANetResearch/ANet-Drone4D}
+  url     = {https://github.com/ANetResearch/ANet4D}
 }
 ```
 

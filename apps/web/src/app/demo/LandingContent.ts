@@ -10,6 +10,7 @@ import type { IconKey } from '@/ui/icons/registry'
 import { URBANSCENE_BIBTEX } from '@/lib/demo'
 import { REPO_URL } from '@/lib/site'
 import { LAB_PUBLIC, LAB_PUBLIC_ENTRY } from '@/app/lab-public/flags'
+import LAB_SAMPLES_DATA from './labSamples.json'
 
 export type CapStatus = 'available' | 'dev' | 'research'
 
@@ -64,6 +65,30 @@ export const LAB_MEDIA: readonly Media[] = [
 ]
 /** the sample run the frames come from, with its event and world (landing.lab.meta) */
 export const LAB_SAMPLE = { run: 'run-koyqeft6xe', event: 'crop-handoff-001', world: 'oryahovo-crop1' } as const
+/** one public sample run of the gallery (thumbnail under /demo/lab/samples/<run>.webp in the main site's own assets; the cards link to the
+ * sample run page of the /lab/ static build, a full-page navigation) */
+export interface LabSample {
+  /** public run id, run-[a-z2-7]{10} */
+  run: string
+  event: string
+  eventType: string
+  world: string
+  policy: string
+  nUav: number
+  obsLevel: 'L1' | 'L2'
+  thumb: string
+  thumbW: number
+  thumbH: number
+  /** one factual sentence on what the run shows */
+  caption?: { en: string; zh: string }
+}
+/** the public sample runs in display order (data file ./labSamples.json, which keeps the Chinese captions out of the sources, I18N-01);
+ * the first is the featured run of LAB_SAMPLE */
+export const LAB_SAMPLES: readonly LabSample[] = LAB_SAMPLES_DATA as readonly LabSample[]
+/** the sample run page of one run in the /lab/ static build; a function for the same reason as labSampleUrl */
+export function labRunUrl(run: string): string {
+  return `${LAB_PUBLIC_ENTRY}samples/${run}`
+}
 /** the sample run page of the /lab/ static build (full-page navigation, not an application route); a function, so that
  * the build without VITE_AWR_LAB_PUBLIC drops it with every other Event Lab entry (the K9 D3 scan finds no "/lab/") */
 export function labSampleUrl(): string {
@@ -75,13 +100,13 @@ export const LAB_POINTS: readonly IconKey[] = ['sensor.camera', 'layer.mesh', 't
 export const LAB_WORLD_AUTHOR = { name: 'Mitko', url: 'https://sketchfab.com/bg3d' } as const
 export const LAB_WORLD_LICENSE = { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/' } as const
 
-/** BibTeX of the software (README.md "Data and citation", CITATION.cff); the product was named ANet Drone4D up to V0.3.1,
- * the repository keeps its legacy name until it is renamed (lib/site.ts) */
+/** BibTeX of the software (README.md "Data and citation", CITATION.cff); the product was named ANet Drone4D up to V0.3.1;
+ * the repository is ANetResearch/ANet4D (lib/site.ts) */
 export const ANET4D_BIBTEX = `@software{anet4d_2026,
   title   = {ANet4D: Simulation Infrastructure for Collaborative Embodied Agents},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.3.2},
+  version = {0.3.3},
   url     = {${REPO_URL}}
 }`
 
@@ -91,7 +116,7 @@ export const CITATIONS: readonly { id: string; label: string; bibtex: string }[]
 ]
 
 /** the sections of the page in reading order (header navigation and the mobile menu); "event-lab" only with LAB_PUBLIC */
-export const NAV: readonly NavId[] = LAB_PUBLIC ? ['story', 'event-lab', 'showcase', 'open-source'] : ['story', 'showcase', 'open-source']
+export const NAV: readonly NavId[] = LAB_PUBLIC ? ['event-lab', 'story', 'showcase', 'open-source'] : ['story', 'showcase', 'open-source']
 export type NavId = 'story' | 'event-lab' | 'showcase' | 'open-source'
 /** i18n key of each section's navigation label */
 export const NAV_KEY: Record<NavId, string> = {
@@ -101,9 +126,9 @@ export const NAV_KEY: Record<NavId, string> = {
   'open-source': 'landing.nav.open',
 }
 /** the two-digit index of a numbered section header: the story is 01 and the closing call to action keeps its slot
- * (unnumbered) before the open source section; the Event Lab section, when present, follows the story */
+ * (unnumbered) before the open source section; the Event Lab section, when present, comes first (right after the hero) */
 export function sectionIndex(id: 'event-lab' | 'showcase' | 'open-source', lab: boolean = LAB_PUBLIC): string {
-  const order = lab ? ['story', 'event-lab', 'showcase', 'closing', 'open-source'] : ['story', 'showcase', 'closing', 'open-source']
+  const order = lab ? ['event-lab', 'story', 'showcase', 'closing', 'open-source'] : ['story', 'showcase', 'closing', 'open-source']
   return String(order.indexOf(id) + 1).padStart(2, '0')
 }
 

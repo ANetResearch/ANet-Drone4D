@@ -19,8 +19,8 @@
 // (~230 KB raw) in this chunk; openSheet() syncs the shared app/i18n locale right before the sandbox Sheet (and the
 // full dictionary it needs) lazily loads, so the Sheet opens in the language chosen here.
 // V0.3.1 (extension point 15, ADR-129): with VITE_AWR_LAB_PUBLIC=1 the hero gets a third action (UAV view samples, a
-// full-page link to the /lab/ static build) and the "Event Lab · UAV camera views" section follows the story
-// (LandingEventLab); without the switch both are constant-false branches the bundler removes.
+// full-page link to the /lab/ static build) and a link to the featured sample run, and the "Event Lab" section follows
+// the hero directly (LandingEventLab, before the story); without the switch both are constant-false branches the bundler removes.
 import * as React from 'react'
 import { createRoot } from 'react-dom/client'
 import { bootCapacityFetch, capacityLine, sandboxQueueHint, setLocale, useT, type CapacityLine, type Locale } from './LandingI18n'
@@ -30,7 +30,7 @@ import { Button } from '@/ui/components/ui/button'
 import { Icon } from '@/ui/icons/Icon'
 import type { CapacityView } from '@/net/sandbox/client'
 import { LAB_PUBLIC, LAB_PUBLIC_ENTRY } from '@/app/lab-public/flags'
-import { buildVersion } from './LandingContent'
+import { buildVersion, LAB_SAMPLE, labSampleUrl } from './LandingContent'
 import { EventLab } from './LandingEventLab'
 import { LandingHeader } from './LandingHeader'
 import { LandingFooter, OpenSource, Showcase } from './LandingSections'
@@ -225,6 +225,13 @@ export function Landing() {
                   </Button>
                 ) : null}
               </div>
+              {LAB_PUBLIC ? (
+                <a href={labSampleUrl()} data-landing-lab-featured="" className="flex w-fit max-w-full items-center gap-1.5 text-sm text-foreground underline-offset-4 hover:underline">
+                  <Icon icon="tl.replay" className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <span className="min-w-0 text-pretty">{t('landing.lab.featured', { run: LAB_SAMPLE.run })}</span>
+                  <Icon icon="chev.right" className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                </a>
+              ) : null}
               <div className="flex min-h-5 flex-col gap-1.5">
                 {capacity.line ? (
                   <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground tabular-nums" data-landing-capacity={capacity.line.kind}>
@@ -245,8 +252,8 @@ export function Landing() {
           </div>
         </section>
 
-        <LandingStory />
         {LAB_PUBLIC ? <EventLab /> : null}
+        <LandingStory />
         <Showcase />
         <section id="closing" className="scroll-mt-14 py-16 md:py-24" aria-labelledby="closing-title" data-landing-closing="">
           <div className="mx-auto max-w-6xl px-4 sm:px-6">

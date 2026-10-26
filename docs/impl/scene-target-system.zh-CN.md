@@ -1,6 +1,6 @@
 # 场景适配目标系统：相对 v0.2.0 的升级说明
 
-本分支将原生“识别物”扩展为可选的精细外观、场景约束、持续身份和自主生活行为系统。当前完整验收场景是 **synthcity**，用户已验收部署版本并批准提交汇总 PR；尚未合并 main。契约审查记录为 [#62](https://github.com/ANetResearch/ANet-Drone4D/issues/62)。设计定义见 [设计文档](../design/scene-target-engine.zh-CN.md)，实测结果见 [验收报告](../audit/target-life/REVIEW.zh-CN.md)。
+本分支将原生“识别物”扩展为可选的精细外观、场景约束、持续身份和自主生活行为系统。当前完整验收场景是 **synthcity**，用户已验收部署版本并批准提交汇总 PR；尚未合并 main。契约审查记录为 [#62](https://github.com/ANetResearch/ANet4D/issues/62)。设计定义见 [设计文档](../design/scene-target-engine.zh-CN.md)，实测结果见 [验收报告](../audit/target-life/REVIEW.zh-CN.md)。
 
 ## 与 v0.2.0 的对照
 

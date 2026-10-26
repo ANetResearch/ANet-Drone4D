@@ -32,7 +32,7 @@
 | 并行实例 | 同一块 A40 上 4 个服务端（各 3 架）同时运行：每个 RTF 0.69，总吞吐 362 MB/s（单实例的 3.3 倍），每实例约 3 核 | 批量数据集生产按"每次运行一个 gz 进程"横向扩展 | §2.5 |
 | 进程外锁步 | 经 gz-transport：`set_pose_vector` 0.65 ms、`multi_step` 请求 0.35 ms，但每个 0.1 s 节拍要等渲染完成，3 架带 LiDAR 时 219 ms/节拍（RTF 0.46），10 架相机时 272 ms（RTF 0.37）；帧内容对应本节拍注入的位姿（误差 0.11 m，滞后一拍时为 1.78 m） | 调试与小规模可用；生产锁步用 r9 的进程内时钟门控（r9 实测 RTF 0.95） | §2.6 |
 | 进程内从动 | 进程内 Python System 按"FleetSim 供给"逐步写 3 架机体位姿：Gazebo 回报位姿与供给值逐位相同（误差 0）；3 路相机 + 42 个 actor 时 RTF 1.15 | "Gazebo 当渲染器、FleetSim 当飞行权威"的从动模式可行 | §2.6 |
-| ROS 2 桥 | `ros_gz_bridge`（Jazzy 1.0.24）：1280×720 图像 10 Hz（26 MB/s）、深度 9.8 Hz、点云 9.2 Hz、里程计 50 Hz、时钟 250 Hz，时间戳为仿真时间 | ROS 2 只作为对外生态接口，不进 Drone4D 主链路 | §2.7 |
+| ROS 2 桥 | `ros_gz_bridge`（Jazzy 1.0.24）：1280×720 图像 10 Hz（26 MB/s）、深度 9.8 Hz、点云 9.2 Hz、里程计 50 Hz、时钟 250 Hz，时间戳为仿真时间 | ROS 2 只作为对外生态接口，不进 ANet4D 主链路 | §2.7 |
 | 降雨 | 粒子发射器能出画面，但发射体朝向与尺寸语义需逐世界调参；在 8k / 20k 粒子/s 下 LiDAR 射线受影响比例只有 0.06% / 0%，RTF 下降约一半 | 雨雾不交给 Gazebo，统一在 Sensor Service 做物理参数化退化（r3、r4 已实现） | §2.8 |
 | PX4 SITL 多机 | 官方镜像（gz 8.15）在小镇 GLB 世界上 1 / 3 / 5 / 10 架 x500 全部在 9–11 s 内 "Ready for takeoff"，起飞到 2.5 m；RTF 1.00 / 1.00 / 0.99 / 0.76–0.96；每架 PX4 0.22–0.34 核、RSS 约 20 MB；gz 0.35–1.33 核 | SITL 档可行；需要 GCS 心跳与平整起降垫（§2.9） | §2.9 |
 
@@ -41,7 +41,7 @@
 1. **Gazebo 适合作为 D3 的 Realistic 物理档，不适合作为默认的传感器档。** 刚体动力学（DART + bullet 网格碰撞、旋翼模型、WindEffects）和 PX4 SITL 都能在 GLB 世界上跑起来，物理开销与碰撞网格规模几乎无关；但 gz 传感器每次更新约 11 ms（RGB 13 ms、gpu_lidar 17.5 ms），而 r3 的 EGL 光栅化 720p RGB+深度+实例只要 1.4–1.6 ms，r4 的 Warp 网格 LiDAR 每帧核函数约 0.07 ms。**推荐：两档共用同一个 Sensor Generation Service（M25），Gazebo 只提供位姿；gz 原生传感器作为可选的"生态 / 交叉验证"模式。** 这样 Fast 与 Realistic 的观测差异只来自飞行动力学，便于做对照实验（design-r1 P2 的退出标准）。
 2. **事件真值只来自 Canonical Event Tape。** actor 不参与碰撞、不受重力，Gazebo 里的人和车只是"可被传感器看到的皮肤"。磁带进入 Gazebo 有两条路：离线导出 SDF 轨迹（偏差约 0.3 m，零运行时代码）和进程内 TapeSystem（逐步精确采样）。锁步数据集生产用后者。
 3. **GLB → SDF 有一条容易踩的坑：roll = +π/2。** 不加这个旋转，整个小镇会竖起来；节点矩阵（含 Sketchfab 的 2.5 倍缩放）gz 会照常应用。米制尺度另由 M22 标定（r2、r3 认为小镇应再放大约 4 倍），导出器只需要 `scale` 与平移。
-4. **同步方式分三种，对应 D2 `ClockCaps.mode` 的三个取值**：`lockstep`（Drone4D 门控每一步，数据集与可复现实验）、`free_running`（Gazebo 尽快跑，Drone4D 跟随 gz 时钟，批量探索）、`slaved_realtime`（PX4 SITL，RTF 锁 1）。进程外 gz-transport 锁步只有 0.37–0.46 RTF，生产链路应在 gz 进程内门控（r9 的 C++ `Drone4DClock`，或本文的 Python System 原型）。
+4. **同步方式分三种，对应 D2 `ClockCaps.mode` 的三个取值**：`lockstep`（ANet4D 门控每一步，数据集与可复现实验）、`free_running`（Gazebo 尽快跑，ANet4D 跟随 gz 时钟，批量探索）、`slaved_realtime`（PX4 SITL，RTF 锁 1）。进程外 gz-transport 锁步只有 0.37–0.46 RTF，生产链路应在 gz 进程内门控（r9 的 C++ `Drone4DClock`，或本文的 Python System 原型）。
 5. **容量规划按传感器更新次数，而不是按机体数。** 每个 gz 进程约 90 次传感器更新/s；一次 300 s、3 架、10 Hz 全套传感器的事件复跑约需 6 分钟墙钟；一块 A40 上可并行 4 个进程（实测 3.3 倍）。同样任务在 Fast 档按 r3/r4 的数字约 0.5–1 分钟，所以 Realistic 档用于少量高可信复跑，不用于大规模策略搜索。
 6. **gz-sim 8.15（Harmonic）的两个已复现缺陷要写进导出器**：`<loop>false</loop>` 的 actor 会让带渲染传感器的世界卡死在首帧；actor 无脚本时，`TrajectoryPose` 会与 actor 自身 `<pose>` 相乘（`<pose>` 必须为单位位姿）。
 
@@ -241,7 +241,7 @@ p90 绝对差（town 0.22 m、stage1 4.6 m）来自立面与树冠处深度像�
 |---|---|---|---|---|---|
 | 3 | 3 × 640×360 RGB 10 Hz + 42 个 actor | 1.146 | 10.0 Hz | 1,077 个样本全部为 0（逐位一致） | 0.87 ms/步（46 个实体） |
 
-结论：进程内写 ECM 不存在排序问题，位姿在同一步的 PostUpdate 渲染快照中生效。Python 每实体约 20 µs/步；4 ms 步长下 46 个实体占 0.87 ms，规模再大时应改 C++，或只在传感器到期的步写入（10 Hz 磁带下最多 0.1 s 陈旧）。r9 用 C++ System 做了同样的门控（每步等待 Drone4D 授权），3 架 RGB+LiDAR 锁步 RTF 0.95，并验证了跨运行、跨 GPU 的逐位确定性。
+结论：进程内写 ECM 不存在排序问题，位姿在同一步的 PostUpdate 渲染快照中生效。Python 每实体约 20 µs/步；4 ms 步长下 46 个实体占 0.87 ms，规模再大时应改 C++，或只在传感器到期的步写入（10 Hz 磁带下最多 0.1 s 陈旧）。r9 用 C++ System 做了同样的门控（每步等待 ANet4D 授权），3 架 RGB+LiDAR 锁步 RTF 0.95，并验证了跨运行、跨 GPU 的逐位确定性。
 
 ### 2.7 E6：ROS 2 Jazzy 桥
 
@@ -416,7 +416,7 @@ done
 ```
 
 - **权威划分**（对应 design-r1 的三种权威）：事件真值 = 磁带（Event Runtime 生成，gz 只读）；飞行与碰撞 = gz（Realistic）或 FleetSim（Fast）；观测 = Sensor Service 按 `(World, tape(t), Pose_i(t), Rig_i, Env(t), seed)` 纯函数生成；Agent 只拿观测与收到的消息。
-- **时钟**：`lockstep` 模式下 Drone4D 持有时钟，gz 每一步在 PreUpdate 被门控（r9 的 C++ 实现已测 RTF 0.95；本文的 Python 进程内 System 证明 ECM 写入与渲染快照同步）。`free_running` 模式下 gz 以 `rtf=0` 运行，Drone4D 以 gz 的 `/clock` 为准，SimClock 处于从动状态，UI 显示实际 RTF。
+- **时钟**：`lockstep` 模式下 ANet4D 持有时钟，gz 每一步在 PreUpdate 被门控（r9 的 C++ 实现已测 RTF 0.95；本文的 Python 进程内 System 证明 ECM 写入与渲染快照同步）。`free_running` 模式下 gz 以 `rtf=0` 运行，ANet4D 以 gz 的 `/clock` 为准，SimClock 处于从动状态，UI 显示实际 RTF。
 - **启动屏障**：首次渲染（纹理上传 7–13 s）完成前不开始计时；控制器在收到所有传感器第一帧后才授予第一个节拍。
 - **镜像回写**：gz 的位姿在 PostUpdate 发布到 StateRing，FleetSim 进入"镜像"角色（不积分），Gateway、UI、录制与回放链路不需要改动。
 - **一致性检查**：每次运行抽样核对"传感器帧时间戳 = 注入位姿的时刻"（§2.6 的方法）和"actor 渲染位置与磁带的偏差 < 0.6 m"（§2.4 的方法），写入运行报告。

@@ -11,7 +11,7 @@
 #
 # 用法（本机仓库根目录）：tools/deploy/dmax/run_d3_gate.sh（make gate-d3-dmax、make gate-d3-nightly 调用）
 # 环境变量：
-#   REF=HEAD          被检查的提交（任意 git 版本表达式，如 origin/d3-dev）
+#   REF=HEAD          被检查的提交（任意 git 版本表达式，如 origin/main）
 #   STEPS=pytest,zero-impact,resim,perf,imports    gate.json 的步骤 id（逗号分隔）
 #   TASK_ID=main      实例名：容器 d3-test-gate-<id>、快照 $D/gate/src-<id>（小写字母、数字、点、下划线、连字符）
 #   CPUS=16 MEM=48g   容器资源上限；TIMEOUT=21600 容器内总时长上限（秒）

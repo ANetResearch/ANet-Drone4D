@@ -217,7 +217,7 @@
 
 | 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
-| M17-FR-053 | sandbox-api 公开 `GET /api/sandbox/v1/openapi.json`（OpenAPI 3.1，title "ANet Drone4D Sandbox API"，version 1.x）；按领域分 tag；`bearerAuth` 安全方案；每个操作列出可能的原因码（扩展 `x-awr-reasons`）与 curl、SDK 示例（扩展 `x-codeSamples`，从 `tools/sdk/examples/` 抽取）；快照 `packages/contracts/rest/sandbox.openapi.snapshot.json`，CI 以 `gen_openapi.py --sandbox --check` 比对；D1 全站 OpenAPI 在公开模式仍隐藏 | P0 | V0.2-demo | 是 | M17-AC-007 | §11.4、17 §4.1 第 10 条 |
+| M17-FR-053 | sandbox-api 公开 `GET /api/sandbox/v1/openapi.json`（OpenAPI 3.1，title "ANet4D Sandbox API"，version 1.x）；按领域分 tag；`bearerAuth` 安全方案；每个操作列出可能的原因码（扩展 `x-awr-reasons`）与 curl、SDK 示例（扩展 `x-codeSamples`，从 `tools/sdk/examples/` 抽取）；快照 `packages/contracts/rest/sandbox.openapi.snapshot.json`，CI 以 `gen_openapi.py --sandbox --check` 比对；D1 全站 OpenAPI 在公开模式仍隐藏 | P0 | V0.2-demo | 是 | M17-AC-007 | §11.4、17 §4.1 第 10 条 |
 | M17-FR-054 | 扩展 `x-awr-realtime`：从 `rt/topics.json`、`rt/commands.json` 生成沙盒可用的 topic（编码、频率、schema）、事件与命令清单，供文档页渲染"实时接口"一节；文档页 `/sandbox/api` 由 M15 以 shadcn 组件渲染，不引入 Swagger UI | P0 | V0.2-demo | 是 | M17-AC-007 | §11.4 |
 | M17-FR-055 | SDK 下载：nginx 以静态文件提供 `/sdk/awr_sandbox.py`（发布目录内同名文件）与 `/sdk/examples/*.py`；文档页给出链接与校验和 | P1 | V0.2-demo | 是 | M17-AC-013 | 本文设定 |
 

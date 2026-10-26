@@ -31,7 +31,7 @@ the same version; see {doc}`../guide/showcase`. Requirements, ports and configur
 
 ```sh
 cd ~
-git clone https://github.com/ANetResearch/ANet-Drone4D.git ANet4D
+git clone https://github.com/ANetResearch/ANet4D.git ANet4D
 cd ANet4D
 ```
 
@@ -40,8 +40,8 @@ Cloning into 'ANet4D'...
 Updating files: 100% (3245/3245), done.
 ```
 
-The second argument of `git clone` names the working directory `ANet4D`; the GitHub repository still carries its former name
-ANet-Drone4D. In this run the working tree is about 126 MB and the clone took 5.8 s. The repository contains no point clouds, world packages or run
+The second argument of `git clone` names the working directory `ANet4D`, matching the repository name.
+In this run the working tree is about 126 MB and the clone took 5.8 s. The repository contains no point clouds, world packages or run
 artifacts: `worlds/`, `data/raw/` and `runs/` are in `.gitignore` and are produced locally by the following steps.
 
 `main` is the maintained branch; to match the released version byte for byte, check out the version tag:

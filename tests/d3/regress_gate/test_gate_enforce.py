@@ -6,7 +6,7 @@ dmax 重载部分启动脚本的登记。
 - 证据检查（make gate-d3-check）：以被检查内容的 tree id 为键，每步取最近一次结果；缺步、失败、运行期间树发生变化的报告
   均不通过；完整门可由多份报告合并覆盖。
 - 导出副本运行（GATE_REF）：实际执行一个轻量门步骤，报告与 meta.json 记录提交、tree id 与未登记步骤，副本与临时索引在结束后删除。
-- pre-push 钩子只拦截 refs/heads/d3-dev，并对被推送的提交执行检查。
+- pre-push 钩子只拦截 refs/heads/main（ADR-225 起只保留 main），并对被推送的提交执行检查。
 """
 
 from __future__ import annotations
@@ -171,7 +171,7 @@ def test_gate_runs_a_step_on_an_exported_commit(tmp_path: Path) -> None:
 # ==================================================================== pre-push 钩子
 
 
-def test_pre_push_hook_only_guards_d3_dev(tmp_path: Path) -> None:
+def test_pre_push_hook_only_guards_main(tmp_path: Path) -> None:
     env = _need_tools()
     bare = tmp_path / "hooks-only.git"
     subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True, capture_output=True)
@@ -179,35 +179,35 @@ def test_pre_push_hook_only_guards_d3_dev(tmp_path: Path) -> None:
     assert r.returncode == 0, r.stderr
     hook = bare / "hooks" / "pre-push"
     text = hook.read_text(encoding="utf-8")
-    assert os.access(hook, os.X_OK) and "refs/heads/d3-dev" in text and 'GATE_REF="$lsha"' in text and f"-C {ROOT} " in text
+    assert os.access(hook, os.X_OK) and "refs/heads/main" in text and 'GATE_REF="$lsha"' in text and f"-C {ROOT} " in text
     sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, env=env, capture_output=True, text=True, check=True).stdout.strip()
     zero = "0" * 40
     run = lambda line: subprocess.run(["bash", str(hook), "origin", "x"], input=line, cwd=ROOT, text=True, capture_output=True,  # noqa: E731
                                       env={**env, "GATE_D3_ROOT": str(tmp_path / "evidence")}, timeout=300, check=False)
-    assert run(f"refs/heads/main {sha} refs/heads/main {zero}\n").returncode == 0           # 其他分支不拦截
-    assert run(f"(delete) {zero} refs/heads/d3-dev {sha}\n").returncode == 0                # 删除分支不检查
-    r = run(f"refs/heads/d3-dev {sha} refs/heads/d3-dev {zero}\n")
+    assert run(f"refs/heads/topic {sha} refs/heads/topic {zero}\n").returncode == 0         # 其他分支不拦截
+    assert run(f"(delete) {zero} refs/heads/main {sha}\n").returncode == 0                # 删除分支不检查
+    r = run(f"refs/heads/main {sha} refs/heads/main {zero}\n")
     assert r.returncode != 0 and "FAIL" in r.stdout                                       # 无证据：拒绝推送
 
 
 # ==================================================================== 托管 CI 与 dmax 启动脚本
 
 
-def test_ci_runs_the_light_gate_on_d3_dev() -> None:
+def test_ci_runs_the_light_gate_on_main() -> None:
     yaml = pytest.importorskip("yaml")
     wf = yaml.safe_load(CI.read_text(encoding="utf-8"))
     on = wf.get("on", wf.get(True))
-    assert "d3-dev" in on["push"]["branches"] and "main" in on["push"]["branches"] and "pull_request" in on
+    assert on["push"]["branches"] == ["main"] and "pull_request" in on
     job = wf["jobs"]["d3-gate"]
     cond = job["if"]
-    assert "refs/heads/d3-dev" in cond and "github.base_ref == 'd3-dev'" in cond and "workflow_dispatch" in cond
+    assert "refs/heads/main" in cond and "github.base_ref == 'main'" in cond and "workflow_dispatch" in cond
     steps = job["steps"]
     assert steps[0]["uses"].startswith("actions/checkout@") and steps[0]["with"]["fetch-depth"] == 0   # demo-parity 需要 v0.2.1
     runs = [s.get("run", "") for s in steps]
     idx = lambda needle: next(i for i, x in enumerate(runs) if needle in x)  # noqa: E731
     assert idx("make setup") < idx("make demo-world") < idx("make gate-d3-light") < idx("make gate-d3-check GATE_TIER=light")
     assert steps[-1].get("if") == "always()" and "GITHUB_STEP_SUMMARY" in runs[-1]
-    # 原有 G1h 任务保持不变（main 与 d3-dev 的 push、全部 PR 上运行）
+    # 原有 G1h 任务保持不变（main 的 push、全部 PR 上运行）
     assert {"checks", "pytest"} <= set(wf["jobs"]) and "if" not in wf["jobs"]["checks"] and "if" not in wf["jobs"]["pytest"]
 
 

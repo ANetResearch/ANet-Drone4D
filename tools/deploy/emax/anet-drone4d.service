@@ -14,7 +14,7 @@
 
 [Unit]
 Description=ANet4D public site (World Runtime: shared show S7 and multi-tenant sandboxes)
-Documentation=https://github.com/ANetResearch/ANet-Drone4D/blob/main/tools/deploy/emax/README.md
+Documentation=https://github.com/ANetResearch/ANet4D/blob/main/tools/deploy/emax/README.md
 After=network-online.target
 Wants=network-online.target
 

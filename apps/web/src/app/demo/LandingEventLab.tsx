@@ -1,15 +1,16 @@
 // "Event Lab · UAV camera views" section of the landing page (V0.3.1; extension point 15, ADR-129): rendered only in the
-// demo build with VITE_AWR_LAB_PUBLIC=1 (lab-public/flags.ts LAB_PUBLIC), right after the story. It shows the camera
+// demo build with VITE_AWR_LAB_PUBLIC=1 (lab-public/flags.ts LAB_PUBLIC), directly after the hero (before the story). It shows the camera
 // frames each UAV of a public sample run actually received (server-side GLB mesh rendering in the Gazebo Sim lockstep
-// run; LandingContent.ts LAB_MEDIA), states that every UAV sees only its own camera, and links to the /lab/ static build
+// run; LandingContent.ts LAB_MEDIA) and a gallery of the public sample runs (LAB_SAMPLES, one card per run), states that every UAV sees only its own camera, and links to the /lab/ static build
 // (event replay, multi-UAV private views, Rerun inspection) and to the sample run page, both as full-page navigations
 // (the /lab/ build is a separate static site, not an application route). The world mesh is CC BY 4.0: the attribution
 // line names the title, author and source, licence and the modification. Images are lazy with their intrinsic sizes.
-import { useT } from './LandingI18n'
+import { getLocale, useT } from './LandingI18n'
+import { cn } from '@/lib/utils'
 import { Button } from '@/ui/components/ui/button'
 import { Icon } from '@/ui/icons/Icon'
 import { LAB_PUBLIC_ENTRY } from '@/app/lab-public/flags'
-import { LAB_MEDIA, LAB_POINTS, LAB_SAMPLE, LAB_WORLD_AUTHOR, LAB_WORLD_LICENSE, labSampleUrl, sectionIndex } from './LandingContent'
+import { LAB_MEDIA, LAB_POINTS, LAB_SAMPLE, LAB_SAMPLES, LAB_WORLD_AUTHOR, LAB_WORLD_LICENSE, labRunUrl, labSampleUrl, sectionIndex, type LabSample } from './LandingContent'
 import { Figure, Section } from './LandingSections'
 
 const EXT = { target: '_blank', rel: 'noreferrer noopener' } as const
@@ -29,6 +30,55 @@ function Attribution() {
             : p === '{license}' ? link(LAB_WORLD_LICENSE.url, LAB_WORLD_LICENSE.name, i)
               : p)}
     </p>
+  )
+}
+
+/** one card of the sample gallery: thumbnail (lazy, intrinsic size) and the run's event, policy, fleet and observation level; the
+ * whole card is one full-page link to the sample run page of the /lab/ static build */
+function SampleCard({ s, wide }: { s: LabSample; wide: boolean }) {
+  const t = useT()
+  const caption = s.caption ? s.caption[getLocale() === 'zh-CN' ? 'zh' : 'en'] : null
+  return (
+    <li className="landing-reveal min-w-0" data-lab-sample-card={s.run}>
+      <a href={labRunUrl(s.run)} data-landing-lab-card={s.run}
+        className={cn('group flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-foreground/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring', wide && 'md:flex-row')}>
+        <img src={s.thumb} alt={t('landing.lab.card.alt', { run: s.run, event: s.event })} width={s.thumbW} height={s.thumbH}
+          sizes={wide ? '(min-width: 1152px) 640px, (min-width: 768px) 55vw, 100vw' : '(min-width: 1024px) 352px, (min-width: 640px) 50vw, 100vw'}
+          loading="lazy" decoding="async" className={cn('block h-auto w-full bg-muted', wide && 'md:w-[58%] md:shrink-0 md:self-start')} />
+        <div className={cn('flex flex-1 flex-col gap-3 border-t border-border px-4 py-4', wide && 'md:justify-center md:border-t-0 md:border-l md:px-6')}>
+          <div className="flex flex-col gap-1">
+            <span className="font-mono text-sm font-medium break-all text-foreground">{s.event}</span>
+            <span className="font-mono text-xs text-muted-foreground">{s.eventType} · {s.world}</span>
+          </div>
+          <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground tabular-nums" data-lab-card-facts="">
+            <li>{t('landing.lab.card.policy', { policy: s.policy })}</li>
+            <li>{t('landing.lab.card.fleet', { n: s.nUav })}</li>
+            <li>{t('landing.lab.card.obs', { level: s.obsLevel })}</li>
+          </ul>
+          {caption ? <p className="text-xs leading-relaxed text-pretty text-muted-foreground">{caption}</p> : null}
+          <span className="mt-auto flex items-center gap-1.5 pt-1 text-sm font-medium text-foreground">
+            {t('landing.lab.card.open')}
+            <Icon icon="chev.right" className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+          </span>
+        </div>
+      </a>
+    </li>
+  )
+}
+
+/** the gallery of the public sample runs (LAB_SAMPLES): 1 column on phones, 2 from 640 px, 3 from 1024 px */
+function SampleGallery() {
+  const t = useT()
+  return (
+    <div className="mt-12 md:mt-16" data-lab-gallery="">
+      <div className="landing-reveal mb-6 flex max-w-3xl flex-col gap-2">
+        <h3 className="text-lg font-semibold tracking-tight text-balance md:text-xl">{t('landing.lab.gallery.title')}</h3>
+        <p className="text-sm leading-relaxed text-pretty text-muted-foreground">{t('landing.lab.gallery.hint')}</p>
+      </div>
+      <ul className={cn('grid grid-cols-1 gap-4 md:gap-6', LAB_SAMPLES.length > 1 && 'sm:grid-cols-2 lg:grid-cols-3')}>
+        {LAB_SAMPLES.map((s) => <SampleCard key={s.run} s={s} wide={LAB_SAMPLES.length === 1} />)}
+      </ul>
+    </div>
   )
 }
 
@@ -53,19 +103,22 @@ export function EventLab() {
             ))}
           </ul>
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-            <Button nativeButton={false} render={<a href={LAB_PUBLIC_ENTRY} data-landing-lab-entry="section" />} className="h-11 w-full px-5 text-sm sm:w-auto">
+            <Button nativeButton={false} render={<a href={labSampleUrl()} data-landing-lab-sample="" />} className="h-11 w-full px-5 text-sm sm:w-auto">
               <Icon icon="tl.replay" data-icon="inline-start" />
-              {t('landing.lab.open')}
-            </Button>
-            <Button variant="ghost" nativeButton={false} render={<a href={labSampleUrl()} data-landing-lab-sample="" />} className="h-11 w-full px-4 text-sm sm:w-auto">
               {t('landing.lab.sample', { id: LAB_SAMPLE.run })}
+            </Button>
+            <Button variant="outline" nativeButton={false} render={<a href={LAB_PUBLIC_ENTRY} data-landing-lab-entry="section" />}
+              className="h-11 w-full px-5 text-sm sm:w-auto dark:bg-card dark:hover:bg-muted">
+              {t('landing.lab.open')}
               <Icon icon="chev.right" data-icon="inline-end" />
             </Button>
           </div>
         </div>
         <Figure m={lead} sizes="(min-width: 1280px) 640px, (min-width: 1152px) 1104px, 100vw" />
       </div>
-      <div className="mt-4 grid grid-cols-1 gap-4 md:mt-6 md:grid-cols-2 md:gap-6" data-lab-frames="">
+      <SampleGallery />
+      <h3 className="landing-reveal mt-12 mb-6 text-lg font-semibold tracking-tight text-balance md:mt-16 md:text-xl">{t('landing.lab.frames.title')}</h3>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6" data-lab-frames="">
         {rest.map((m) => <Figure key={m.key} m={m} frame={m.w / m.h < 1.7} sizes="(min-width: 768px) 50vw, 100vw" />)}
       </div>
       <Attribution />

@@ -37,9 +37,9 @@ anet4d-agent = "anet4d.serve:main"
 drone4d-agent = "drone4d.serve:main"
 
 [project.urls]
-Homepage = "https://github.com/ANetResearch/ANet-Drone4D"
+Homepage = "https://github.com/ANetResearch/ANet4D"
 Documentation = "https://docs.agentnetwork.org.cn/anet4d/"
-Source = "https://github.com/ANetResearch/ANet-Drone4D/tree/main/tools/sdk/anet4d"
+Source = "https://github.com/ANetResearch/ANet4D/tree/main/tools/sdk/anet4d"
 
 [tool.setuptools.dynamic]
 version = { attr = "anet4d.__version__" }

@@ -27,7 +27,7 @@
 | 9 | 通信模型 | 链路层（距离、遮挡、丢包、时延、带宽桶、事件干扰区）与应用层（M14 ANet 的委派与黑板）分开建模；全员广播的投递次数随机队规模平方增长，链路状态应按 1 s 缓存 | 3 机共享：12% 丢包（99.7% 发生在广场干扰区）、平均时延 20.6 ms、360 s 内 111 KB；60 机时 133 万次投递，L1 仍有 1.9 倍实时；30 机缓存链路后仿真耗时 −39% | M26 |
 | 10 | 指标 | Event Capture、Understanding、Active Observation、Collaborative Efficiency 四类都能自动计算；Active Observation 不能只看机位，要看实际拿到的证据质量；协同收益要同时报告冗余度 | 覆盖式扫描（lawnmower）"机位得分"0.92，但实际证据得分 0；三机跟踪对 A 的平均同时观察机数 1.4–1.6，协同收益接近 0 | M27 |
 | 11 | 跨机复现 | 事件真值（含射线计算）与 Benchmark 结果在两台不同 CPU、不同 numpy 版本的机器上除耗时外完全相同 | `event_truth.json`（去掉 perf）与 6 个策略的 `results.json` 逐项相等 | M27 |
-| 12 | 定位 | 2025–2026 年的开源无人机基准多数是"固定场景 + 静态目标 + 单机导航/问答"（OpenFly、UAV-ON、TravelUAV、AerialVLN、CityNav、ESARBench、AirCopBench）；动态人群与事件脚本出现在 Isaac Sim IRA、MetaUrban、SimWorld、UnrealZoo、Habitat-GS，但它们不面向多无人机协同观测。Drone4D 的差异点是"同一事件带 + 可替换机队策略 + 由世界状态验证的事件真值 + 受限通信 + 自动评测" | 见 §13（36 个仓库的 star 与最近提交，2026-10-11 实测） | 定位与论文叙事 |
+| 12 | 定位 | 2025–2026 年的开源无人机基准多数是"固定场景 + 静态目标 + 单机导航/问答"（OpenFly、UAV-ON、TravelUAV、AerialVLN、CityNav、ESARBench、AirCopBench）；动态人群与事件脚本出现在 Isaac Sim IRA、MetaUrban、SimWorld、UnrealZoo、Habitat-GS，但它们不面向多无人机协同观测。ANet4D 的差异点是"同一事件带 + 可替换机队策略 + 由世界状态验证的事件真值 + 受限通信 + 自动评测" | 见 §13（36 个仓库的 star 与最近提交，2026-10-11 实测） | 定位与论文叙事 |
 
 **实现者先看这 10 条：**
 
@@ -237,7 +237,7 @@ COMPILE FAILED
 | 已有格式 | 关系 |
 |---|---|
 | D2 沙盒快照 `awr.sandbox.snapshot.v1` 的 `targets[]`（`motion.mode = path`、`path[]`、`dwell_s[]`、`loop`） | Interactive 模式下，编译器可把事件带的脚本演员降级为 M18 识别物（路径点取 NavMesh 折线，速度取每段反算值），沿用 M18 的反应状态机；Exogenous 模式不经过 M18 运动推进，只用其类别模板与签名 |
-| ASAM OpenSCENARIO（XML 1.x / DSL 2.x）、esmini、CARLA ScenarioRunner | 面向道路交通，行为是"触发条件 → 动作"的状态机，适合车辆交互；Drone4D 的事件以"人在建筑与街道间按时刻移动"为主，用锚点 + 时刻更直接。可借鉴其触发器语法作为 Interactive 模式的扩展（例如"当 UAV 距 B < 30 m 时 B 改走 via 小巷"） |
+| ASAM OpenSCENARIO（XML 1.x / DSL 2.x）、esmini、CARLA ScenarioRunner | 面向道路交通，行为是"触发条件 → 动作"的状态机，适合车辆交互；ANet4D 的事件以"人在建筑与街道间按时刻移动"为主，用锚点 + 时刻更直接。可借鉴其触发器语法作为 Interactive 模式的扩展（例如"当 UAV 距 B < 30 m 时 B 改走 via 小巷"） |
 | Scenic 3（概率场景语言） | 可借鉴"分布 + 约束 + 拒绝采样"生成同一事件模板的多个变体（锚点、时刻、背景密度的分布），作为 M27 的事件族生成器；单个 Benchmark 事件仍需固化为一条事件带 |
 | Isaac Sim IRA（原 omni.anim.people）命令文件 | 每行"角色 + 命令 + 参数"（GoTo、Idle、LookAround、Sit、Queue），与本 DSL 的路线动作一一对应；若 P2/P3 引入 Isaac 渲染，可由事件带导出 IRA 命令文件或直接逐帧驱动角色骨骼 |
 | ASAM OpenLABEL（objects、actions、events、contexts、relations，按帧区间标注） | `event_truth.json` 与 `event_graph.json` 应提供 OpenLABEL 导出，便于第三方工具读取（§6.4） |
@@ -674,7 +674,7 @@ star 与"最近提交"于 2026-10-11 由 GitHub API 实测（`repos/{o}/{r}` 与
 
 ### 13.1 事件与场景描述
 
-| 项目 | star | 最近提交 | 定位 | 可借鉴 | 与 Drone4D 的差异 |
+| 项目 | star | 最近提交 | 定位 | 可借鉴 | 与 ANet4D 的差异 |
 |---|---|---|---|---|---|
 | carla-simulator/scenario_runner | 682 | 2025-09-29 | OpenSCENARIO 1.x/2.0 执行器，原子行为 + 触发器 + 判据 | "场景通过判据"即评测规则；触发器语法可用于 Interactive 模式 | 面向自车与道路交通 |
 | esmini/esmini | 949 | 2026-10-06 | 轻量 OpenSCENARIO 播放器 | 无渲染、确定性的场景回放器形态，与本文的事件带生成器同类 | 只有车辆 |
@@ -736,7 +736,7 @@ star 与"最近提交"于 2026-10-11 由 GitHub API 实测（`repos/{o}/{r}` 与
 
 已有工作分成三类：其一，固定场景中的单机导航与问答（OpenFly、UAV-ON、TravelUAV、AerialVLN、CityNav、EmbodiedCity、ESARBench），目标多为静态；其二，离线多机感知数据（AirCopBench、UAV3D），观测已经录好，不能主动改变；其三，有动态人群与脚本行为的通用具身平台（Isaac IRA、MetaUrban、SimWorld、UnrealZoo、Habitat-GS、CarlaAir），但不提供"事件真值 + 多无人机观测策略 + 受限通信"的评测协议。
 
-Drone4D 可以占据的位置是：**在真实摄影测量城镇中，以经过世界状态验证的事件真值为核心，让数量、策略、协同与通信都可变的多无人机反复观测同一事件，并在 Capture、Understanding、Active Observation、Collaborative Efficiency 四个维度自动评分。** 与上述项目相比，下列组合目前没有看到公开实现：
+ANet4D 可以占据的位置是：**在真实摄影测量城镇中，以经过世界状态验证的事件真值为核心，让数量、策略、协同与通信都可变的多无人机反复观测同一事件，并在 Capture、Understanding、Active Observation、Collaborative Efficiency 四个维度自动评分。** 与上述项目相比，下列组合目前没有看到公开实现：
 
 1. 事件带（Canonical Event Tape）在跨机器上逐字节可复现，并与背景密度解耦；
 2. 事件声明与世界几何的自动一致性验证（例如"作者以为会被遮挡"的声明会被拒绝）；

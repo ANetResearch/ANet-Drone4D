@@ -81,7 +81,7 @@ sudo python3 /srv/drone4d/bin/verify.py --connect 127.0.0.1 --expect d2 # 回滚
 ```
 
 `withdraw` 不删除版本目录与构建，之后 `enable-site` 即可恢复。上线实测任一条不通过时，按 ADR-194 (5) ⑥ 在 10 min 内执行
-`withdraw --d2-release <上一 D2 标签构建>`，在 `d3-dev` 修复后自发布候选重新执行。
+`withdraw --d2-release <上一 D2 标签构建>`，在 `main` 修复后自发布候选重新执行。
 
 ## 4 验收检查（verify.py）
 

@@ -37,7 +37,7 @@
 | 5 | 格式、体积与精度 | 1.116M 高斯、SH0：浮点 PLY 62.5 MB（56 B/高斯）；SOG 14.1 MB（12.6 B），位置误差 p99 4.1 mm（世界坐标）/ 9.7 mm（瓦片居中），渲染 PSNR 49–54 dB；压缩 PLY 18.2 MB（16.3 B），p99 13 mm、最大 79 mm；SPZ v4 19.7 MB（17.6 B），p99 0.19 mm；GLB（KHR_gaussian_splatting）66.9 MB；单文件 HTML 查看器 22.3 MB。相对 r11 原始 PLY（272 MB）SOG 为 19.3 倍 | 服务端（M25）保存 SPZ 或浮点 PLY（毫米级以下精度）；浏览器分发用 SOG 流式 LOD；SOG 的对数位置编码在原点附近更精细，大场景必须分块（流式 SOG 每块自带包围盒） |
 | 6 | 坐标约定陷阱 | splat-transform 与 PlayCanvas 把 PLY 数据视为"绕 Z 轴 180° 的存储空间"，所有 `-t/-r/-s` 与 `-B` 盒体都在引擎空间解释；世界 ENU（z 上）转换为瓦片局部、y 上的网页坐标需 `-r 0,0,180 -r -90,0,0 -t <Ec>,0,<−Nc>`，实测存储坐标为 (−(E−Ec), −U, −(N−Nc))，残差 0.0 | M22 封装统一计算并校验这一换算，禁止人工拼写参数；出处清单记录 `T_web_world` |
 | 7 | 浏览器渲染规模（A40，1080p，WebGL2） | SuperSplat Viewer（PlayCanvas 2.23）：1.12M / 4.46M / 10.0M / 17.85M 高斯 GPU 帧时间 p50 2.1 / 3.5 / 5.4 / 8.5 ms，但 CPU 排序（Web Worker）23 / 107 / 212 / 474 ms，排序滞后随规模线性增长；流式 LOD（17.85M 场景，预算 2M / 4M / 8M）GPU 1.6 / 2.5 / 4.3 ms、排序 42 / 95 / 193 ms | WebGL2 浏览器上大场景必须用流式 LOD + 2–4M 预算；单文件 SOG 只用于 ≤ 2M 的街区 |
-| 8 | 与现有 three.js 视口的关系 | Spark 2.2（three r186 `WebGLRenderer`，与 Drone4D 经典视口同类渲染器）可直接读取 PlayCanvas SOG：同一组资产 GPU 帧时间 1.7 / 4.4 / 9.0 / 15.6 ms（1080p）；PlayCanvas 与 three.js 不能共享深度缓冲 | 推荐两级方案：P1 在 Lab 以独立视图嵌入 SuperSplat Viewer（`createViewer`），P2 视需要在场景视图中以 Spark 同屏渲染；SOG 作为两者共用的分发格式；不统一到单一引擎 |
+| 8 | 与现有 three.js 视口的关系 | Spark 2.2（three r186 `WebGLRenderer`，与 ANet4D 经典视口同类渲染器）可直接读取 PlayCanvas SOG：同一组资产 GPU 帧时间 1.7 / 4.4 / 9.0 / 15.6 ms（1080p）；PlayCanvas 与 three.js 不能共享深度缓冲 | 推荐两级方案：P1 在 Lab 以独立视图嵌入 SuperSplat Viewer（`createViewer`），P2 视需要在场景视图中以 Spark 同屏渲染；SOG 作为两者共用的分发格式；不统一到单一引擎 |
 | 9 | WebGL2 最小上限 | Viewer 与 v2 编辑器在 WebGL2 规范最小统一块上限（24/12/12/24、块 16 KiB，沿用 `gpu-limits.spec.ts` 的模拟方法）下 0 个 WebGL 错误；程序最多引用 1 个顶点统一块、最大块 656 B | 浏览器高斯图层的最小上限风险低，仍需纳入 `m06.gpu-limits` 回归 |
 | 10 | 无头 GPU 浏览器 | dmax 容器内 Chrome 151 的 WebGL2 可走 ANGLE GL-EGL 或 ANGLE Vulkan（需 `--disable-vulkan-surface`）；Dawn 只枚举到 ANGLE OpenGLES 兼容适配器，**WebGPU core 不可用**（PlayCanvas 自动回退 WebGL2；v3 编辑器回退到 SwiftShader WebGPU，只能在 CPU 上运行）；SwiftShader WebGPU 画布在无头截图中为空白，需走离屏读回 | 服务端批量渲染与 CI 不依赖浏览器 WebGPU；WebGPU 路径的验收放在带显示的工作站 |
 | 11 | 相机时间轴与视频 | 编辑器 7 个关键帧（三次样条）→ 181 帧 H.264 MP4：1.12M 720p 15.6 s 导出（11.6 帧/s）、17.85M 1080p 107.5 s（1.7 帧/s，每帧同步排序）；Viewer 设置文件的 `animTracks` 可直接驱动航线预览 | 航线预览用 Viewer 的 `animTracks`（由运行轨迹生成）；演示视频以 M25 渲染为准，浏览器导出只作外观层预览 |
@@ -384,7 +384,7 @@ python -m awr.world.glb gaussian validate <wid> [--views views.json]
 
 - 用途：自动清理之后的人工质检与修补，包括删除天空与远景残留、删除生成式外观中的幻觉物体（r11 §G5 的幻觉目标审计发现项）、检查瓦片接缝；对 `aerial` 资产做三点调平的复核。
 - 部署：作为内部工作区的独立工具页（例如 `/lab/tools/gs-editor/`，`lab-web` 同一鉴权反向代理之后），静态构建、版本锁定；以 `?load=<短期签名 URL>&filename=` 打开资产。
-- 必要改动（小型分叉补丁，约 200 行）：隐藏"发布到 superspl.at"菜单并在构建期剔除 `publish.ts` 的网络调用（当前实现在同源 `/api/id` 返回 404 时不会发布，但应在构建上杜绝外传）；增加"保存到 Drone4D"菜单项，经 `postMessage` 把 `.ssproj` 与导出的 PLY 交给宿主页，由宿主页上传到 `POST /api/bench/v1/worlds/{wid}/gaussian/edits`；界面字符串按 §7.10 文案规范复核 zh-CN。
+- 必要改动（小型分叉补丁，约 200 行）：隐藏"发布到 superspl.at"菜单并在构建期剔除 `publish.ts` 的网络调用（当前实现在同源 `/api/id` 返回 404 时不会发布，但应在构建上杜绝外传）；增加"保存到 ANet4D"菜单项，经 `postMessage` 把 `.ssproj` 与导出的 PLY 交给宿主页，由宿主页上传到 `POST /api/bench/v1/worlds/{wid}/gaussian/edits`；界面字符串按 §7.10 文案规范复核 zh-CN。
 - 审计：`.ssproj` 保存了源数据与实例表（删除、变换、调色），可完整回放；每次人工编辑产生新的外观层版本，`provenance.json` 增加 `edits[]`（工程文件 sha256、编辑器版本、操作者、删除数量与包围盒）。
 - 版本选择：v3（WebGPU）性能与选择工具更完整，作为默认；无 WebGPU 的机器使用 v2 构建。两者都不进入公开站。
 
@@ -470,7 +470,7 @@ fused/gsplat PLY ─ gs.inspect（fillRatio、NaN、模型标签）
 | 工作包（建议编号） | 内容 | 模块 | 阶段 | 人周 |
 |---|---|---|---|---|
 | R12-1 高斯发布子阶段 | splat-transform 封装（坐标换算与回读校验、清理、瓦片、SPZ 与流式 SOG、体素）、门限、出处清单 `pipeline` 段、`world_build` 接入；其中 1.0 人周替代 WP-D3-22（P1）中"`spz@2` 编码"一项 | M22 | P1（随方案 C1） | 2.0（净增 1.0） |
-| R12-2 内部资产编辑工具 | SuperSplat v3/v2 版本锁定构建、发布功能剔除、"保存到 Drone4D"补丁、鉴权部署、编辑上传接口、zh-CN 文案复核、操作手册 | M22、M15 | P1 | 1.0 |
+| R12-2 内部资产编辑工具 | SuperSplat v3/v2 版本锁定构建、发布功能剔除、"保存到 ANet4D"补丁、鉴权部署、编辑上传接口、zh-CN 文案复核、操作手册 | M22、M15 | P1 | 1.0 |
 | R12-3 外观层检视面板 | `createViewer` 组件、viewer-settings 生成（锚点注释、航线动画轨）、与 M12 播放头同步、来源角标、Playwright 用例（含 `gpu-limits` 最小上限） | M15、M22 | P1 | 2.0 |
 | R12-4 航线预览与外观层视频 | 轨迹 → `animTracks` 转换、服务端 `--camera-track` 渲染作业、视频封装 | M27、M15 | P1 | 1.0 |
 | R12-5 事件编辑器选择交互 | 多边形、套索、盒体区域绘制与网格拾取（移植交互与掩码求交） | M23 前端 | P1（事件编辑） | 1.5 |

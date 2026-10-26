@@ -48,7 +48,7 @@
 - 完整 `make -k _lint` 未通过：`targets.py` 的生活预览/配方读取直接依赖 `awr.sim.activities`，触发 9 条 import-boundary 报告，需在正式合并前完成规划服务与 API 的架构解耦；未通过动态导入或放宽白名单来掩盖。
 - 同一 lint 的发布大小检查被 main 已有的 `research/ccf-tpci/data/m1geo_full.parquet`（12,858,479 bytes，限制 5 MB）阻塞；该文件不在本 PR 的改动中。
 - 完整 contracts/georef 后端套件未取得结果：远端是按部署所需文件同步的工作区，收集 `test_d3_event_contracts.py` 时缺少上游 `docs/modules/M23-*.md`，在收集阶段终止；不将该次尝试计作通过。目标契约相关测试已包含在上述 267 项回归中。
-- 完整 `make ci` 尚未通过。契约设计审查记录为 [#62](https://github.com/ANetResearch/ANet-Drone4D/issues/62)；本次提交用于汇总审查，不表示已满足自动合并条件。
+- 完整 `make ci` 尚未通过。契约设计审查记录为 [#62](https://github.com/ANetResearch/ANet4D/issues/62)；本次提交用于汇总审查，不表示已满足自动合并条件。
 
 ## 手动配置及 CI 修复复测
 

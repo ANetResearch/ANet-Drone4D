@@ -47,6 +47,15 @@ which are disabled by default and not offered on the public instance. The public
 [anet4d.agentnetwork.org.cn](https://anet4d.agentnetwork.org.cn) and this documentation to `docs.agentnetwork.org.cn/anet4d/`; the former
 addresses redirect permanently. The Python SDK is now `anet4d`; `drone4d` remains for one release as a deprecated alias.
 
+### V0.3.3: Event Lab samples
+
+V0.3.3 extends the public samples of the Event Lab (`/lab/`) to seven runs over five dev events: three baseline policies on
+`crop-handoff-001` (`track_share`, `coverage_scan`, `static_guard`) and one run each on `crop-handoff-002`, `crop-reid-001`,
+`crop-search-001` and `crop-vehicle-001`. Each run offers the event replay, the RGB and thermal private views of every UAV and Rerun data
+inspection; the samples are single-seed single runs, not ranked results. Sample media moves to the ModelScope dataset
+`inksong/ANet4D-samples`, and the landing page of the public site shows a sample gallery right after the first screen. The repository is
+renamed to `ANetResearch/ANet4D`; development happens on `main` only, and earlier releases are checked out by tag.
+
 ## D3 design record: event simulation and active observation benchmark
 
 D3 is defined as *A World-Grounded Event Simulation and Active Observation Benchmark for Collaborative Aerial Agents*: under the same world

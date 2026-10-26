@@ -2,8 +2,8 @@
  "hero": {
   "eyebrow_en": "AGENT NETWORK RESEARCH · RELEASE v0.2.0",
   "eyebrow_zh": "AGENT NETWORK RESEARCH · 版本 v0.2.0",
-  "title_en": "ANet Drone4D",
-  "title_zh": "ANet Drone4D",
+  "title_en": "ANet4D",
+  "title_zh": "ANet4D",
   "subtitle_en": "A real-world 4D simulation platform for multi-agent drones, from environments to coordinated swarms.",
   "subtitle_zh": "以真实世界环境为基础，推演多智能体无人机集群协同的 4D 仿真平台。"
  },

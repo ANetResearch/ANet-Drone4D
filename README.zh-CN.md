@@ -6,8 +6,8 @@
 
 ANet4D 是新一代具身智能体协同模拟基础设施。ANet4D 的目标是成为具身智能体协同研究的标准实验基础设施，如同 NS-3 之于网络研究。其适用范围涵盖多无人机、无人车（UGV）、无人船（USV）、地面机器人、固定传感器与软件智能体；已发布版本以无人机作为首类实体，运行在以真实世界为基础的四维数字孪生之上。交互沙盒（V0.2）在同一仿真时钟下运行城市级点云数字孪生、机群仿真、集群控制与目标感知，服务器无需 GPU，场景由访客浏览器渲染。事件沙盘（V0.3）引入网格世界、事件磁带与 Gazebo Sim 锁步、基于网格渲染的相机、热成像与 LiDAR 传感器以及基准评测运行时，其传感器生成需要服务器配备 NVIDIA GPU。
 
-[![Release](https://img.shields.io/github/v/release/ANetResearch/ANet-Drone4D?label=release&color=1f1f1f)](https://github.com/ANetResearch/ANet-Drone4D/releases/latest)
-[![CI](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/ANetResearch/ANet4D?label=release&color=1f1f1f)](https://github.com/ANetResearch/ANet4D/releases/latest)
+[![CI](https://github.com/ANetResearch/ANet4D/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ANetResearch/ANet4D/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-Read%20the%20Docs%20layout-1f1f1f)](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/)
 [![Live demo](https://img.shields.io/badge/live%20demo-anet4d.agentnetwork.org.cn-e0322d)](https://anet4d.agentnetwork.org.cn)
 [![License](https://img.shields.io/badge/license-modified%20Apache--2.0-1f1f1f)](LICENSE)
@@ -15,7 +15,7 @@ ANet4D 是新一代具身智能体协同模拟基础设施。ANet4D 的目标是
 **[在线演示](https://anet4d.agentnetwork.org.cn)** · **[文档](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/)** ·
 [快速开始](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/intro/quickstart.html) ·
 [开放接口](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/api/rest.html) ·
-[发布记录](https://github.com/ANetResearch/ANet-Drone4D/releases) · [ANet](https://github.com/ANetResearch/ANet)
+[发布记录](https://github.com/ANetResearch/ANet4D/releases) · [ANet](https://github.com/ANetResearch/ANet)
 
 [English](README.md) · **简体中文**
 
@@ -60,7 +60,7 @@ ANet4D 是新一代具身智能体协同模拟基础设施。ANet4D 的目标是
 无需注册即可访问**[在线演示](https://anet4d.agentnetwork.org.cn)**，站点提供只读的共享展示以及为每位访客隔离的沙盒。在 Linux 上本地运行平台：
 
 ```sh
-git clone https://github.com/ANetResearch/ANet-Drone4D.git && cd ANet-Drone4D
+git clone https://github.com/ANetResearch/ANet4D.git && cd ANet4D
 make setup        # 安装 Python 与 Node 依赖
 make demo-world   # 生成 ANet 合成城市
 make run          # 随后打开 http://127.0.0.1:8000/world/synthcity
@@ -238,9 +238,10 @@ with sb.create("synthcity", "t5_area_guard") as s:   # 公开站满载时自动�
 | V0.2 | 交互沙盒：目标物与量化感知、机巢与接力监视、开放接口、手机与平板适配、城市模拟监测展示；自 `v0.2.1` 起为补丁版本 | 已发布 |
 | V0.3 | 事件沙盘：GLB 网格世界、事件磁带、Gazebo Sim 锁步、网格相机与 LiDAR、FAST-LIVO2 评估、事件级观测基准 | 已发布 |
 | V0.3.2 | 更名为 ANet4D 并确立具身智能体协同定位；场景目标基础能力（目标外观、活动与生命周期绑定），为实验功能，缺省关闭 | 已发布 |
+| V0.3.3 | 事件沙盘公开样例扩充为 5 个 dev 事件上的 7 个运行，落地页增加样例画廊；仓库更名为 `ANetResearch/ANet4D`，样例数据集迁至 `inksong/ANet4D-samples` | 已发布 |
 | V0.3.x | 在 V0.3 基线上的增量交付，包括 SITL 物理档与 3DGS 外观层 | 规划中 |
 
-跨实体协同实验平台（D4 阶段）处于调研与概念设计阶段，此处不作排期，参见[概念设计](docs/06-D4-协同实验平台概念设计.md)。进度以 [GitHub Milestone](https://github.com/ANetResearch/ANet-Drone4D/milestones) 与置顶的[路线图 Issue](https://github.com/ANetResearch/ANet-Drone4D/issues/1) 为准。参见[版本路线](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/project/roadmap.html)与[D3 设计](docs/05-D3-设计增补与决策记录.md)。
+跨实体协同实验平台（D4 阶段）处于调研与概念设计阶段，此处不作排期，参见[概念设计](docs/06-D4-协同实验平台概念设计.md)。进度以 [GitHub Milestone](https://github.com/ANetResearch/ANet4D/milestones) 与置顶的[路线图 Issue](https://github.com/ANetResearch/ANet4D/issues/1) 为准。参见[版本路线](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/project/roadmap.html)与[D3 设计](docs/05-D3-设计增补与决策记录.md)。
 
 </details>
 
@@ -256,7 +257,7 @@ V0.2.0 依据 55 项验收标准（D2-AC-01 至 D2-AC-55）进行评估。第 2 
 | P0 (50) | 41 | 9 | 0 |
 | P1 (5) | 3 | 0 | 2 |
 
-在模拟 4 核公开站主机的 cgroup 环境下，24 h 浸泡测试以零重启完成，内存增长率为 0.48 MB/h。其余未通过项作为已知问题记录于[发布说明](https://github.com/ANetResearch/ANet-Drone4D/releases/tag/v0.2.0)；完整报告见 [docs/impl/D2-验收报告-第2轮.md](docs/impl/D2-验收报告-第2轮.md)。
+在模拟 4 核公开站主机的 cgroup 环境下，24 h 浸泡测试以零重启完成，内存增长率为 0.48 MB/h。其余未通过项作为已知问题记录于[发布说明](https://github.com/ANetResearch/ANet4D/releases/tag/v0.2.0)；完整报告见 [docs/impl/D2-验收报告-第2轮.md](docs/impl/D2-验收报告-第2轮.md)。
 
 </details>
 
@@ -314,8 +315,8 @@ ANet4D 是 Agent Network Research 旗下 ANet 生态的组成部分，与 [ANet]
   title   = {ANet4D: Simulation Infrastructure for Collaborative Embodied Agents},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.3.2},
-  url     = {https://github.com/ANetResearch/ANet-Drone4D}
+  version = {0.3.3},
+  url     = {https://github.com/ANetResearch/ANet4D}
 }
 ```
 

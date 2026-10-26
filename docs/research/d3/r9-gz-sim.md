@@ -1,4 +1,4 @@
-# r9 · gz-sim 源码研究与 Drone4D Realistic 后端落地设计
+# r9 · gz-sim 源码研究与 ANet4D Realistic 后端落地设计
 
 > 研究单元：r9-gz-sim　｜　日期：2026-10-11　｜　范围：Gazebo Sim（gz-sim）及其配套库的源码级研究、dmax 上的锁步原型实测、作为 D3 Realistic 后端的接口设计
 >
@@ -11,7 +11,7 @@
 | # | 议题 | 结论 | 依据 |
 |---|------|------|------|
 | 1 | 版本选型 | 原型采用 Harmonic（gz-sim 8.15，ROS 2 Jazzy vendor 包，LTS 至 2028）；生产目标建议 Jetty（gz-sim 10，LTS），其新增批量射线求交与 CPU LiDAR；main（11.0.0~pre2）引入 EnTT ECM、`Server::EcmScope`、Python ECM 绑定，暂不用于生产 | §1、§2.1、§2.5 |
-| 2 | 外部权威时钟锁步 | 可行且已验证。自研 `Drone4DClock` System 在 `PreUpdate` 处门控每一次迭代，Drone4D 控制器按 tick 授予步数；`step_done` 返回该 tick 末的真值位姿 | §3.1、§3.3 |
+| 2 | 外部权威时钟锁步 | 可行且已验证。自研 `Drone4DClock` System 在 `PreUpdate` 处门控每一次迭代，ANet4D 控制器按 tick 授予步数；`step_done` 返回该 tick 末的真值位姿 | §3.1、§3.3 |
 | 3 | 确定性 | 同一镜像、同型号 GPU 下，300 tick（7500 物理步、1800 帧）两次运行的位姿逐位一致，RGB 与 LiDAR 帧逐字节一致（需 `--seed`）；GPU 2 与 GPU 3 之间同样逐位一致；有无渲染传感器不影响物理轨迹（逐位一致） | §3.3.2 |
 | 4 | 命令通道语义 | gz-transport 话题为异步投递，无法与步进严格排序；需改为同步服务或进程内 ECM 写入。上游 `MulticopterVelocityControl` 将线速度指令按完整机体姿态（含横滚、俯仰）解释，机动时会把水平指令转为垂向分量，导致掉高；分叉版本 `Drone4DVelocityControl` 增加 `world`/`heading` 指令坐标系后定高误差由 −87 m 降至 +1.4 m 以内 | §2.8、§3.4 |
 | 5 | 多传感器时间一致性 | 同一渲染批次内所有传感器取自同一份 ECM 快照，RGB/Depth/Seg/LiDAR 时间戳与 tick 时刻完全相等（实测差值 0）；渲染为异步流水线，须按时间戳等待帧；无订阅者的传感器会被跳过渲染；渲染初始化异步，需"传感器就绪屏障" | §2.5、§3.4 |
@@ -23,7 +23,7 @@
 | 11 | 风与天气 | WindEffects 为全场均匀风（可按区域分段缩放）+ 一阶滤波 + 正弦 + 噪声，力 = 质量 × 系数 ×（风速 − 连杆速度）；Drone4DClock 直接写入风种子分量，确定性可控；降雨无物理模型，仅 ParticleEmitter 视觉与散射 | §2.7 |
 | 12 | Python 接入 | `gz.sim8` 可在进程内托管 Server 并以 `run(blocking, N)` 步进（已实测）；`gz.transport13` 的 Python `request()` 阻塞期间不释放 GIL，与订阅回调并发时会丢失应答（已复现，main 分支同样存在），生产链路应使用 C++ 或独立进程 | §2.11、§3.4 |
 | 13 | PX4 集成 | PX4 `gz_bridge` 以 `/world/<w>/clock` 驱动自身时钟（时间从动），Gazebo 不等待 PX4 输出，因此 SITL 档无法逐位确定，仅用于飞控验证档 | §2.8 |
-| 14 | 总体建议 | 采纳 gz-sim 作为 D3 Realistic 后端：Drone4D 持有时钟与事件磁带，gz-sim 负责刚体动力学、旋翼模型与基于 GLB 网格的传感器渲染；通过 `GzSimBackend`（实现既有 `SimBackend`/`DroneAdapter`/`SensorBackend` 协议）与 FleetSim Fast 档对齐 | §4 |
+| 14 | 总体建议 | 采纳 gz-sim 作为 D3 Realistic 后端：ANet4D 持有时钟与事件磁带，gz-sim 负责刚体动力学、旋翼模型与基于 GLB 网格的传感器渲染；通过 `GzSimBackend`（实现既有 `SimBackend`/`DroneAdapter`/`SensorBackend` 协议）与 FleetSim Fast 档对齐 | §4 |
 
 ---
 
@@ -171,7 +171,7 @@ Run() 循环（L810）
 - **WindEffects**（`src/systems/wind_effects/WindEffects.cc`）：风实体携带 `WorldLinearVelocitySeed`（目标风）与 `WorldLinearVelocity`（当前风）。每步对水平幅值、方向、垂向分别做一阶滤波（`time_for_rise`）、叠加正弦与高斯噪声；对所有 `enable_wind` 的连杆施加 `F = m · k(pos) · (v_wind − v_link)`（L586–L624），`k(pos)` 可按区域分段多项式缩放（如按高度分层）。外部可经 `/world/<w>/wind` 话题异步修改。
 - **大气**：`<atmosphere type="adiabatic">` 提供温度/气压递减率，供气压计、高度计使用。
 - **降雨/雾**：无物理模型；ParticleEmitter 系统提供粒子视觉，gz-rendering 对深度相机与 gpu_lidar 有粒子散射噪声监听（`Ogre2ParticleNoiseListener`），可用于"雨雾导致的回波噪声"近似。
-- Drone4D 用法：事件磁带中的风时间线由 Drone4DClock 直接写入种子分量（同步、确定），不经异步话题。
+- ANet4D 用法：事件磁带中的风时间线由 Drone4DClock 直接写入种子分量（同步、确定），不经异步话题。
 
 ### 2.8 多旋翼插件与 PX4 集成
 
@@ -224,7 +224,7 @@ Run() 循环（L810）
 
 ---
 
-## 3. 原型：Drone4D Lockstep Bridge
+## 3. 原型：ANet4D Lockstep Bridge
 
 ### 3.1 组成
 
@@ -332,8 +332,8 @@ Run() 循环（L810）
 
 | 档位 | 后端 | 权威划分 | 用途 |
 |------|------|----------|------|
-| Fast | FleetSim + 网格射线（r4）+ 快速相机（r3、r10） | Drone4D 全权 | 大规模策略搜索、批量数据集 |
-| **Realistic** | **gz-sim + Drone4D Bridge** | 时钟、事件：Drone4D；刚体与旋翼动力学、碰撞、GLB 网格传感器：gz-sim | 少量无人机的高可信实验，Fast 档动力学与传感器差异标定 |
+| Fast | FleetSim + 网格射线（r4）+ 快速相机（r3、r10） | ANet4D 全权 | 大规模策略搜索、批量数据集 |
+| **Realistic** | **gz-sim + ANet4D Bridge** | 时钟、事件：ANet4D；刚体与旋翼动力学、碰撞、GLB 网格传感器：gz-sim | 少量无人机的高可信实验，Fast 档动力学与传感器差异标定 |
 | Photorealistic | Realistic 或 Fast + 3DGS 相机（r3） | 静态背景由 3DGS 渲染，动态前景由 gz 渲染并按深度合成 | VLM、视觉搜索、Re-ID |
 | SITL | gz-sim + PX4 | PX4 时钟从动于 gz，非确定 | 飞控交互验证 |
 
@@ -348,7 +348,7 @@ Run() 循环（L810）
 | `collision.mesh` | 同一模型 `<collision>` | 减面至约 10 万面量级（r5 数据），或 bullet-featherstone 的 `convex_decomposition`；标注"几何不完整"区域 |
 | `anchors.json`、`walkable.navmesh` | 不进入 SDF | 由 Event Runtime 消费，生成事件磁带 |
 | 事件实体（人、车、狗） | 人：`<actor>`（蒙皮）；车：带碰撞体的运动学模型 | 每个事件实体挂 `Label`（实例 ID 与事件实体 ID 建立映射表），供分割与标注 |
-| 机队 | `<include>` 机型模板 + 传感器挂载 | 机型模板来自 Drone4D 机型目录；指令语义统一为世界系速度 |
+| 机队 | `<include>` 机型模板 + 传感器挂载 | 机型模板来自 ANet4D 机型目录；指令语义统一为世界系速度 |
 | 天气 | `<wind>` + WindEffects；可选 ParticleEmitter | 风时间线由磁带驱动 |
 | 系统清单 | Physics（dartsim + bullet 检测器）、Sensors（ogre2）、Imu/NavSat 等、WindEffects、Label、Drone4DClock | 批处理模式省略 SceneBroadcaster 与 GUI |
 
@@ -356,7 +356,7 @@ Run() 循环（L810）
 
 ### 4.3 与权威时钟、事件磁带的同步
 
-1. **权威**：Drone4D Experiment Controller 持有 `t_sim_ns` 与 tick 序号；gz-sim 只在被授予步数时推进，tick 周期必须是物理步长的整数倍（本原型 0.1 s = 25 × 4 ms）。
+1. **权威**：ANet4D Experiment Controller 持有 `t_sim_ns` 与 tick 序号；gz-sim 只在被授予步数时推进，tick 周期必须是物理步长的整数倍（本原型 0.1 s = 25 × 4 ms）。
 2. **每 tick 流程**：Agent 观测 → 策略动作 → DroneAdapter 写入指令（同步）→ 授予步数 → `step_done`（真值位姿，写入 StateRing）→ Sensor Service 收齐 (t_{k−1}, t_k] 帧后放行下一 tick。
 3. **事件磁带**：在 Drone4DClock 的 `PreUpdate` 中按仿真时间纯函数回放（actor、运动学车辆、风、天气开关），保证与 FleetSim Fast 档使用同一份 Canonical Event Tape；Exogenous 模式下磁带只读；Interactive 模式由 Event Runtime 每 tick 计算增量后经同一通道下发，锁步保证闭环结果可复现。
 4. **回合边界**：传感器就绪屏障之后的第一个 tick 定为回合零点；回合重置采用"重启实例 + 重新生成"，不依赖 ECM 状态快照（`WorldControlState` 的 `SerializedState` 恢复覆盖不完整）。
@@ -375,7 +375,7 @@ Run() 循环（L810）
 | `payload` | 共享内存或文件引用（大帧不进消息总线） |
 | `backend="gz:ogre2"`、`backend_version`、`asset_hash`、`seed` | 运行清单 |
 
-**数据通路**：gz-transport（容器内 127.0.0.1、独立分区）→ C++ Sensor Bridge 进程（订阅全部声明的传感器、按 tick 汇齐、写共享内存、生成帧契约）→ Drone4D Sensor Service：① 写 MCAP 原始录制与数据集目录（`runs/<policy>/<uav>/rgb|depth|lidar/`）；② 经 ANet 按机私有通道发给对应 Agent（每机仅收本机观测）；③ 以 `sim_time` 时间线记录到 Rerun（与 r8 对齐，实体路径如 `/world/uav0/camera/rgb`）。
+**数据通路**：gz-transport（容器内 127.0.0.1、独立分区）→ C++ Sensor Bridge 进程（订阅全部声明的传感器、按 tick 汇齐、写共享内存、生成帧契约）→ ANet4D Sensor Service：① 写 MCAP 原始录制与数据集目录（`runs/<policy>/<uav>/rgb|depth|lidar/`）；② 经 ANet 按机私有通道发给对应 Agent（每机仅收本机观测）；③ 以 `sim_time` 时间线记录到 Rerun（与 r8 对齐，实体路径如 `/world/uav0/camera/rgb`）。
 
 **与既有 `SensorBackend` 协议的映射**：`open(world, rigs)` → 校验 SDF 中的传感器与 rig 一致并订阅；`request(slots, poses, t)` → 对常开传感器为空操作（位姿由物理决定），对按需传感器转为 `<triggered>` 触发（同样走同步控制消息）；`poll()` → 返回已汇齐的帧。`SensorCaps` 声明 `raycast="gpu"`、`render="raster-glb"`。
 
@@ -414,7 +414,7 @@ Run() 循环（L810）
 |------|------|
 | `attach(world, clock, bus, ring)` | 在指定 GPU 的工作容器中启动 gz 进程（独立分区），等待锁步服务与传感器就绪屏障 |
 | `spawn(spec)` / `despawn(id)` | 优先在导出时预置机位；运行时经 UserCommands 的 `/world/<w>/create`、`/remove` 服务 |
-| `dispatch_batch(cmds)` | 高层指令在 Drone4D 侧统一由路径跟踪器转为世界系速度 + 偏航角速度，与 FleetSim 共用同一实现；只下发 `velocity` |
+| `dispatch_batch(cmds)` | 高层指令在 ANet4D 侧统一由路径跟踪器转为世界系速度 + 偏航角速度，与 FleetSim 共用同一实现；只下发 `velocity` |
 | `step(tick)` | 授予 `tick_period / dt` 步，等待 `step_done`，写入 StateRing（`Pose(t_sim_ns, pos, q_xyzw, vel, omega)`） |
 | `snapshot()` / `restore()` | 仅记录运行清单与 tick；恢复采用重放 |
 
@@ -424,7 +424,7 @@ Run() 循环（L810）
 
 | 项 | 规格 |
 |----|------|
-| 镜像 | Ubuntu 24.04 + Gazebo Harmonic（ROS Jazzy vendor 或 OSRF 官方源）+ Drone4D Bridge 插件，约 3.5 GB；Jetty 迁移后同构 |
+| 镜像 | Ubuntu 24.04 + Gazebo Harmonic（ROS Jazzy vendor 或 OSRF 官方源）+ ANet4D Bridge 插件，约 3.5 GB；Jetty 迁移后同构 |
 | 单实例资源 | 显存约 2 GB；CPU 2–3 核；内存约 3 GB（小镇级 GLB） |
 | GPU 绑定 | 每容器 `--gpus device=N`（EGL 固定使用可见设备 #0） |
 | 隔离 | `GZ_PARTITION=<run_id>`、`GZ_IP=127.0.0.1`、每实例独立世界名 |
@@ -442,7 +442,7 @@ Run() 循环（L810）
 ### 4.8 对外表述建议（UI、网站、README）
 
 - 档位名称：快速仿真（Fast）、高保真仿真（Realistic, Gazebo Sim）、照片级渲染（Photorealistic）、飞控在环（SITL）。
-- 能力描述示例："高保真仿真档由 Gazebo Sim 提供刚体动力学、旋翼模型与基于 GLB 场景网格的传感器渲染，在 Drone4D 权威时钟下逐步推进，同一实验条件下可逐位复现。"
+- 能力描述示例："高保真仿真档由 Gazebo Sim 提供刚体动力学、旋翼模型与基于 GLB 场景网格的传感器渲染，在 ANet4D 权威时钟下逐步推进，同一实验条件下可逐位复现。"
 - 避免口语化措辞与未经验证的性能承诺；性能数值一律注明硬件、分辨率、传感器组合与测量条件。
 
 ---

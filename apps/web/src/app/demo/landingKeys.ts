@@ -37,7 +37,9 @@ const STATIC_KEYS = [
 const LAB_MEDIA_KEYS = ['lab-oblique', 'lab-junction', 'lab-thermal', 'lab-residential', 'lab-blocks']
 const LAB_POINTS = 3
 const LAB_STATIC_KEYS = ['landing.nav.lab', 'landing.nav.labViews', 'landing.lab.samples', 'landing.lab.title', 'landing.lab.sub',
-  'landing.lab.meta', 'landing.lab.open', 'landing.lab.sample', 'landing.lab.attribution']
+  'landing.lab.meta', 'landing.lab.open', 'landing.lab.sample', 'landing.lab.attribution', 'landing.lab.featured', 'landing.lab.gallery.title',
+  'landing.lab.gallery.hint', 'landing.lab.frames.title', 'landing.lab.card.fleet', 'landing.lab.card.obs', 'landing.lab.card.policy', 'landing.lab.card.open',
+  'landing.lab.card.alt']
 
 function landingI18nKeys(lab: boolean): string[] {
   const keys = new Set(STATIC_KEYS)

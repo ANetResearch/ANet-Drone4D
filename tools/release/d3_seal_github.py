@@ -54,7 +54,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCS05 = ROOT / "docs" / "05-D3-设计增补与决策记录.md"
-REPO = "ANetResearch/ANet-Drone4D"
+REPO = "ANetResearch/ANet4D"
 API = "https://api.github.com"
 TAG = "v0.3.0"
 D2_TAG = "v0.2.2"

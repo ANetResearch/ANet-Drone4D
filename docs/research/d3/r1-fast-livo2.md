@@ -36,7 +36,7 @@
 | 项 | 现状（2026-10-11 核对） | 对 D3 的含义 |
 |---|---|---|
 | 仓库 | hku-mars/FAST-LIVO2，4729 stars / 866 forks / 325 open issues；`main@0d2c034`（2026-03-08，只改了数据集链接），代码自 2025-01 开源后基本稳定 | 可冻结在该提交；以容器形式长期使用 |
-| 许可证 | **GPL-2.0**（商用需另谈） | 只能作为独立进程/容器"聚合"使用，不得把源码或链接库并入 Drone4D（ANet 修改版 Apache）；Drone4D 只交付 bag/配置生成与评测脚本 |
+| 许可证 | **GPL-2.0**（商用需另谈） | 只能作为独立进程/容器"聚合"使用，不得把源码或链接库并入 ANet4D（ANet 修改版 Apache）；ANet4D 只交付 bag/配置生成与评测脚本 |
 | ROS | 仅 ROS1 catkin（Noetic 已于 2025-05 EOL） | 用 `ros:noetic-perception-focal` 容器；ROS2 只有社区移植：Vulcan-YJX/FAST-LIVO2_ROS2（humble，60 stars，2025-02）、davidakhihiero/FAST-LIVO2-ROS2（humble）、U-AMC/FAST-LIVO2-ROS2（2026-05）、freshleesh/fast_livo2（jazzy + 重定位，2026-06）等，均非官方，D3 不依赖 |
 | Sophus | 必须用非模板版 `a621ff`（`#include <sophus/se3.h>`，链接 `libSophus.so`） | GCC 9 下 `so2.cpp` 对 `std::complex::real()` 赋值编译失败，需打一行补丁并去掉 `-Werror`（见 §3.1） |
 | rpg_vikit | 必须用 xuankuzcr 分叉（与 FAST-LIVO1 的不同）：相机模型 Pinhole(+radtan d0–d3) / EquidistantCamera(k1–k4) / ATAN / PolynomialCamera / Ocam(omni)，`camera_loader::loadFromRosNs("laserMapping")` 读参 | 模拟相机用 Pinhole、零畸变最省事；鱼眼可用 EquidistantCamera |
@@ -383,7 +383,7 @@ ROS1 字节直接拼装（numpy 结构体 19 B/点），写 bag 用 `rosbags`（
 
 ## 7. 风险与注意事项
 
-1. **许可证**：FAST-LIVO2 为 GPL-2.0，只能独立分发容器、通过文件/ROS 消息交互；Drone4D 仓库内不得包含其源码或链接产物（Dockerfile 只在构建时拉取）。
+1. **许可证**：FAST-LIVO2 为 GPL-2.0，只能独立分发容器、通过文件/ROS 消息交互；ANet4D 仓库内不得包含其源码或链接产物（Dockerfile 只在构建时拉取）。
 2. **ROS1 EOL 与依赖链**：Noetic、非模板 Sophus（需补丁）、vikit 分叉都已停滞；镜像应长期保存（已保留 `d3-r1-fast-livo2:noetic`）并在 D3 制品库存档。ROS2 移植均为社区版，切换前需用本闭环回归。
 3. **模拟与算法的隐含假设**：本研究已踩到"丢无回波点 → 时间修正级联"这一类问题；其他潜在差异（Livox `tag` 语义、多回波、点序、IMU 单位、相机滚动快门与运动模糊、HDR/自动曝光曲线）都可能让结果"好得不真实"或"差得不真实"。合同测试 + 真机回归是唯一的防线。
 4. **场景真实度**：小镇网格中位边长约 3 m（8.4 m/单位，r2 配准），屋檐、树冠、电线等细结构缺失，纹理为烘焙光照（无昼夜/阴影变化）；这让 VIO 比真实环境容易、LIO 在大平面上更容易退化。尺度 8.4 m/单位是 r2 的估计值（置信度 C），改尺度后需要重跑。

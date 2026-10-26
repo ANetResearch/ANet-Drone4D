@@ -22,4 +22,4 @@ What changes and why. Link the issue: Closes #
 Not affected / measured with `make perf CASE=<id>` (attach the report).
 
 By submitting this PR you agree to the contributor terms in
-[LICENSE](https://github.com/ANetResearch/ANet-Drone4D/blob/main/LICENSE), condition 2.
+[LICENSE](https://github.com/ANetResearch/ANet4D/blob/main/LICENSE), condition 2.

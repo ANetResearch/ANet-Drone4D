@@ -27,7 +27,7 @@
 ### 2.1 开关与入口
 
 - `apps/web/src/lib/demo.ts`：`DEMO_PUBLIC = import.meta.env.VITE_AWR_DEMO === 'public'`（常量折叠），以及演示世界、入口、路由与隐藏动作表、仓库与文档链接、`demoWorlds()`。
-- `apps/web/vite.config.ts`：`VITE_AWR_DEMO` 只允许 `public`，与 `VITE_AWR_TEST_SWITCHES=1` 同用直接抛错；演示构建启用 `awr-demo-public` 插件：把 `index.html` 的入口换成 `src/app/demo/entry.tsx`、标题换成 "ANet Drone4D · Public Demo"，在 `<head>` 内联一行脚本给 `/` 打 `data-landing`（启动遮罩在首帧前就不绘制）；`closeBundle` 删除 `dist/bench`（UrbanScene3D 城市的 flight60 夹具），把 6 张合成城市截图与 `demo-flight.webp` 从 `docs/media` 复制到 `dist/demo`。头图按任务书复制到 `apps/web/public/demo/drone4d-banner.jpg`（512 KB，默认构建也会带上这一张，但不引用）。
+- `apps/web/vite.config.ts`：`VITE_AWR_DEMO` 只允许 `public`，与 `VITE_AWR_TEST_SWITCHES=1` 同用直接抛错；演示构建启用 `awr-demo-public` 插件：把 `index.html` 的入口换成 `src/app/demo/entry.tsx`、标题换成 "ANet4D · Public Demo"，在 `<head>` 内联一行脚本给 `/` 打 `data-landing`（启动遮罩在首帧前就不绘制）；`closeBundle` 删除 `dist/bench`（UrbanScene3D 城市的 flight60 夹具），把 6 张合成城市截图与 `demo-flight.webp` 从 `docs/media` 复制到 `dist/demo`。头图按任务书复制到 `apps/web/public/demo/drone4d-banner.jpg`（512 KB，默认构建也会带上这一张，但不引用）。
 - 分块：演示构建在 `ui` 组之前插入 `landing` 组，只捕获落地页实际用到的模块（含 Vite 预加载辅助模块）。第一次构建时落地页经 `ui` 分块静态导入 three（`index.html` 预加载了 three、r3f、ui）；先把组扩到整个 `ui/components` 与 `ui/icons`（`ui-kit` 1.07 MB），再收窄到精确模块并捕获预加载辅助模块后，落地页的静态依赖只剩运行时、react 与 landing（脚本约 156 KB gzip、样式约 30 KB gzip）。
 - `src/app/demo/entry.tsx`：`/` 调用 `renderLanding()`，其余路径 `import('../../main')`。
 
@@ -43,7 +43,7 @@
 | 菜单与动作 | 去掉重建任务、录制列表、回放录制、GPU 自检；帮助增加"演示首页"；面包屑 run 不链接；不登记 `jobs.open`、`replay.runs`；书签动作禁用并给出只读原因 | `ui/layout/AppHeader.tsx`、`ui/actions/builtin.ts` |
 | 只读 | token 一律按 viewer；i18n 别名把 4 个只读原因键与 `role.viewer`、`hint.liveNoRewind` 改指演示文案（键不变，守卫与 Tooltip 无需分支）；顶栏只读徽标带 Tooltip；详情页、设置账户页、顶栏都没有"申请控制"；环境面板的预设与滑块、时间轴"添加书签"在只读时以 Tooltip 说明 | `app/i18n/index.ts`、`net/api.ts`、`ui/panels/{drone-detail,settings,env,timeline}/*` |
 | 数据 | 世界列表只保留 synthcity；时间轴不探测录制、不读服务端书签（此前每次进入沙盘有 2 个 404） | `app/query/options.ts`、`stores/timeline.ts` |
-| 标识 | 标题"<视图> · ANet Drone4D 公开演示"；关于区块最前增加"演示站"一行 | `app/App.tsx`、`ui/views/AboutDialog.tsx` |
+| 标识 | 标题"<视图> · ANet4D 公开演示"；关于区块最前增加"演示站"一行 | `app/App.tsx`、`ui/views/AboutDialog.tsx` |
 
 ### 2.4 顺带修复：设计样例页的无主分块
 
@@ -113,7 +113,7 @@ WS（Origin 为站点域名）：serverInfo 角色 viewer、席位 none；`uav/p
 
 ### 6.3 Playwright（Chrome 151 SwiftShader，1600 × 900，`.cache/demo/pw-demo.mjs`）
 
-全部 27 项断言通过（其余读数记在 `demo-pw-log.json`），无 pageerror、无 console.error：落地页只请求 4 个脚本分块（入口、运行时、react、landing），启动遮罩不绘制；标题、按钮、演示说明的 4 个要点；英文切换后按钮为 "Launch demo"、`<html lang="en">`；点击"进入演示"约 17 s 揭开，加载了 three；点云上屏（Tier S 1–2 万点）、机群列表 7 架、无人机图层有绘制；标题"synthcity · ANet Drone4D 公开演示"；顶栏"公开演示 · 只读"与 Tooltip、环境面板 Tooltip、详情页说明都是"公开演示为只读模式"；页面中没有"申请控制"；工具（性能面板、事件日志、图表、时间轴）、帮助（快捷键、演示首页、项目仓库、关于）、仿真菜单中没有重建、录制与 GPU 自检；`/jobs` 回到世界列表且只有 synthcity，卡片为就绪（"打开"可用）。
+全部 27 项断言通过（其余读数记在 `demo-pw-log.json`），无 pageerror、无 console.error：落地页只请求 4 个脚本分块（入口、运行时、react、landing），启动遮罩不绘制；标题、按钮、演示说明的 4 个要点；英文切换后按钮为 "Launch demo"、`<html lang="en">`；点击"进入演示"约 17 s 揭开，加载了 three；点云上屏（Tier S 1–2 万点）、机群列表 7 架、无人机图层有绘制；标题"synthcity · ANet4D 公开演示"；顶栏"公开演示 · 只读"与 Tooltip、环境面板 Tooltip、详情页说明都是"公开演示为只读模式"；页面中没有"申请控制"；工具（性能面板、事件日志、图表、时间轴）、帮助（快捷键、演示首页、项目仓库、关于）、仿真菜单中没有重建、录制与 GPU 自检；`/jobs` 回到世界列表且只有 synthcity，卡片为就绪（"打开"可用）。
 
 截图（逐张查看过）：`demo-landing.png`（首屏）、`demo-landing-media.png`、`demo-landing-features.png`、`demo-landing-full.png`、`demo-landing-en.png`、`demo-sandbox.png`（只读徽标 Tooltip）、`demo-readonly-env.png`（环境面板 Tooltip）、`demo-select.png`（详情页只读说明）、`demo-menu-tools.png`、`demo-worldhub.png`，均在 `.cache/impl/shots/`。
 

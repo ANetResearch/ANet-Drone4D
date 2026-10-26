@@ -20,15 +20,15 @@ test-d3: ## D3 测试（tests/d3，.venv-d3）
 # ---- D3 回归门：合入前强制（D3-AC-01；AWR-05 §4.8；封板任务 G05） -----------------------------------------------------
 # 步骤登记在 tests/d3/regress_gate/gate.json，由 tools/bench/d3/regress_gate.py 执行；本节只定义档位、被检查的树与证据位置。
 #   make gate-d3              完整门：gate.json 的缺省步骤（第 1–6 条；第 3 条性能子集自 G04 起为缺省步骤，GATE_PERF 保留兼容）
-#   make gate-d3-light        轻量门：不需要数据、GPU、浏览器与独占主机的步骤（GATE_D3_LIGHT）；托管 CI 在 d3-dev 的 push 与
-#                             指向 d3-dev 的 PR 上运行同一目标（.github/workflows/ci.yml 的 d3-gate 任务）
+#   make gate-d3-light        轻量门：不需要数据、GPU、浏览器与独占主机的步骤（GATE_D3_LIGHT）；托管 CI 在 main 的 push 与
+#                             指向 main 的 PR 上运行同一目标（.github/workflows/ci.yml 的 d3-gate 任务）
 #   make gate-d3-dmax         重载部分（GATE_D3_HEAVY：D2 Python 测试全集、零影响对拍、resim、性能子集、import 方向）在 dmax CPU 池容器中
 #                             运行（tools/deploy/dmax/run_d3_gate.sh；不挂 GPU）
-#   make gate-d3-nightly      夜间作业：取 origin/d3-dev，dmax 跑重载部分，本机跑其余缺省步骤；两份报告合起来覆盖完整门
+#   make gate-d3-nightly      夜间作业：取 origin/main，dmax 跑重载部分，本机跑其余缺省步骤；两份报告合起来覆盖完整门
 #   make gate-d3-check        合入前检查：被检查的树已有覆盖所需步骤且全部通过的报告（GATE_TIER=light 缺省，full 要求完整门，
 #                             可由多份报告合并覆盖，每步取最近一次结果）；不通过时 make 以非零状态退出
-#   make gate-d3-hook         安装 pre-push 钩子：推送 d3-dev 前对被推送的提交执行 gate-d3-check（GATE_TIER 同上）
-# 被检查的树：GATE_REF 为空时为当前工作树；给出提交（HEAD、origin/d3-dev、sha）时 git archive 导出到 GATE_WORK/src-<tag>.<随机>
+#   make gate-d3-hook         安装 pre-push 钩子：推送 main 前对被推送的提交执行 gate-d3-check（GATE_TIER 同上）
+# 被检查的树：GATE_REF 为空时为当前工作树；给出提交（HEAD、origin/main、sha）时 git archive 导出到 GATE_WORK/src-<tag>.<随机>
 # （缺省 ~/.cache/awr/d3-gate，在本检出之外：检出内的 .cache/ 被 .gitignore 忽略，oxlint 会因此找不到文件），在副本中运行（node_modules 逐项链接本检出、@awr/* 工作区包指向副本，worlds/ 链接 AWR_WORLDS_DIR，PYTHONPATH = 副本的
 # python/，git 用临时索引 read-tree 该提交，本检出的索引与工作树不受影响）。多个任务共用一个工作树时，以 GATE_REF 检查
 # 将要合入的提交，避免把他人未提交的改动计入证据。
@@ -47,7 +47,7 @@ GATE_TIER     ?= light
 GATE_PERF     ?= 0
 GATE_KEEP     ?= 0
 GATE_WORK     ?= $(HOME)/.cache/awr/d3-gate
-NIGHTLY_REF   ?= origin/d3-dev
+NIGHTLY_REF   ?= origin/main
 
 # 门运行脚本（bash；以 $(value …) 原样导出，脚本内的 $ 不经 make 展开）。参数：tag | run <档位> <步骤>；
 # 输入环境：GATE_ROOT_DIR（本检出）、GATE_PY、GATE_REF、GATE_D3_ROOT、GATE_KEEP、GATE_WORK、AWR_WORLDS_DIR。
@@ -185,9 +185,9 @@ gate-d3-dmax: ## D3 回归门重载部分在 dmax CPU 池运行（GATE_D3_HEAVY�
 	@cd $(ROOT) && REF=$(if $(GATE_REF),$(GATE_REF),HEAD) STEPS=$(GATE_D3_HEAVY) GATE_D3_ROOT=$(GATE_D3_ROOT) \
 	  bash tools/deploy/dmax/run_d3_gate.sh
 
-gate-d3-nightly: _need-installed ## 夜间作业：取 NIGHTLY_REF（origin/d3-dev），dmax 跑重载部分、本机跑其余缺省步骤，再按完整门检查
+gate-d3-nightly: _need-installed ## 夜间作业：取 NIGHTLY_REF（origin/main），dmax 跑重载部分、本机跑其余缺省步骤，再按完整门检查
 	@cd $(ROOT) && $(GATE_D3_ENV) bash -c 'cd "$$GATE_ROOT_DIR"; [ -e .git ] || export GIT_DIR=$${GIT_DIR:-/data/projs/.anet-drone4d.git} GIT_WORK_TREE=$$GATE_ROOT_DIR; \
-	  git fetch --quiet origin d3-dev'
+	  git fetch --quiet origin main'
 	@echo "[d3-gate] nightly $(NIGHTLY_REF) $$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 	-@$(MAKE) --no-print-directory gate-d3-dmax GATE_REF=$(NIGHTLY_REF)
 	-@$(MAKE) --no-print-directory gate-d3 GATE_REF=$(NIGHTLY_REF) GATE_STEPS=$$($(PY) -c 'import json; h = set("$(GATE_D3_HEAVY)".split(",")); print(",".join(s["id"] for s in json.load(open("$(GATE_D3_JSON)"))["steps"] if s.get("default", True) and s["id"] not in h))')
@@ -200,11 +200,11 @@ gate-d3-check: ## 合入前检查：被检查的树已有覆盖 GATE_TIER（ligh
 	@tag=$$($(GATE_D3_TAG)) && [ -n "$$tag" ] || { echo "[d3-gate-check] cannot resolve GATE_REF=$(GATE_REF)" >&2; exit 2; }; \
 	  $(PY) -c "$$_GATE_D3_CHECK_TEXT" "$(GATE_TIER)" "$$tag" "$(GATE_D3_ROOT)" "$(GATE_D3_JSON)" "$(GATE_D3_LIGHT)" "$(GATE_D3_HEAVY)" "$(GATE_PERF)"
 
-gate-d3-hook: ## 安装 pre-push 钩子：推送 refs/heads/d3-dev 前对被推送的提交执行 gate-d3-check（GATE_TIER，缺省 light）
+gate-d3-hook: ## 安装 pre-push 钩子：推送 refs/heads/main 前对被推送的提交执行 gate-d3-check（GATE_TIER，缺省 light）
 	@cd $(ROOT) && { [ -e .git ] || export GIT_DIR=$${GIT_DIR:-/data/projs/.anet-drone4d.git} GIT_WORK_TREE=$(ROOT); } && \
 	  h=$$(git rev-parse --git-path hooks)/pre-push && mkdir -p "$${h%/*}" && \
 	  printf '%s\n' '#!/usr/bin/env bash' '# D3 回归门合入前检查（mk/d3.mk gate-d3-hook 安装；D3-AC-01）' 'set -euo pipefail' \
 	    'while read -r lref lsha rref rsha; do' \
-	    '  [ "$$rref" = refs/heads/d3-dev ] && [ "$$lsha" != 0000000000000000000000000000000000000000 ] || continue' \
+	    '  [ "$$rref" = refs/heads/main ] && [ "$$lsha" != 0000000000000000000000000000000000000000 ] || continue' \
 	    "  make -s -C $(ROOT) gate-d3-check GATE_REF=\"\$$lsha\" GATE_TIER=$(GATE_TIER)" 'done' > "$$h" && chmod +x "$$h" && \
 	  echo "pre-push hook installed: $$h (GATE_TIER=$(GATE_TIER))"

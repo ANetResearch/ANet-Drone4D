@@ -44,7 +44,7 @@ transitions-dev CLI and the Refine tool are MIT-licensed; neither is included he
 derive from the Prometheus mesh.
 
 **gz-sim fork.** The seven files in `native/gz/src/` listed above keep the original copyright header of gz-sim
-(Copyright (C) 2019 Open Source Robotics Foundation, Apache License 2.0) and state their changes in a "Drone4D
+(Copyright (C) 2019 Open Source Robotics Foundation, Apache License 2.0) and state their changes in a "ANet4D
 modifications" paragraph under it (Apache License 2.0, Section 4(b)); the heading, the `Drone4D*` file and class
 names and `drone4d_gz.proto` are legacy identifiers of the native plugin and keep the former name.
 `Common.cc`, `Common.hh`, `LeeVelocityController.cc`, `LeeVelocityController.hh` and `Parameters.hh` are copies in which only the namespace
@@ -56,7 +56,7 @@ gz-transport topics, and the `commandFrame` and `init_hover` parameters are adde
 checked by REL-06 of `tools/lint/check-release.mjs`.
 
 中文：`native/gz/src/` 中由 gz-sim 8.15.0 复制或派生的 7 个文件保留原版权头（Open Source Robotics Foundation，Apache-2.0），
-并在版权头下以"Drone4D modifications"段落注明改动；`native/gz/models/x500_d4d/` 派生自 Rudis Laboratories 的 x500_base
+并在版权头下以"ANet4D modifications"段落注明改动；`native/gz/models/x500_d4d/` 派生自 Rudis Laboratories 的 x500_base
 （BSD-3-Clause），原许可文件随目录保留。
 
 ## 2. Adapted code

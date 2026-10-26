@@ -249,7 +249,7 @@ def test_parity_trees_resolve_workspace_packages_to_their_own_copy(tmp_path: Pat
 
 
 def test_d2_demo_build_parity(tmp_path: Path) -> None:
-    """扩展点 15：开关缺省关闭时 d3-dev 的演示构建与 D2 标签（D2_REF）的演示构建逐字节一致（D3-AC-01，UX-AC-082）"""
+    """扩展点 15：开关缺省关闭时 main 的演示构建与 D2 标签（D2_REF）的演示构建逐字节一致（D3-AC-01，UX-AC-082）"""
     _need_node()
     if not _git_ok():
         pytest.skip(f"[platform] git with tag {_d2_ref()} not reachable (export GIT_DIR for the external git directory)")

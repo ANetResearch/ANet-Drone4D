@@ -165,7 +165,7 @@ URL 查询参数（只写非权威的视图状态；权威状态永远来自服�
 | `replay` | string | 运行 id | 空 | 一次性参数：`/world/:id/replay/:run?seg=&t=` 重定向为 `/world/:id?replay=<run>&seg=&t=`（画布与世界加载路径不变）；Sandbox 在连接就绪后按 §5.4 进入回放（先暂停实时，再 `playback open`，有 `t` 时 seek），随即从地址栏删除 `replay`、`seg`、`t`；无席位时 Toast 说明原因（FX-WEB2） |
 | `tier`、`rb`、`allowFallback` | string | 见 AWR-03 §3.5 | 空 | 仅 dev/test 构建生效，生产构建移除（ADR-044） |
 
-页面标题（`document.title`）为"<视图> · ANet Drone4D"：Sandbox 取世界 id，覆盖页与页面层取其名称（世界、重建任务、录制列表、测试报告、GPU 自检），其余为"ANet Drone4D"（ADR-056）。公开演示构建（`VITE_AWR_DEMO=public`，ADR-083）中产品名部分为"ANet Drone4D 公开演示"，只有 `/`（落地页，不加载应用）、`/world/synthcity`、`/worlds` 与 `/settings` 四条路由，其余路径回到世界列表；只读控件的原因统一为"公开演示为只读模式"，不出现申请控制，关于区块最前增加"演示站"一行（M15-FR-120 至 FR-124）。
+页面标题（`document.title`）为"<视图> · ANet4D"：Sandbox 取世界 id，覆盖页与页面层取其名称（世界、重建任务、录制列表、测试报告、GPU 自检），其余为"ANet4D"（ADR-056）。公开演示构建（`VITE_AWR_DEMO=public`，ADR-083）中产品名部分为"ANet4D 公开演示"，只有 `/`（落地页，不加载应用）、`/world/synthcity`、`/worlds` 与 `/settings` 四条路由，其余路径回到世界列表；只读控件的原因统一为"公开演示为只读模式"，不出现申请控制，关于区块最前增加"演示站"一行（M15-FR-120 至 FR-124）。
 
 URL 写入规则：相机与选择变化以 `history.replaceState` 写入，节流 1 Hz，不产生历史记录；路由切换用 `pushState`。深链打开时先加载世界，再按参数恢复相机与选择，任一 id 不存在时静默忽略该项，并在 Toast 中说明"链接中的 2 架无人机已不存在"。
 
@@ -188,7 +188,7 @@ URL 写入规则：相机与选择变化以 `history.replaceState` 写入，节�
 | 仿真 | 播放或暂停（Space）；倍速（子菜单）；单步（→，仅暂停时）；加载剧本…；重置剧本（确认）；添加 P600；开始录制 / 停止录制（ext）；故障注入…（ext）；进入回放…（ext）；回到实时（ext，仅回放中） |
 | 任务 | 任务面板；GoTo 工具（G）；编辑航线（ext）；绘制区域（ext）；AGENTS 面板（ext） |
 | 工具 | 性能面板；事件日志；测试报告（子菜单列出 `GET /api/sys/perf-reports` 最近 5 份，点击打开 `/reports/:rid`）；重建任务（ext）；录制列表（ext） |
-| 帮助 | 快捷键（?）；GPU 自检 `/bench`（ext）；项目仓库（新窗口打开 `github.com/ANetResearch/ANet-Drone4D`）；关于 |
+| 帮助 | 快捷键（?）；GPU 自检 `/bench`（ext）；项目仓库（新窗口打开 `github.com/ANetResearch/ANet4D`）；关于 |
 
 `DropdownMenuLabel` 与 `MenubarLabel` 一律放在对应 Group 内（Base UI error #31，g07 §6 第 1 条）。
 
@@ -272,7 +272,7 @@ classDiagram
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│[av]ANet Drone4D│World Runtime  世界 视图 仿真 任务 工具 帮助   shenzhen › r20260928…a3f1 › P600-01     │ 顶栏 44
+│[av]ANet4D      │World Runtime  世界 视图 仿真 任务 工具 帮助   shenzhen › r20260928…a3f1 › P600-01     │ 顶栏 44
 │                              SIM T+00:12:31 ×1 LIVE │ WS 38 ms │ OPERATOR │ 告警(2) │ 搜索 Mod+K │ 设置  │
 ├─────────────────┬──────────────────────────────────────────────────────────────┬────────────────────┤
 │ WORLD        [-]│      ┌ Orbit │ Free │ Third │ FPV │ Bird ┐  [L 跟随]          ┌ViewCube┐│ DRONES  2   [筛选] │
@@ -302,7 +302,7 @@ classDiagram
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│[av]ANet Drone4D  世界 视图 仿真 任务 工具 帮助 SIM T+00:12:31 ×1 │WS│OP│告警(2)│K│ 44
+│[av]ANet4D        世界 视图 仿真 任务 工具 帮助 SIM T+00:12:31 ×1 │WS│OP│告警(2)│K│ 44
 ├──────────────────────────────────────────────────────────────┬───────────────┤
 │[左栏收起：Mod+B 展开]  ┌Orbit│Free│Third│FPV│Bird┐  ┌ViewCube┐│ DRONES 2      │
 │                        └─────────────────────────┘  └────────┘│|P600-01 飞行中 │
@@ -317,7 +317,7 @@ classDiagram
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-紧凑档的差异：左栏默认收起；倍速由 ToggleGroup 改为 `Select`；顶栏隐藏面包屑与"ANet Drone4D │ World Runtime"中的副标题，只保留头像与"ANet Drone4D"；HUD 只保留 KPI 行，无 sparkline。
+紧凑档的差异：左栏默认收起；倍速由 ToggleGroup 改为 `Select`；顶栏隐藏面包屑与"ANet4D │ World Runtime"中的副标题，只保留头像与"ANet4D"；HUD 只保留 KPI 行，无 sparkline。
 
 **（c）Replay 模式，Dock 展开事件标签**
 
@@ -352,7 +352,7 @@ classDiagram
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│[av]ANet Drone4D │ 世界                                                        [搜索世界]  [关闭 Esc] │
+│[av]ANet4D       │ 世界                                                        [搜索世界]  [关闭 Esc] │
 │ ┌深圳 shenzhen──────────┐ ┌上海 shanghai──────────┐ ┌纽约 newyork──────────┐                        │
 │ │5.00M 点 · 1 根 · 60 MB │ │5.00M 点 · 1 根       │ │5.00M 点 · 1 根       │                        │
 │ │[层级点数 rung bars]    │ │[层级点数 rung bars]  │ │[层级点数 rung bars]  │                        │
@@ -475,7 +475,7 @@ HUD 位于未遮挡区左下角，是一张 `LfChartCard`（`size="sm"`、`round
 
 | 元素 | 组件组合 | 要点 | 动效 | 图标 | D1 |
 |---|---|---|---|---|---|
-| 品牌锁定组合 | `<img>`（`public/brand/avatar-96.png`，24 px）+ 文本 + `Separator orientation="vertical"` | "头像 24 px + ANet Drone4D + 分隔线 + World Runtime"（ADR-032、ADR-056）；紧凑档省略"World Runtime" | — | — | core |
+| 品牌锁定组合 | `<img>`（`public/brand/avatar-96.png`，24 px）+ 文本 + `Separator orientation="vertical"` | "头像 24 px + ANet4D + 分隔线 + World Runtime"（ADR-032、ADR-056）；紧凑档省略"World Runtime" | — | — | core |
 | 主菜单 | `Menubar` > `MenubarMenu` > `MenubarTrigger` + `MenubarContent` > `MenubarGroup` > `MenubarItem`/`MenubarCheckboxItem`/`MenubarRadioGroup` + `MenubarShortcut` | Label 必须在 Group 内 | 05 | 按项 | core |
 | 面包屑 | `Breadcrumb` > `BreadcrumbList` > `BreadcrumbItem` > `BreadcrumbLink`/`BreadcrumbPage` + `BreadcrumbSeparator` | 超长运行 id 中段省略（`BreadcrumbEllipsis`） | — | `chev.right` | core |
 | 仿真时钟 | `Badge variant="secondary"` + `HoverCard`（`PreviewCard`） | 文本 C 类，≤ 4 Hz（Tier S）；HoverCard 显示仿真时间、墙钟、倍速、TIME.state、epoch、RTF | 05 | `tl.clock` | core |
@@ -695,7 +695,7 @@ D1 安装清单（44 个，即 ADR-028 所述"约 45 个"；`anet-base.json` 一
 | | 当前生效档位（只读，含来源） | `Badge` | — | core |
 | 快捷键 | 全表（只读，D1 不支持改键） | `Table` + `KbdGroup` | — | core |
 | 账户 | 当前角色与席位（`GET /api/auth/whoami`：`role`、`seat`、`exp_unix_ns`、`access_mode`）；申请控制（局域网模式需管理口令，`InputGroupInput type="password"`，错误时 `304 ADMIN_SECRET_REQUIRED` 显示为字段错误）；释放控制（`seat/release`）；以管理员身份登录（ext，签发 admin token） | `Field`、`Item` | viewer 或 operator | core（admin 为 ext） |
-| 关于 | 完整徽章 320 px（原样，不得移除）、产品名 ANet Drone4D 与版本、许可摘要（ANet Open Source License，Apache 2.0 修改版；多租户托管需授权；界面标志与版权不得移除）、仓库链接 `github.com/ANetResearch/ANet-Drone4D`、数据来源与引用（UrbanScene3D，Lin et al., ECCV 2022，仅限非商业科研用途，不随仓库分发）、保真度声明（Mock L1 仿真值、示意坐标）、版权行"Copyright (c) 2026 Agent Network Research"、contracts 版本、World `contentVersion`、会话（世界、运行 id）；与帮助 › 关于为同一内容（ADR-056） | 描述列表 + `Separator` | — | core |
+| 关于 | 完整徽章 320 px（原样，不得移除）、产品名 ANet4D 与版本、许可摘要（ANet Open Source License，Apache 2.0 修改版；多租户托管需授权；界面标志与版权不得移除）、仓库链接 `github.com/ANetResearch/ANet4D`、数据来源与引用（UrbanScene3D，Lin et al., ECCV 2022，仅限非商业科研用途，不随仓库分发）、保真度声明（Mock L1 仿真值、示意坐标）、版权行"Copyright (c) 2026 Agent Network Research"、contracts 版本、World `contentVersion`、会话（世界、运行 id）；与帮助 › 关于为同一内容（ADR-056） | 描述列表 + `Separator` | — | core |
 
 浅色主题只用于报告导出（ADR-032、Q7），设置中不提供主题切换，也不显示 `Sun`/`Moon` 开关。
 
@@ -2126,7 +2126,7 @@ FLYING 子模式：悬停、定点、航线、环绕、速度、集群、手动�
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
 | UX-FR-008 | 按 §3.1 的 11 层 z 序 token 实现浮层式布局，业务代码不写任意 `z-index` | P0 | V0.1 | 是 | UX-AC-004 | ADR-028 |
-| UX-FR-009 | 顶栏高 44 px，品牌锁定组合"头像 24 px + ANet Drone4D + 分隔线 + World Runtime"，紧凑档省略副标题与面包屑 | P0 | V0.1 | 是 | UX-AC-036 | ADR-032 |
+| UX-FR-009 | 顶栏高 44 px，品牌锁定组合"头像 24 px + ANet4D + 分隔线 + World Runtime"，紧凑档省略副标题与面包屑 | P0 | V0.1 | 是 | UX-AC-036 | ADR-032 |
 | UX-FR-010 | 左栏 WORLD、LAYERS、ENVIRONMENT：`Sidebar variant="floating" collapsible="offcanvas"`，Mod+B 显隐，只改 transform 与 opacity | P0 | V0.1 | 是 | UX-AC-004 | ADR-028 |
 | UX-FR-011 | 右栏 DRONES 页面栈（列表、详情、编辑），用 08 page-side-by-side 切换，`\` 显隐 | P0 | V0.1 | 是 | UX-AC-004、006 | g07 §2.3 |
 | UX-FR-012 | 底部 Timeline 条常驻 48 px；Dock 面板区含事件、图表、性能、任务标签，`` ` `` 展开收起 | P0 | V0.1 | 是 | UX-AC-004 | 01-design §39 |
@@ -2539,7 +2539,7 @@ function resolveSurface(route: Route, sess: SandboxSessionState, showWorld: stri
 2. 只读原因文案按界面区分：共享展示"共享展示为只读，开启我的沙盒即可操作"（带"开启我的沙盒"按钮）；静态浏览"静态浏览，开启沙盒即可在此城市运行仿真"；D1 文案"公开演示为只读模式"在演示构建中废止（M15-FR-123 按 ADR-111 修订）。
 3. 角色徽标：共享展示"公开演示 · 只读"（`layer.visible`）；沙盒"我的沙盒 · 可操作"（新增 `sandbox.mine`）；静态浏览"静态浏览"（`layer.pointcloud`）。
 4. 同一页面在 surface 变化时（例如排队领到沙盒、会话结束回到共享展示）只切换路由与 WS 端点，画布不卸载（D1 U-01）；世界不同时走 §20.12.2 的切换加载卡。
-5. 页面标题：沙盒"<世界> · 我的沙盒 · ANet Drone4D 公开演示"；OpenAPI 页"开放接口 · ANet Drone4D 公开演示"；其余同 D1。
+5. 页面标题：沙盒"<世界> · 我的沙盒 · ANet4D 公开演示"；OpenAPI 页"开放接口 · ANet4D 公开演示"；其余同 D1。
 
 #### 20.2.4 菜单与命令面板增量
 
@@ -2635,7 +2635,7 @@ D1 §7.3 的紧凑加载卡（`Card size="sm"`：世界名 + 进度 + 阶段文�
 ```text
 ┌────────────────────────────── 落地页首屏（1600 × 900）──────────────────────────────┐
 │ [品牌头图]                                                                           │
-│ ANet Drone4D · 4D 世界运行时                                                          │
+│ ANet4D       · 4D 世界运行时                                                          │
 │ 一句话定位                                                                            │
 │ [进入演示]  [开启我的沙盒]                    ← Button / Button variant="outline"      │
 │ 共享展示为只读；每位访客可开一个隔离沙盒（30 min 起，可续期）                          │
@@ -2738,7 +2738,7 @@ stateDiagram-v2
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────────────────────── 顶栏 44 px（D1）─┐
-│[av]ANet Drone4D│World Runtime  世界 视图 仿真 任务 工具 沙盒 帮助   synthcity › sb-k3m9q2x7ab › P600-02          │
+│[av]ANet4D      │World Runtime  世界 视图 仿真 任务 工具 沙盒 帮助   synthcity › sb-k3m9q2x7ab › P600-02          │
 ├──────────────────────────────────────────────────────────────────────────────────────────────── 会话条 32 px ──┤
 │[sandbox.mine] 我的沙盒 · synthcity · T5 │ 剩余 27:41 [续期] │ ×2（可达 ×5）│ 机 5/12 识别物 2/30 机巢 2/4 任务 1/6 │
 │                                                                    │ 白天 10:42 · 照度 日间 │[载入场景][重置][结束会话]│
@@ -4325,7 +4325,7 @@ flowchart TB
 1. 路由 id 一律以 `lab` 前缀登记在 `app/router/table.ts`（扩展点 15 只负责演示构建的路由集合与导航入口，路由本身在 `app/routes/lab*.tsx`，属 M15 新增路径；v1.6，F02：路由不再只在 `app/routes/lab*.tsx`。lab 路由分片：每个 lab 功能新增 `app/routes/lab/<feature>.route.ts`（导出 `route`，经 `routes/lab/lab.ts` 的 `labRoute()` 定义，id 以 `lab-` 为前缀），由 `app/router/table.ts` 的第二个 glob 收集；`VITE_AWR_EXT_ROUTES` 写组名 `lab` 时交付全部分片，旧式 `lab*.tsx` 仍按 id 交付；演示构建以 `labStripPlugin` 清空该 glob 并常量折叠，产物与 D2 逐字节一致）；`/lab/runs/:rid` 中 `:rid` 满足 `^run-[a-z2-7]{10}$`，`/lab/events/:eid` 中 `:eid` 满足 `^[a-z][a-z0-9-]{2,63}$`，不满足时回到对应列表页。
 2. `t` 以仿真秒表示（`t = 37.25`），打开后 seek 到该时刻；`view = eval` 在角色不足时静默改为 `obs` 并 Toast"当前角色无权查看评测视图（115 ROLE_FORBIDDEN）"。
 3. URL 写入沿用 §2.2：播放头与选择以 `history.replaceState` 节流 1 Hz 写入；路由切换用 `pushState`。
-4. 页面标题：`<页面> · 事件沙盘 · ANet Drone4D`；运行页为 `<运行 id> · 观测墙 · 事件沙盘 · ANet Drone4D`；公开只读构建在产品名后加"公开站"（例如"数据集 · 事件沙盘 · ANet Drone4D 公开站"）。
+4. 页面标题：`<页面> · 事件沙盘 · ANet4D`；运行页为 `<运行 id> · 观测墙 · 事件沙盘 · ANet4D`；公开只读构建在产品名后加"公开站"（例如"数据集 · 事件沙盘 · ANet4D 公开站"）。
 
 #### 21.2.3 两种构建与界面解析
 
@@ -4358,7 +4358,7 @@ async function resolveLabSurface(build: LabBuild, route: Route): Promise<LabSurf
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ 顶栏 44：ANet Drone4D · 事件沙盘 │ 面包屑：事件 › abc-crossing-001 v3 › 运行 run-k2m4… │ 队列 3 · GPU 42% │ 研究者 张… v │
+│ 顶栏 44：ANet4D       · 事件沙盘 │ 面包屑：事件 › abc-crossing-001 v3 › 运行 run-k2m4… │ 队列 3 · GPU 42% │ 研究者 张… v │
 ├────────┬─────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ 导航栏 │                                                                                                 │
 │ 56/200 │                                  页面内容区                                                       │
@@ -4378,7 +4378,7 @@ async function resolveLabSurface(build: LabBuild, route: Route): Promise<LabSurf
 
 | 元素 | 组件 | 规则 |
 |---|---|---|
-| 顶栏 | D1 `AppHeader` 的布局与高度（44 px） | 左侧产品名"ANet Drone4D · 事件沙盘"；中部 `Breadcrumb`（世界 › 事件 › 运行，最多 4 级，超出折叠为"…"菜单）；右侧队列与资源指示（内部，读 `GET /queue`，10 s 刷新）、角色徽标、用户菜单（退出登录、关于、文案与许可） |
+| 顶栏 | D1 `AppHeader` 的布局与高度（44 px） | 左侧产品名"ANet4D · 事件沙盘"；中部 `Breadcrumb`（世界 › 事件 › 运行，最多 4 级，超出折叠为"…"菜单）；右侧队列与资源指示（内部，读 `GET /queue`，10 s 刷新）、角色徽标、用户菜单（退出登录、关于、文案与许可） |
 | 导航栏 | `Sidebar`（折叠 56 px、展开 200 px；宽度 ≥ 1600 px 时缺省展开） | 项目随阶段出现（"对照"P2；v1.3："排行榜"与"提交"P0a 起，只在内部构建）；当前页高亮；角色不足的项目不显示（不置灰）；受邀成员只见"概览、世界、事件、排行榜、提交" |
 | 内容区 | 表格页为页面层（画布 `viewport.setSuspended(true)`，§2.1 规则 1 的 `/reports` 做法）；场景页（事件时间线、观测墙、检视、对照）使用常驻画布并安装 lab 图层 | 页面切换不卸载画布（D1 U-01） |
 | D2 入口 | 扩展点 15：开关 `VITE_AWR_LAB_PUBLIC = 1` 时 D2 演示构建的落地页与 World Hub 增加"事件沙盘"入口（链接到 `/lab/`） | 开关缺省 0，D2 构建产物逐字节不变（D3-AC-01） |
@@ -4995,18 +4995,18 @@ async function loadStaticIndex(): Promise<LabStaticIndex> {
 4. 不作无法验证的比较（"首创""唯一""最强""业界领先"；"first-ever""best-in-class"）；与外部工作的比较只在有系统对照报告时给出（D3-AC-53）。
 5. 状态一律以文字与 morphicons 图标表达；严禁 emoji 与状态字形（勾号、叉号、星号等）。
 6. 空状态、加载与错误提示说明"发生了什么"与"可以做什么"；错误附原因码（"码 名称"格式）。
-7. 用户可见称谓统一：D1 视图称"三维场景视图（Scene View）"，D2 称"交互沙盒（Interactive Sandbox）"，D3 与 D3.x 称"事件沙盘（Event Lab）"；"沙盘"只用于 D3。交付称谓与版本号按 AWR-05 §7.10 交付称谓表（D1 = V0.1、D2 = V0.2、D3 = V0.3、D3.x = V0.3.x、D4 为下一大版本，处于调研与概念设计阶段）；界面、README 与 release notes 以版本号与产品称谓表述，不使用"Drone4D 2.0"一类以主版本号 2 指代下一大版本的称谓（v1.6，ADR-194）。
+7. 用户可见称谓统一：D1 视图称"三维场景视图（Scene View）"，D2 称"交互沙盒（Interactive Sandbox）"，D3 与 D3.x 称"事件沙盘（Event Lab）"；"沙盘"只用于 D3。交付称谓与版本号按 AWR-05 §7.10 交付称谓表（D1 = V0.1、D2 = V0.2、D3 = V0.3、D3.x = V0.3.x、D4 为下一大版本，处于调研与概念设计阶段）；界面、README 与 release notes 以版本号与产品称谓表述，不使用"ANet4D 2.0"一类以主版本号 2 指代下一大版本的称谓（v1.6，ADR-194）。
 
 #### 21.15.2 术语与称谓（D3）
 
 | 概念 | 中文 | English | 不采用 |
 |---|---|---|---|
-| 产品 | ANet Drone4D（首次）、Drone4D | ANet Drone4D, Drone4D | 正文中的 ANet-Drone4D；仿真神器 |
+| 产品 | ANet4D | ANet4D | ANet Drone4D、Drone4D、ANet-Drone4D（已退役，ADR-223）；仿真神器 |
 | 基准全称 | 面向协同空中智能体的真实世界事件仿真与主动观测基准 | A World-Grounded Event Simulation and Active Observation Benchmark for Collaborative Aerial Agents | 口号式标语 |
 | D3 工作区 | 事件沙盘 | Event Lab | 数字沙盘、沙盒 |
 | D1 视图 | 三维场景视图 | Scene View | 数字沙盘、沙盘 |
 | D2 | 交互沙盒 | Interactive Sandbox | 沙盘 |
-| 交付称谓与版本（v1.6） | D1（V0.1）、D2（V0.2）、D3（V0.3）、D3.x（V0.3.x）、D4（下一大版本，调研与概念设计阶段）；对外文案称"V0.3 发布" | D1, D2, D3, D3.x, D4; "V0.3 release" | Drone4D 2.0、Drone4D v2、2.0 版、二代、新一代 Drone4D、D3.5、D3 Plus；对外文案中的"封板" |
+| 交付称谓与版本（v1.6） | D1（V0.1）、D2（V0.2）、D3（V0.3）、D3.x（V0.3.x）、D4（下一大版本，调研与概念设计阶段）；对外文案称"V0.3 发布" | D1, D2, D3, D3.x, D4; "V0.3 release" | ANet4D 2.0、ANet4D v2、2.0 版、二代、新一代 ANet4D、D3.5、D3 Plus；对外文案中的"封板" |
 | 世界 | 世界、世界包 | world, world package | 地图包 |
 | 事件 | 事件、事件版本、事件磁带 | event, event version, event tape | 剧情、关卡 |
 | 实验、运行 | 实验、运行 | experiment, run | 任务（与 D2 任务混淆）、跑一次 |
@@ -5095,7 +5095,7 @@ async function loadStaticIndex(): Promise<LabStaticIndex> {
 | CL-EN-03 | 英文 | 无条件性能数字（与 CL-ZH-03 同口径） | warning（对外页面为 error） | 同上 |
 | CL-ALL-01 | 全部 | emoji 与禁用字形（沿用 `no-emoji.mjs` 的字符集） | error | 无 |
 | CL-ALL-02 | 全部 | 产品名写法：正文中出现 `ANet-Drone4D`（URL 与包名除外） | error | URL、代码、包名 |
-| CL-ALL-03 | 全部 | 交付称谓（v1.6，AWR-05 §7.10、ADR-194）：以主版本号 2 指代下一大版本（`Drone4D 2.0`、`Drone4D v2`、`Drone4D 2` 后接非数字、"2.0 版"、"二代"、"新一代 Drone4D"），以及 `D3.5`、`D3 Plus` | error | 第三方许可与软件版本号（Apache License 2.0、Apache-2.0、glTF 2.0、OAuth 2.0）；契约与协议版本号（`board.v2`、`wire.v2`、`1.3.0`）；本项目已发布的版本号（"0.2.0 版本"）；引用外部文献原题 |
+| CL-ALL-03 | 全部 | 交付称谓（v1.6，AWR-05 §7.10、ADR-194）：以主版本号 2 指代下一大版本（`Drone4D 2.0`、`Drone4D v2`、`Drone4D 2` 后接非数字、"2.0 版"、"二代"、"新一代 ANet4D"），以及 `D3.5`、`D3 Plus` | error | 第三方许可与软件版本号（Apache License 2.0、Apache-2.0、glTF 2.0、OAuth 2.0）；契约与协议版本号（`board.v2`、`wire.v2`、`1.3.0`）；本项目已发布的版本号（"0.2.0 版本"）；引用外部文献原题 |
 
 扫描范围：`apps/web/src/app/i18n/{zh-CN,en}.json`、`README.md`、`README.zh-CN.md`、公开站落地页与关于页、GitHub 仓库 About 与 topics（`tools/release/repo-meta.json`）、release notes、`CITATION.cff`、数据集发布页（`README` 与 `GENERATORS.md`）、`drone4d-camera` 文档、OpenAPI 描述（`bench.openapi.snapshot.json` 的 `summary` 与 `description`）。v1.6（L05）：扫描范围由 `tools/lint/copy-lint.scope.json` 在缺省范围外追加：D3 lab 分片词典 `apps/web/src/app/i18n/lab/*.json`；`/lab/` 公开构建 `apps/web/src/app/lab-public/` 下的全部 `i18n/*.json` 与模板 `lab-public/index.html`；原因码文案 `reasons.zh-CN.gen.json`；OpenAPI 快照 `packages/contracts/rest/openapi.snapshot.json`、`packages/contracts/rest/sandbox.openapi.snapshot.json` 与 `packages/contracts/bench/openapi/bench.openapi.snapshot.json`（bench 快照路径以此为准）；数据集发布包的 README 与 GENERATORS 模板（`tools/release/`，属 P3，目录不存在时跳过）。扫描文件 27 个，语言按文件名判定。基线例外在 `tools/lint/copy-lint.baseline.json` 逐条登记（文件、键、规则、理由、登记人），P0b 出口前清零（D3-AC-46、D3-AC-23）。
 
@@ -5123,7 +5123,7 @@ v1.6（K09，AWR-05 §23.5 C-48、C-50）：COPY-05 的英文白名单增加时�
 
 | 章节（`README.md` / `README.zh-CN.md`） | 内容要求 |
 |---|---|
-| 标题与一句话定位 | "ANet Drone4D"；一句话定位分别说明交互沙盒（D2：服务器无需 GPU）与事件沙盘（D3：传感器生成需要服务器 GPU），不使用口号 |
+| 标题与一句话定位 | "ANet4D"；一句话定位分别说明交互沙盒（D2：服务器无需 GPU）与事件沙盘（D3：传感器生成需要服务器 GPU），不使用口号 |
 | Capabilities / 能力 | 能力表：能力、交付（D1、D2、D3）、运行前提；数字一律附条件；D4 未发布前不列入能力表，不预告功能与日期（AWR-05 §7.10 交付称谓表） |
 | Requirements / 运行环境 | 浏览器与设备档、服务器（D2：4 核无 GPU；D3：NVIDIA GPU，驱动 ≥ 535） |
 | Quick start / 快速开始 | 命令块；不含口语化提示 |
@@ -5138,7 +5138,7 @@ GitHub About：一句话描述（≤ 120 字符，无营销用语）；topics �
 1. 新增或修改的界面字符串均有中文与英文两份，键名符合 §13.7。
 2. 每个空状态、错误与确认对话框符合 §21.15.5 模板，错误带原因码。
 3. 页面上的每个性能或精度数字附条件；无"首创"类比较。
-4. 称谓符合 §21.15.1 第 7 条；"沙盘"只出现在 D3；交付称谓与版本号符合 AWR-05 §7.10 交付称谓表，不出现"Drone4D 2.0"一类称谓（CL-ALL-03）。
+4. 称谓符合 §21.15.1 第 7 条；"沙盘"只出现在 D3；交付称谓与版本号符合 AWR-05 §7.10 交付称谓表，不出现"ANet4D 2.0"一类称谓（CL-ALL-03）。
 5. 许可与署名在世界页、数据集页、公开站页脚与下载区可见（D3-AC-24）。
 6. copy-lint 无 error，warning 已逐条确认。
 
@@ -5572,7 +5572,7 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
-│ ANet Drone4D 公开站 · 事件沙盘 · 样例：crop-handoff-001 · 基线 track_share                      │
+│ ANet4D       公开站 · 事件沙盘 · 样例：crop-handoff-001 · 基线 track_share                      │
 ├───────────────────────────────────────┬──────────────────────────────────────────────────────┤
 │ 三维场景视图（彩色点云 + 脚本演员 + 机队轨迹 tracks_obs.bin）│ 多机私有视角（3 机 × [RGB | 热成像]，同步播放）          │
 │                                       │ ┌────────────┬────────────┬────────────┐              │

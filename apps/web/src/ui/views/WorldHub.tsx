@@ -20,6 +20,11 @@ import { LfBarRank, barUnit } from '@/ui/lf/LfBarRank'
 import { LfChartCard } from '@/ui/lf/LfChartCard'
 import { LfStat } from '@/ui/lf/LfStat'
 import { PanelEmpty } from '@/ui/brand'
+// The Event Lab entry reads the build switch directly instead of importing LAB_PUBLIC and LAB_PUBLIC_ENTRY from
+// lab-public/flags: an import across chunks keeps that export in the landing chunk and keeps this branch, so the build
+// without VITE_AWR_LAB_PUBLIC would carry the /lab/ address (K9 D3 scan). Vite replaces the expression at build time and
+// the minifier drops the branch; the address equals lab-public/flags.ts LAB_PUBLIC_ENTRY.
+const HUB_LAB_ENTRY: string | null = import.meta.env.VITE_AWR_LAB_PUBLIC === '1' ? '/lab/' : null
 import { useFrameCapOverlay } from './useFrameCapOverlay'
 import type { SessionWorldItem } from '@awr/contracts/types'
 import { URBANSCENE_BIBTEX, URBANSCENE_WORLDS } from '@/lib/demo'
@@ -110,7 +115,13 @@ export function WorldHub() {
       <div className="mb-3 flex items-center gap-2">
         <Icon icon="nav.world" />
         <h1 className="text-ed-title font-bold">{t('hub.title')}</h1>
-        <Button size="sm" variant="ghost" className="ml-auto" onClick={() => history.length > 1 ? history.back() : navigate('/')}>
+        {HUB_LAB_ENTRY ? (
+          <Button size="sm" variant="outline" className="ml-auto" nativeButton={false} render={<a href={HUB_LAB_ENTRY} data-world-hub-lab="" />}>
+            <Icon icon="tl.replay" data-icon="inline-start" />
+            {t('hub.eventLab')}
+          </Button>
+        ) : null}
+        <Button size="sm" variant="ghost" className={HUB_LAB_ENTRY ? undefined : 'ml-auto'} onClick={() => history.length > 1 ? history.back() : navigate('/')}>
           <Icon icon="close" data-icon="inline-start" />
           {t('common.close')}
         </Button>
