@@ -102,6 +102,6 @@ describe('Event Lab entries of the landing page (VITE_AWR_LAB_PUBLIC=1, V0.3.1)'
   it('numbers the sections in reading order with and without the Event Lab section', () => {
     expect(NAV).toEqual(['story', 'showcase', 'open-source']) // tests run without VITE_AWR_LAB_PUBLIC
     expect([sectionIndex('showcase', false), sectionIndex('open-source', false)]).toEqual(['02', '04'])
-    expect([sectionIndex('event-lab', true), sectionIndex('showcase', true), sectionIndex('open-source', true)]).toEqual(['02', '03', '05'])
+    expect([sectionIndex('event-lab', true), sectionIndex('showcase', true), sectionIndex('open-source', true)]).toEqual(['01', '03', '05'])
   })
 })

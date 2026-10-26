@@ -43,7 +43,7 @@
 | F5 | D2 批处理以 `SimCore + LocalBus + LocalRing + BatchCtl` 组装，规划结果按 `apply_tick = request_tick + lat_ticks` 生效、到期未返回即阻塞，1 h 两次运行逐字节一致 | Env 骨架与决策时延规则直接复用；不修改 `batch.py` | `python/awr/sim/runtime/batch.py` 文档串与 `BatchCtl.lat_ticks`；D2-FX-R2；r7 §8.5 |
 | F6 | D2 契约中 `velocity` 的 `agent` 标记为 `no`、类别 `nav_stream`；M14 TrustedGuard 的限流为墙钟（合计 20/s、每 AID 5/s），A1 要求命令属于活动委派，转发失败按墙钟重试 1 s × 3 | TrustedGuard 不能原样承担 10 Hz lockstep 动作；M26 以仿真时间动作守卫复用其策略语义（§6.6.5） | `packages/contracts/rt/commands.json`；`python/awr/agent/guard/pipeline.py` 文档串 |
 | F7 | D2 契约中 `env/query`、`tasking/plan` 对 agent 开放；`velocity` 的 `keepout_guard` 沙盒缺省 `clamp`；M20 禁入体来自识别物真值 | Bench 动作集合不含环境查询与 M20 规划；与演员相关的在线限幅与告警一律关闭，安全间距只在评测端计算 | `commands.json`；r7 §3.6；AWR-05 §5.3.1 规则 4、§5.6.5 |
-| F8 | M24 规定航点、跟随、环绕等高层指令由 Drone4D 侧路径跟踪器换算为世界系速度，跟踪器以真值状态闭环 | 位置类指令若按真值系执行，航点收敛后"指令目标 = 本机真值位置"，Agent 即得本机真值位姿；必须按导航解坐标系解释 | AWR-05 §5.3.1 规则 2；ADR-161 第 (2) 项 |
+| F8 | M24 规定航点、跟随、环绕等高层指令由 ANet4D 侧路径跟踪器换算为世界系速度，跟踪器以真值状态闭环 | 位置类指令若按真值系执行，航点收敛后"指令目标 = 本机真值位置"，Agent 即得本机真值位姿；必须按导航解坐标系解释 | AWR-05 §5.3.1 规则 2；ADR-161 第 (2) 项 |
 | F9 | M21 `vehicles/p600/sensors/gnss.yaml` 的 `fix_type` 缺省为 `rtk_fixed`（σ_h 1 cm）；AWR-05 §5.4.6 规定 D3 缺省为 `single`（σ_h 1.2 m、τ 60 s） | 排名运行按噪声档覆盖定位档；红队以声明的定位档为标称值 | `vehicles/p600/sensors/gnss.yaml`；AWR-05 §5.4.6 |
 | F10 | r6 原型 L1 Env：单次 360 s 仿真 4.2–7.7 s（47–86 倍实时）；6 种策略 × 12 种子 EC 0.25–1.00；N = 1/3/10/30/60 时 4.3/9.1/29.3/78.4/194.4 s；投递次数约 370–410 × N²；1 s 链路缓存使 N = 30 耗时降 39% | L1 模型与链路模型的缺省参数与性能目标以此为基线 | r6 §10.4、§12.3 |
 | F11 | 世界包在 dev 与 test 划分中均公开（只隐藏 test 集真值与磁带） | 静态世界几何是公开先验，提交的容器可以内置；需要保密的是动态真值、本机真值位姿、种子与 test 磁带 | AWR-05 §5.6.6；§13 第 5 条 |

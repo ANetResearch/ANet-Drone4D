@@ -37,23 +37,25 @@ afterEach(() => {
 })
 
 describe('landing page Event Lab entries (VITE_AWR_LAB_PUBLIC, V0.3.1)', () => {
-  it('with the switch: header link, hero action and the Event Lab section between the story and the showcase', async () => {
+  it('with the switch: header link, hero action and the Event Lab section directly after the hero and before the story', async () => {
     const html = await render(true)
     expect(html).toMatch(/<a[^>]*href="\/lab\/"[^>]*data-landing-lab-entry="nav"/)
     expect(html).toMatch(/<a[^>]*href="\/lab\/"[^>]*data-landing-lab-entry="hero"/)
     expect(html).toMatch(/<a[^>]*href="\/lab\/"[^>]*data-landing-lab-entry="section"/)
     expect(html).toMatch(/<a[^>]*href="\/lab\/samples\/run-koyqeft6xe"[^>]*data-landing-lab-sample=""/)
-    const order = ['id="story"', 'id="event-lab"', 'id="showcase"', 'id="closing"', 'id="open-source"'].map((s) => html.indexOf(s))
+    const order = ['id="event-lab"', 'id="story"', 'id="showcase"', 'id="closing"', 'id="open-source"'].map((s) => html.indexOf(s))
     expect(order.every((i) => i >= 0)).toBe(true)
     expect([...order].sort((a, b) => a - b)).toEqual(order)
+    // the hero links to the featured sample run
+    expect(html).toMatch(/<a[^>]*href="\/lab\/samples\/run-koyqeft6xe"[^>]*data-landing-lab-featured=""/)
     // header navigation: the section in NAV (scrolls) plus the full-page link
     expect(html).toContain('href="#event-lab"')
-    // section numbers follow the reading order (story 01, Event Lab 02, showcase 03, closing, open source 05)
+    // section numbers follow the reading order (Event Lab 01, story 02, showcase 03, closing, open source 05)
     const idx = (id: string) => new RegExp(`<section id="${id}"[\\s\\S]*?tabular-nums">(\\d\\d)<`).exec(html)?.[1]
-    expect([idx('event-lab'), idx('showcase'), idx('open-source')]).toEqual(['02', '03', '05'])
-    const sec = html.slice(html.indexOf('id="event-lab"'), html.indexOf('id="showcase"'))
+    expect([idx('event-lab'), idx('showcase'), idx('open-source')]).toEqual(['01', '03', '05'])
+    const sec = html.slice(html.indexOf('id="event-lab"'), html.indexOf('id="story"'))
     const imgs = [...sec.matchAll(/<img [^>]*>/g)].map((m) => m[0])
-    expect(imgs).toHaveLength(5)
+    expect(imgs).toHaveLength(6) // the five frames and the gallery thumbnail
     for (const f of ['lab-oblique', 'lab-junction', 'lab-thermal', 'lab-residential', 'lab-blocks']) {
       const img = imgs.find((i) => i.includes(`src="/demo/lab/${f}.webp"`))
       expect(img, f).toBeDefined()
@@ -65,7 +67,7 @@ describe('landing page Event Lab entries (VITE_AWR_LAB_PUBLIC, V0.3.1)', () => {
     for (const u of ['https://sketchfab.com/bg3d', 'https://creativecommons.org/licenses/by/4.0/']) expect(sec).toContain(`href="${u}"`)
     // real texts, no key names left (the switched dictionary carries every Event Lab key)
     expect(html).not.toMatch(/>landing\.[a-z]/)
-    expect(sec).toContain('事件沙盘 · 无人机视角')
+    expect(sec).toContain('事件沙盘 · 事件回放与每机私有视角')
     expect(sec).toContain('样例运行 run-koyqeft6xe · 事件 crop-handoff-001 · 世界 oryahovo-crop1')
     expect(sec).toContain('“oryahovo - crop #1 - metashape texture problems”')
     expect(sec).toMatch(/作者 <a [^>]*>Mitko<\/a>（<a [^>]*>sketchfab\.com\/bg3d<\/a>），以 <a [^>]*>CC BY 4\.0<\/a> 许可发布/)
@@ -74,7 +76,7 @@ describe('landing page Event Lab entries (VITE_AWR_LAB_PUBLIC, V0.3.1)', () => {
   it('with the switch, in English: the same entries with the English texts', async () => {
     const html = await render(true, 'en')
     expect(html).not.toMatch(/>landing\.[a-z]/)
-    for (const s of ['Event Lab · UAV camera views', 'UAV view samples', 'Open Event Lab', 'View sample run run-koyqeft6xe']) expect(html).toContain(s)
+    for (const s of ['Event Lab · event replay with per-UAV private views', 'UAV view samples', 'Open Event Lab', 'View sample run run-koyqeft6xe']) expect(html).toContain(s)
     expect(html).toMatch(/by <a [^>]*>Mitko<\/a> \(<a [^>]*>sketchfab\.com\/bg3d<\/a>\), licensed under <a [^>]*>CC BY 4\.0<\/a>, modified/)
   })
 
@@ -85,5 +87,50 @@ describe('landing page Event Lab entries (VITE_AWR_LAB_PUBLIC, V0.3.1)', () => {
     expect(html).not.toContain('/lab/')
     const idx = (id: string) => new RegExp(`<section id="${id}"[\\s\\S]*?tabular-nums">(\\d\\d)<`).exec(html)?.[1]
     expect([idx('showcase'), idx('open-source')]).toEqual(['02', '04'])
+  })
+
+  it('NAV leads with the Event Lab section; the story follows', async () => {
+    vi.resetModules()
+    vi.stubEnv('VITE_AWR_LAB_PUBLIC', '1')
+    const on = await import('@/app/demo/LandingContent')
+    expect(on.NAV).toEqual(['event-lab', 'story', 'showcase', 'open-source'])
+    vi.resetModules()
+    vi.stubEnv('VITE_AWR_LAB_PUBLIC', '')
+    const off = await import('@/app/demo/LandingContent')
+    expect(off.NAV).toEqual(['story', 'showcase', 'open-source'])
+  })
+
+  it('the sample gallery renders one card per LAB_SAMPLES entry (1 to 8) with lazy thumbnails, facts and a full-page link', async () => {
+    const { LAB_SAMPLES } = await import('@/app/demo/LandingContent')
+    expect(LAB_SAMPLES[0]).toMatchObject({ run: 'run-koyqeft6xe', event: 'crop-handoff-001', eventType: 'rendezvous_handoff', nUav: 3, obsLevel: 'L2' })
+    for (const s of LAB_SAMPLES) expect(s.run).toMatch(/^run-[a-z2-7]{10}$/)
+    const html = await render(true, 'en')
+    const gallery = html.slice(html.indexOf('data-lab-gallery'), html.indexOf('data-lab-frames'))
+    expect(gallery.match(/data-lab-sample-card="/g)).toHaveLength(LAB_SAMPLES.length)
+    const card = /<a [^>]*data-landing-lab-card="run-koyqeft6xe"[^>]*>/.exec(gallery)?.[0]
+    expect(card).toContain('href="/lab/samples/run-koyqeft6xe"')
+    const img = /<img [^>]*>/.exec(gallery)?.[0] ?? ''
+    expect(img).toMatch(/loading="lazy"/)
+    expect(img).toMatch(/decoding="async"/)
+    expect(img).toMatch(/width="1600" height="900"/)
+    expect(gallery).toContain('Policy track_share')
+    expect(gallery).toContain('3 UAVs')
+    expect(gallery).toContain('Observation L2')
+    expect(gallery).toContain('rendezvous_handoff')
+    expect(gallery).toContain('grid-cols-1')
+  })
+
+  it('renders eight gallery entries without a layout change', async () => {
+    vi.resetModules()
+    vi.stubEnv('VITE_AWR_LAB_PUBLIC', '1')
+    const real = await import('@/app/demo/LandingContent')
+    const many = Array.from({ length: 8 }, (_, i) => ({ ...real.LAB_SAMPLES[0]!, run: `run-koyqeft6x${'abcdefgh'[i]}`, event: `ev-${i}-001` }))
+    vi.resetModules()
+    vi.doMock('@/app/demo/LandingContent', async (orig) => ({ ...(await orig<typeof import('@/app/demo/LandingContent')>()), LAB_SAMPLES: many }))
+    vi.doMock('virtual:awr-landing-i18n', () => ({ default: landingI18nDict(zhCN, en, LANDING_LAB_I18N_KEYS) }))
+    const { EventLab } = await import('@/app/demo/LandingEventLab')
+    const html = renderToStaticMarkup(createElement(EventLab))
+    expect(html.match(/data-lab-sample-card="/g)).toHaveLength(8)
+    vi.doUnmock('@/app/demo/LandingContent')
   })
 })

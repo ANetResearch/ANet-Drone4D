@@ -36,7 +36,7 @@ PRODUCT = "ANet4D"
 SITE_ROOT_URL = "https://docs.agentnetwork.org.cn/anet4d/"
 # GitHub 仓库地址的唯一出处：仓库改名前保持旧地址（GitHub 对改名后的旧地址自动跳转）
 GITHUB_OWNER = "ANetResearch"
-GITHUB_REPO = "ANet-Drone4D"
+GITHUB_REPO = "ANet4D"
 GITHUB_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
 DEMO_URL = "https://anet4d.agentnetwork.org.cn"
 

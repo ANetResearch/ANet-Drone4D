@@ -7,7 +7,7 @@
 | 依据 | INT-1 报告 §3、§6、§7.5、§7.8；AWR-03 §4.3、§8.4、ADR-032；AWR-14 §2、§4、§5.4–§5.7、§6.10、§6.17、§7、§11；AWR-15 §4.5；M12 PRD §7.1、§8；M01 PRD §7.1、§7.2、§8.2；M16 PRD M16-FR-006、FR-010、FR-011；请求 M12-to-M15、M01-to-M15、M01-to-M03 第 8 条、M16-to-M15 第 1–3 条 |
 | 环境 | 8 核 CPU、无 GPU；Chromium 151（SwiftShader，Tier S）；Node 22；`.venv`。私有后端：`python -m awr.runtime.supervisor --profile demo`（端口 18766、总线 17766、私有 runs 目录、`AWR_WEB_DIST` 指向私有测试构建），深圳 + S1 |
 | 约束执行 | 未安装任何依赖；未运行性能基准与 `@perf` 用例；未执行 git 写操作（两轮各有一次误输入的只读 `git status`，因目录不是仓库直接返回，无任何影响）；颜色只用 token；无 emoji 与禁用字形；未引入 lucide-react 与 backdrop-filter；只用 shadcn 组件；续作期间其他工作包同时在跑全量 pytest 与剧本用例（负载均值 8–22），私有构建、私有后端与 Playwright 输出目录均放在 scratchpad 的 `fxweb2/` 下，不与他人共享 |
-| 结论 | 五项任务全部完成。Timeline 已接 M12 store 与轨道模型（实时与回放、seek、倍速 0.1–20×、书签、快捷键、Runs 覆盖页与深链，回放悬停按 R68 取事件正文）；重建任务页 `/jobs` 与 `stores/jobs.ts` 已对接 M03 R39–R42、R64 与 M01 R38（进度 ≤ 4 Hz、`scale_status` 徽标），并用真实 job-worker 跑通 Mock 重建到"在沙盘中打开"；诚实标识与报告保真度、页脚槽位已交付；产品显示名统一为"ANet Drone4D"（ADR-056），关于区块含版本、许可摘要、仓库链接、UrbanScene3D 引用与版权行；两种分辨率的截图逐面板复核，第 1 轮修正 17 处、续作再修正 14 处（§1.5、§1.6）。本区域功能测试全部通过（vitest 947/947；Playwright M15/M12 功能 26/26、skeleton 门禁 4/4、e2e 13 例全部通过，其中 timeline 实时用例须在新起的后端上运行，原因是该用例对共享后端席位的顺序依赖；pytest 子集 370/370；负载敏感用例的说明见 §5）；`make lint` 全部通过（第 1 轮阻断的 8 条 ruff 已由其所有者修正） |
+| 结论 | 五项任务全部完成。Timeline 已接 M12 store 与轨道模型（实时与回放、seek、倍速 0.1–20×、书签、快捷键、Runs 覆盖页与深链，回放悬停按 R68 取事件正文）；重建任务页 `/jobs` 与 `stores/jobs.ts` 已对接 M03 R39–R42、R64 与 M01 R38（进度 ≤ 4 Hz、`scale_status` 徽标），并用真实 job-worker 跑通 Mock 重建到"在沙盘中打开"；诚实标识与报告保真度、页脚槽位已交付；产品显示名统一为"ANet4D"（ADR-056），关于区块含版本、许可摘要、仓库链接、UrbanScene3D 引用与版权行；两种分辨率的截图逐面板复核，第 1 轮修正 17 处、续作再修正 14 处（§1.5、§1.6）。本区域功能测试全部通过（vitest 947/947；Playwright M15/M12 功能 26/26、skeleton 门禁 4/4、e2e 13 例全部通过，其中 timeline 实时用例须在新起的后端上运行，原因是该用例对共享后端席位的顺序依赖；pytest 子集 370/370；负载敏感用例的说明见 §5）；`make lint` 全部通过（第 1 轮阻断的 8 条 ruff 已由其所有者修正） |
 
 ## 1 实现清单
 
@@ -51,11 +51,11 @@
 | `ui/panels/world/WorldPanel.tsx` | 世界卡片增加数据来源行"数据 UrbanScene3D v0.0.1 · 科研用途"（`world.json.dataset`，悬停显示完整引用） |
 | `ui/views/AboutDialog.tsx` | 关于中写出数据来源、引用、科研用途与保真度声明（见 1.4） |
 
-### 1.4 产品显示名 ANet Drone4D 与关于区块（任务 4；ADR-056）
+### 1.4 产品显示名 ANet4D 与关于区块（任务 4；ADR-056）
 
-- 页面标题：`index.html` 为"ANet Drone4D"，运行时为"<视图> · ANet Drone4D"（Sandbox 为世界 id，覆盖页为其名称）；启动遮罩文字"ANet Drone4D · World Runtime"。
-- 顶栏锁定组合：头像 24 px + "ANet Drone4D" + 分隔线 + "World Runtime"（紧凑档省略副名）；头像与徽章资产未动，check-brand 通过。
-- 关于区块（帮助 › 关于、设置 › 关于共用 `AboutContent`）：完整徽章 320 px（原样）、产品名与副名、版本、许可摘要（ANet Open Source License，Apache 2.0 修改版；多租户托管需书面授权；界面标志与版权不得移除；第三方见 THIRD_PARTY_NOTICES.md）、仓库链接 `github.com/ANetResearch/ANet-Drone4D`、数据（UrbanScene3D，仅限非商业科研用途，不随仓库分发）与引用（Lin et al., ECCV 2022）、保真度、应用与 contracts 版本、会话（世界、运行、contentVersion）、版权行"Copyright (c) 2026 Agent Network Research（anet0.com）"。帮助菜单新增"项目仓库"。版权行写"(c)"：U+00A9 属 Extended_Pictographic，会被 D1-AC-20 拦截。
+- 页面标题：`index.html` 为"ANet4D"，运行时为"<视图> · ANet4D"（Sandbox 为世界 id，覆盖页为其名称）；启动遮罩文字"ANet4D · World Runtime"。
+- 顶栏锁定组合：头像 24 px + "ANet4D" + 分隔线 + "World Runtime"（紧凑档省略副名）；头像与徽章资产未动，check-brand 通过。
+- 关于区块（帮助 › 关于、设置 › 关于共用 `AboutContent`）：完整徽章 320 px（原样）、产品名与副名、版本、许可摘要（ANet Open Source License，Apache 2.0 修改版；多租户托管需书面授权；界面标志与版权不得移除；第三方见 THIRD_PARTY_NOTICES.md）、仓库链接 `github.com/ANetResearch/ANet4D`、数据（UrbanScene3D，仅限非商业科研用途，不随仓库分发）与引用（Lin et al., ECCV 2022）、保真度、应用与 contracts 版本、会话（世界、运行、contentVersion）、版权行"Copyright (c) 2026 Agent Network Research（anet0.com）"。帮助菜单新增"项目仓库"。版权行写"(c)"：U+00A9 属 Extended_Pictographic，会被 D1-AC-20 拦截。
 
 ### 1.5 UI 精修（任务 5）
 
@@ -104,7 +104,7 @@
 | 30 | `tests/time/store.test.ts`"1 s 未确认即回退"在负载均值 ≈ 20 时失败（`t0` 取在 `play()` 之前，二者间隔超过 1 ms 时 `t0 + 1001` 仍未到期） | `t0` 改在 `play()` 之后读取 | `tests/time/store.test.ts`（M12 前端用例） |
 | 31 | `perf/m15/fxweb2.spec.ts` 注释把产品名 ADR 写成 ADR-054（该号已被 FX-WEB1 用于点径上限） | 改为 ADR-056 | `perf/m15/fxweb2.spec.ts` |
 
-另：网关已在 hello 之后补发 playbackState（FX-GW 实现 FX-WEB2-to-M11 第 1 条），`stores/timeline.ts` 的 `syncReplayState` 只作丢包兜底，注释同步更新；FastAPI 标题已改为"ANet Drone4D World Runtime API"（同一请求第 3 条）。
+另：网关已在 hello 之后补发 playbackState（FX-GW 实现 FX-WEB2-to-M11 第 1 条），`stores/timeline.ts` 的 `syncReplayState` 只作丢包兜底，注释同步更新；FastAPI 标题已改为"ANet4D World Runtime API"（同一请求第 3 条）。
 
 新增与修改的单元用例（`tests/m15/fxweb2.test.ts`，共 24 例）：R68 请求窗口与 `limit`、按运行与段缓存与失效、回放悬停先类别后正文且机体只出现一次、实时模式不请求 R68、播放头列夹取、子状态中文。
 
@@ -134,7 +134,7 @@
 
 | 变更 | 文档 |
 |---|---|
-| 产品显示名统一为 ANet Drone4D，关于区块内容与版权行、页面标题规则、帮助菜单"项目仓库" | AWR-03 附录 E **ADR-056**（§7.0 索引登记；ADR-032 锁定组合文字加注以 ADR-056 为准）；13 §2.6、产品名表与定位陈述、功能树根节点；14 §2.2（页面标题）、§2.3（帮助菜单）、§3.2 线框、§4.1、§5.6 关于行、UX-FR-009；15 §4.5；M15-FR-110；docs/README 标题与首段 |
+| 产品显示名统一为 ANet4D，关于区块内容与版权行、页面标题规则、帮助菜单"项目仓库" | AWR-03 附录 E **ADR-056**（§7.0 索引登记；ADR-032 锁定组合文字加注以 ADR-056 为准）；13 §2.6、产品名表与定位陈述、功能树根节点；14 §2.2（页面标题）、§2.3（帮助菜单）、§3.2 线框、§4.1、§5.6 关于行、UX-FR-009；15 §4.5；M15-FR-110；docs/README 标题与首段 |
 | 回放深链的一次性参数 `replay`、`seg`、`t`（`/world/:id/replay/:run` 重定向到 Sandbox） | 14 §2.2 URL 参数表 |
 | 回放"中途加入"的客户端行为 | 14 §5.4 新增一行；续作改写：网关 hello 后补发 playbackState（M11 已实现），speed 只作兜底；深链指向正在回放的同一录制时只 seek，另一录制先 close 再 open；被拒命令（本页 `request_id`、原因码不是 213）不改回放状态、横幅不报"回放进程已停止" |
 | 回放中面包屑"运行"显示被回放的录制并可点击打开 Runs；Timeline 回放悬停 150 ms 后经 R68 取正文 | 14 §5.4 新增"面包屑与悬停"一行（续作）；后者与 M12 §8.4 一致，不改 M12 |

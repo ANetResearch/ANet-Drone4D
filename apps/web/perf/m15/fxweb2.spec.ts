@@ -86,7 +86,7 @@ test('brand name, About content and the synthetic-source honesty badge', async (
   await expect(about.locator('[data-brand="badge"]')).toBeVisible()
   await expect(about.locator('[data-about-product]')).toHaveText('ANet4D')
   await expect(about.locator('[data-about-license]')).toContainText('ANet Open Source License')
-  await expect(about.getByRole('link', { name: /ANetResearch\/ANet-Drone4D/ })).toHaveAttribute('href', 'https://github.com/ANetResearch/ANet-Drone4D')
+  await expect(about.getByRole('link', { name: /ANetResearch\/ANet-Drone4D/ })).toHaveAttribute('href', 'https://github.com/ANetResearch/ANet4D')
   await expect(about.locator('[data-about-data]')).toContainText('UrbanScene3D')
   await expect(about.locator('[data-about-data]')).toContainText('经数据集权利方授权') // D2 ADR-109 (14 §20.16 about.dataset.d2)
   await expect(about.locator('[data-about-copyright]')).toContainText('Copyright (c) 2026 Agent Network Research')

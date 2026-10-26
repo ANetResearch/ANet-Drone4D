@@ -17,6 +17,7 @@
  "lab.public.catalog.col.files": "制品",
  "lab.public.catalog.fleet": "{n} 架",
  "lab.public.catalog.files": "{n} 个文件",
+ "lab.public.catalog.eventMeta": "版本 {version} · 世界 {world} · {n} 个运行",
  "lab.public.catalog.aria": "样例运行列表",
  "lab.public.catalog.emptyTitle": "暂无公开样例",
  "lab.public.catalog.emptyHint": "当前静态制品版本中没有样例运行。",

@@ -16,7 +16,7 @@
 目前已交付的实体类型为无人机（多旋翼、固定翼与垂起机型）。后续方向是跨实体的协同实验平台：声明式实验规格、可替换的协同算法与可比较的
 实验证据，见 {doc}`project/roadmap`。
 
-本文档对应 **0.3.2**（V0.3.2 · ANet4D）。公开实例位于
+本文档对应 **0.3.3**（V0.3.3 · ANet4D）。公开实例位于
 [anet4d.agentnetwork.org.cn](https://anet4d.agentnetwork.org.cn)，源代码位于 {gh}`GitHub </>`。ANet4D 曾以 ANet Drone4D
 之名发布；原站点与原文档地址均跳转到新地址，少量遗留标识符仍保留原名（见 {doc}`project/faq`）。
 
@@ -135,7 +135,7 @@ project/citation
 ```
 
 {doc}`project/roadmap`
-: V0.1 至 V0.3 的交付内容、V0.3.2 的范围，以及 ANet4D 的后续方向（D4）。
+: V0.1 至 V0.3 的交付内容、V0.3.2 与 V0.3.3 的范围，以及 ANet4D 的后续方向（D4）。
 
 {doc}`project/acceptance`
 : D2 第 2 轮验收的结果、未通过项的根因与完整报告的链接。

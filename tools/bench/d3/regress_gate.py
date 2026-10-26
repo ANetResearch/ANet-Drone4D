@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""tools/bench/d3/regress_gate.py：D3 回归门（AWR-05 §4.8、D3-AC-01；WP-D3-00）。每个 D3 工作包合入 `d3-dev` 之前运行。
+"""tools/bench/d3/regress_gate.py：D3 回归门（AWR-05 §4.8、D3-AC-01；WP-D3-00）。每个改动合入 `main` 之前运行（ADR-225 起只保留 `main`）。
 
 步骤与命令登记在 `tests/d3/regress_gate/gate.json`（第 1–6 条）：
   1. D2 Python 测试全集（`pytest -m "not perf"`）、契约测试与前端单测；

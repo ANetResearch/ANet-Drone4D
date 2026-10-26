@@ -677,7 +677,7 @@ describe('public sample panel reads static slices only (AWR-14 §21.9.4; D3-AC-2
   })
 
   it('accepts ModelScope copies of slices and of the viewer Wasm, and nothing else off-site (ADR-221)', () => {
-    const ms = 'https://www.modelscope.cn/datasets/inksong/ANet-Drone4D-samples/resolve/master/samples/v/runs/r/slices/a.rrd'
+    const ms = 'https://www.modelscope.cn/datasets/inksong/ANet4D-samples/resolve/master/samples/v/runs/r/slices/a.rrd'
     expect(isStaticRrd(ms)).toBe(true)
     expect(isStaticRrd('https://modelscope.cn/datasets/x/y/resolve/master/a.rrd')).toBe(true)
     for (const bad of ['https://modelscope.cn.evil.example/a.rrd', 'http://www.modelscope.cn/a.rrd', 'https://www.modelscope.cn/a/../b.rrd',

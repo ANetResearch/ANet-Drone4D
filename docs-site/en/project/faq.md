@@ -6,8 +6,8 @@
 They are the same project. From 0.3.2 the product is called ANet4D, simulation infrastructure for collaborative embodied agents; the
 former name ANet Drone4D is retired. The public site moved from `drone4d.agentnetwork.org.cn` to
 [anet4d.agentnetwork.org.cn](https://anet4d.agentnetwork.org.cn) and this documentation from `docs.agentnetwork.org.cn/drone4d/` to
-`docs.agentnetwork.org.cn/anet4d/`; the former addresses redirect permanently. The GitHub repository keeps the URL
-{gh}`github.com/ANetResearch/ANet-Drone4D </>` for now; GitHub redirects the former URL after a rename.
+`docs.agentnetwork.org.cn/anet4d/`; the former addresses redirect permanently. The GitHub repository is {gh}`github.com/ANetResearch/ANet4D </>`; GitHub redirects the former URL
+(`ANetResearch/ANet-Drone4D`) to it.
 
 **Why do some identifiers still contain `drone4d`?**
 Identifiers that are part of a protocol, a data contract or recorded data keep their former spelling, so that existing recordings, event

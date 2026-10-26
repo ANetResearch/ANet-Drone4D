@@ -30,7 +30,7 @@
 
 ```sh
 cd ~
-git clone https://github.com/ANetResearch/ANet-Drone4D.git ANet4D
+git clone https://github.com/ANetResearch/ANet4D.git ANet4D
 cd ANet4D
 ```
 
@@ -39,7 +39,7 @@ Cloning into 'ANet4D'...
 Updating files: 100% (3245/3245), done.
 ```
 
-`git clone` 的第二个参数把工作目录命名为 `ANet4D`；GitHub 仓库目前仍沿用原名 ANet-Drone4D。本次运行的工作树约 126 MB，克隆用时 5.8 s。仓库不包含任何点云、世界包或运行产物：`worlds/`、`data/raw/` 与 `runs/` 都在
+`git clone` 的第二个参数把工作目录命名为 `ANet4D`，与仓库名一致。本次运行的工作树约 126 MB，克隆用时 5.8 s。仓库不包含任何点云、世界包或运行产物：`worlds/`、`data/raw/` 与 `runs/` 都在
 `.gitignore` 中，由后续步骤在本机生成。
 
 `main` 分支是持续维护的分支；需要与已发布版本逐字节一致时，切到版本标签：

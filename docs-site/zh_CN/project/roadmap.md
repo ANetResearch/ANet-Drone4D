@@ -39,6 +39,13 @@ V0.3.2 将产品更名为 ANet4D，定位调整为新一代具身智能体协同
 以契约中新增的可选字段表达），缺省关闭，公开实例不提供。公开站迁至 [anet4d.agentnetwork.org.cn](https://anet4d.agentnetwork.org.cn)，
 本文档站迁至 `docs.agentnetwork.org.cn/anet4d/`，原地址永久跳转。Python SDK 改为 `anet4d`，`drone4d` 作为已弃用的别名保留一个版本。
 
+### V0.3.3：事件沙盘样例
+
+V0.3.3 把事件沙盘（`/lab/`）的公开样例扩充为 5 个 dev 事件上的 7 个运行：`crop-handoff-001` 的三个基线策略（`track_share`、`coverage_scan`、
+`static_guard`），以及 `crop-handoff-002`、`crop-reid-001`、`crop-search-001`、`crop-vehicle-001` 各一个运行。每个运行提供事件回放、各机私有视角的可见光与
+热成像视频和 Rerun 数据检视；样例为单种子单次运行，不是排名结果。样例媒体迁至 ModelScope 数据集 `inksong/ANet4D-samples`，
+公开站落地页在首屏之后展示样例画廊。仓库更名为 `ANetResearch/ANet4D`，开发只在 `main` 分支进行，历史版本以标签检出。
+
 ## D3 设计记录：事件仿真与主动观测基准
 
 D3 定位为 *A World-Grounded Event Simulation and Active Observation Benchmark for Collaborative Aerial Agents*：在同一世界、同一事件下，

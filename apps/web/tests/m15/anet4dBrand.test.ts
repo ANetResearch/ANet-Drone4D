@@ -1,6 +1,6 @@
 // v0.3.2 rename (ANet Drone4D -> ANet4D): every user-visible string of the web app names the product ANet4D; the old
 // names survive only as legacy identifiers (schema ids such as drone4d.bench.*, the reserved DRONE4D_* environment prefix,
-// the repository name ANet-Drone4D until the owner renames it). The landing hero carries the positioning, with the NS-3
+// the retired repository name ANet-Drone4D, which GitHub redirects). The landing hero carries the positioning, with the NS-3
 // analogy phrased as an aim and used exactly once; the public addresses come from lib/site.ts only.
 import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -54,8 +54,8 @@ describe('ANet4D product name (v0.3.2)', () => {
     expect(PRODUCT_NAME).toBe('ANet4D')
     expect(SITE_ORIGIN).toBe('https://anet4d.agentnetwork.org.cn')
     expect(DOCS_URL).toBe('https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/')
-    expect(REPO_URL).toBe('https://github.com/ANetResearch/ANet-Drone4D')
-    expect(REPO_LABEL).toBe('github.com/ANetResearch/ANet-Drone4D')
+    expect(REPO_URL).toBe('https://github.com/ANetResearch/ANet4D')
+    expect(REPO_LABEL).toBe('github.com/ANetResearch/ANet4D')
     expect([DEMO_SITE_ORIGIN, DEMO_DOCS_URL, DEMO_REPO_URL]).toEqual([SITE_ORIGIN, DOCS_URL, REPO_URL])
     expect(ANET4D_BIBTEX).toContain('title   = {ANet4D: Simulation Infrastructure for Collaborative Embodied Agents}')
     expect(ANET4D_BIBTEX).toContain(`url     = {${REPO_URL}}`)

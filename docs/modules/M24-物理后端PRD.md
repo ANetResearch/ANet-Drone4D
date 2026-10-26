@@ -62,7 +62,7 @@
 ### 1.3 设计原则
 
 1. **换动力学，不换观测**：物理档只产出状态，观测一律由 M25 按 PoseHistory 生成；gz 原生传感器只作交叉验证与 ROS 2 生态出口（R-D3-31，ADR-138）。
-2. **时钟只有一个**：Drone4D 持有 `t_sim_ns` 与 tick，gz 只在被授予步数时推进；所有时刻为整数纳秒，物理步网格 `t_n = t_0 + n·dt` 严格成立。
+2. **时钟只有一个**：ANet4D 持有 `t_sim_ns` 与 tick，gz 只在被授予步数时推进；所有时刻为整数纳秒，物理步网格 `t_n = t_0 + n·dt` 严格成立。
 3. **一致性优先于功能堆叠**：档间共享的输入（磁带、M07 环境、M13 云台、M21 限幅、指令生效步）必须相同；无法相同之处（气动模型、旋翼模型、湍流实现）在对照报告中逐项列出。
 4. **不改 D2 文件**：Fast 档只经 M08 登记表接入，D2 文件的改动只限 AWR-05 §12.3 扩展点及本文 §9.4 提出的变更请求。
 5. **故障可恢复、现场可追溯**：控制消息、版本与种子逐条存档；实例故障以"重启实例 + 从回合起点重放"恢复（ADR-138）。
@@ -1338,7 +1338,7 @@ Agent principal 不得订阅以上任何事件与通道（ADR-161）；`lab-gate
 | 位置 | 中文 | English |
 |---|---|---|
 | 档位名称 | 快速仿真（Fast）、高保真仿真（Realistic，Gazebo Sim）、飞控在环（SITL） | Fast simulation、High-fidelity simulation (Gazebo Sim)、Software-in-the-loop (PX4) |
-| 能力描述 | 高保真仿真档由 Gazebo Sim 提供刚体动力学与旋翼模型，在 Drone4D 权威时钟下逐步推进，同一实验条件下可逐位复现。 | The high-fidelity tier uses Gazebo Sim for rigid-body and rotor dynamics, advanced step by step under the Drone4D authoritative clock and reproducible bit for bit under identical conditions. |
+| 能力描述 | 高保真仿真档由 Gazebo Sim 提供刚体动力学与旋翼模型，在 ANet4D 权威时钟下逐步推进，同一实验条件下可逐位复现。 | The high-fidelity tier uses Gazebo Sim for rigid-body and rotor dynamics, advanced step by step under the ANet4D authoritative clock and reproducible bit for bit under identical conditions. |
 | 限制说明 | 快速仿真档不支持在桥梁、树冠等悬挑结构下方飞行。 | The fast tier does not support flight beneath overhanging structures such as bridges or tree canopies. |
 | 性能数值 | 一律注明硬件、机数、传感器组合与测量条件 | Always state hardware, fleet size, sensor configuration and measurement conditions. |
 

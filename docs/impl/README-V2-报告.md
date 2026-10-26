@@ -17,7 +17,7 @@
 | 特性各节补真实截图 | 完成。流式加载下方 `screenshot-streaming.jpg`，环境下方 `screenshot-weather.jpg`，多机同钟下方 `screenshot-swarm.jpg` 与 `screenshot-follow.jpg` 两栏，设计体系下方 `screenshot-perf.jpg`（lieflat 性能面板）。特性开头的 NOTE 改为"开头插图是概念图，图注标有 Screenshot / 截图的是真实截图"。Reality → World 与无人机即智能体没有对应的真实画面，只保留概念图 |
 | 快速开始 | 完成。第一段即零下载：`make setup` → `make demo-world` → `make run` → `http://localhost:8000/world/synthcity`；说明 S0 内容、synthcity 的生成方式与可自由再分发、已有六城时的启动命令 `AWR_WORLD=synthcity AWR_SCENARIO=s0-synthcity-showcase make run`。第二段"加入六座真实城市（可选）"：`make fetch-data` → `make worlds` → `make run` → `/world/shenzhen`，紧接 UrbanScene3D 非商业与禁止再分发的 IMPORTANT 提示 |
 | 最终验收结果 | 完成。删去 Features 下的"Measured so far"与 Roadmap 下的"Where D1 stands"，新增一级节"D1 acceptance / D1 验收"（导航与 Status 徽章指向它）：通过计数表（含 P0 的 25 项通过 23，只含 P1 的 13 项通过 12，合计 38 项通过 35）、各轮趋势、测试口径 NOTE、16 行关键实测表、"Open items / 未通过项"三条与沿用项说明，链接第 5 轮报告 |
-| CI 徽章 | 已存在（SHOW-CI 加入），指向 `ANetResearch/ANet-Drone4D` 的 `actions/workflows/ci.yml`，`.github/workflows/ci.yml` 存在；保留。验收节末尾另链接工作流文件 |
+| CI 徽章 | 已存在（SHOW-CI 加入），指向 `ANetResearch/ANet4D` 的 `actions/workflows/ci.yml`，`.github/workflows/ci.yml` 存在；保留。验收节末尾另链接工作流文件 |
 | 校验 | 相对链接与图片各 70 处全部存在，页内锚点各 16 处全部可解析，`no-emoji` 规则 0 违规，中文 README 无段内硬换行，`make lint` 通过（§4） |
 
 ## 2 改动明细（两版逐节对应）

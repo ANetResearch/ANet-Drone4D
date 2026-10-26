@@ -20,7 +20,7 @@
 |---|---|---|
 | Skyfall-GS 做了什么 | 卫星影像重建 3DGS（外观嵌入、熵不透明度正则、MoGe 伪深度）→ 5 级课程（仰角 85°→45°）× 每级 108 张 FLUX.1 [dev] + FlowEdit 文本编辑图回训；单 AOI 6 h 45 min、峰值 46 GB（RTX A6000）；以 FID_CLIP、CMMD 评价，不追求像素一致 | 价值在"补全卫星看不见的立面"；D3 网格的问题是"看得见但低空模糊"，场景性质不同 |
 | 能否直接运行 | 不能直接用于 D3：数据读取只认卫星或 COLMAP；环绕半径、伪相机半径按卫星归一化单位硬编码；Difix3D、DreamScene 分支引用未导入；核心训练代码与光栅化器为 Inria 非商业许可 | 原样复用其 FlowEdit 模块（MIT），其余在 gsplat（Apache-2.0）上实现最小可行版本 |
-| 许可（阻断项） | FLUX.1 [dev] 许可 §4.a 禁止将模型或其产生的数据用于商业、生产与"监视相关的研究或开发"；Drone4D 的跨遮挡身份保持、车辆追踪与目标搜索存在被认定为监视相关研发的风险 | 本单元未运行 FLUX.1 [dev]，已下载的部分权重删除；生成式路线只能用许可兼容的模型（SDXL OpenRAIL++-M、ControlNet-Union Apache-2.0、FLUX.1 [schnell] Apache-2.0） |
+| 许可（阻断项） | FLUX.1 [dev] 许可 §4.a 禁止将模型或其产生的数据用于商业、生产与"监视相关的研究或开发"；ANet4D 的跨遮挡身份保持、车辆追踪与目标搜索存在被认定为监视相关研发的风险 | 本单元未运行 FLUX.1 [dev]，已下载的部分权重删除；生成式路线只能用许可兼容的模型（SDXL OpenRAIL++-M、ControlNet-Union Apache-2.0、FLUX.1 [schnell] Apache-2.0） |
 | 细化器 | FlowEdit + FLUX.1 [schnell]（Skyfall-GS 原参数与 3 组变参）几乎不改变输入，15.6 s/张；SDXL + ControlNet-Union（网格逆深度 + 边缘）4.6–8.1 s/张、14.2 GB：强度 ≤ 0.55 几乎不增细节，≥ 0.70 出现照片级瓦片与砌石，同时把多面体树团画成芭蕉叶或篷布、在立面上生成不存在的拱门与老虎窗 | 网格的粗几何是生成式幻觉的主要诱因；细节与幻觉不可分 |
 | 基线 (a)：网格直接训练 3DGS | 150 m 街区 4M 高斯，30k 步 17.2 min、峰值 4.7 GB；留出视角对网格 PSNR 33.0（中空 64–115 m）/ 33.1 dB（低空 11–29 m）；720p 291 帧/s、1080p 225 帧/s；但锐度与 MUSIQ 在 29/29 个低空视角上都低于网格 | 与 r3 一致：网格训练的 3DGS 上限就是网格；可作为 3DGS 外观层基础设施的验证资产 |
 | 课程式 IDU（Skyfall 式，b1/b2） | 每级回训后与网格的一致性单调下降（b1：33.0 → 26.1 → 23.8 → 22.2 → 21.6 dB）；低空锐度反而下降（Tenengrad 0.019 → 0.009）；期望深度残差中位数 0.2 → 3.4–3.7 m，低空 57% 像素出现前景浮点；保守变体 b2 在 18 m 级发散崩溃（13.4 dB） | 不加约束的 IDU 在网格派生 3DGS 上不可用 |
@@ -112,7 +112,7 @@ Skyfall-GS 没有使用跨视角注意力或视频扩散模型，跨视角一致
 
 ### 1.8 许可
 
-| 组件 | 许可 | 对 Drone4D 的含义 |
+| 组件 | 许可 | 对 ANet4D 的含义 |
 |---|---|---|
 | Skyfall-GS 仓库顶层 | Apache-2.0（`LICENSE`） | 只覆盖作者新增部分 |
 | 由 Inria 3DGS 派生的文件（`train.py`、`arguments/`、`scene/`、`gaussian_renderer/` 等，文件头声明"free for non-commercial, research and evaluation use"）与 `LICENSE_inria.md` | Gaussian-Splatting License（非商业，研究与评估） | 不能进入产品；可作研究参考 |
@@ -121,7 +121,7 @@ Skyfall-GS 没有使用跨视角注意力或视频扩散模型，跨视角一致
 | FlowEdit | MIT | 可复用（本单元原样调用 `FlowEditFLUX`） |
 | MoGe | MIT | 可复用（本方案不需要，网格提供度量深度） |
 | fused-ssim | MIT | 可复用（镜像已含） |
-| **FLUX.1 [dev] 权重** | FLUX.1 [dev] Non-Commercial License v1.1.1：§2.b 只允许非商业用途；§4.a 禁止将模型**或其产生的任何数据**用于商业或生产目的、军事目的、**监视目的（包括与监视相关的任何研究或开发）**与生物特征处理；§2.d 对输出的放宽受 §4 约束 | Drone4D 的事件观测基准包含跨遮挡身份保持、车辆追踪与目标搜索，存在被认定为"与监视相关的研发"的实质风险，且生成资产将进入内部基准与样例数据。**本单元未运行 FLUX.1 [dev]**：已下载的部分权重在确认条款后删除（`dl_schnell.sh` 记录），改用同架构的 FLUX.1 [schnell]（Apache-2.0）复现 Skyfall-GS 的 FlowEdit 算法 |
+| **FLUX.1 [dev] 权重** | FLUX.1 [dev] Non-Commercial License v1.1.1：§2.b 只允许非商业用途；§4.a 禁止将模型**或其产生的任何数据**用于商业或生产目的、军事目的、**监视目的（包括与监视相关的任何研究或开发）**与生物特征处理；§2.d 对输出的放宽受 §4 约束 | ANet4D 的事件观测基准包含跨遮挡身份保持、车辆追踪与目标搜索，存在被认定为"与监视相关的研发"的实质风险，且生成资产将进入内部基准与样例数据。**本单元未运行 FLUX.1 [dev]**：已下载的部分权重在确认条款后删除（`dl_schnell.sh` 记录），改用同架构的 FLUX.1 [schnell]（Apache-2.0）复现 Skyfall-GS 的 FlowEdit 算法 |
 
 ### 1.9 运行要求与可复用性评估
 

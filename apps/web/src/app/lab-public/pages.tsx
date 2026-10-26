@@ -9,7 +9,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '
 import { Icon } from '@/ui/icons/Icon'
 import { LfTable, type LfColumn } from '@/ui/lf/LfTable'
 import { useLabT } from './i18n'
-import { LAB_PREFIX, onLabLinkClick, type LabPublicRoute, type LabRouteProps } from './router'
+import { LAB_PREFIX, labNavigate, onLabLinkClick, type LabPublicRoute, type LabRouteProps } from './router'
 import { findSample, sampleFiles, sampleRuns, type LabStaticRun } from './staticIndex'
 
 /** 字节数的显示：MB（单位在表头，lieflat），一位小数；未知为 "—" */
@@ -42,20 +42,48 @@ export function LabEmpty({ title, description, action }: { title: string; descri
   )
 }
 
+/** 事件类型的显示名（静态制品索引不带事件类型；未登记的事件只显示事件 id） */
+export const EVENT_TYPES: Readonly<Record<string, string>> = {
+  'crop-handoff-001': 'rendezvous_handoff',
+  'crop-handoff-002': 'rendezvous_handoff',
+  'crop-reid-001': 'reid_occlusion',
+  'crop-search-001': 'target_search',
+  'crop-vehicle-001': 'vehicle_track',
+}
+
+/** 按事件分组的样例运行（输入已按事件、运行 id 排序） */
+export function groupByEvent(rows: readonly LabStaticRun[]): { eventId: string; eventVersion: number; worldId: string | null; runs: LabStaticRun[] }[] {
+  const groups: { eventId: string; eventVersion: number; worldId: string | null; runs: LabStaticRun[] }[] = []
+  for (const r of rows) {
+    const g = groups.find((x) => x.eventId === r.eventId)
+    if (g) g.runs.push(r)
+    else groups.push({ eventId: r.eventId, eventVersion: r.eventVersion, worldId: r.worldId, runs: [r] })
+  }
+  return groups
+}
+
 export function CatalogPage({ index }: LabRouteProps) {
   const t = useLabT()
   const rows = sampleRuns(index)
+  const groups = groupByEvent(rows)
   const cols: LfColumn<LabStaticRun>[] = [
-    { key: 'event', label: t('lab.public.catalog.col.event'), format: (r) => <Mono>{r.eventId}</Mono> },
-    { key: 'world', label: t('lab.public.catalog.col.world'), format: (r) => <Mono>{r.worldId ?? '—'}</Mono> },
     {
       key: 'run', label: t('lab.public.catalog.col.run'),
-      format: (r) => <a href={samplePath(r.runId)} onClick={(e) => onLabLinkClick(e, samplePath(r.runId))} className="font-mono underline-offset-4 hover:underline" data-sample-link={r.runId}>{r.runId}</a>,
+      format: (r) => (
+        <a href={samplePath(r.runId)} onClick={(e) => { e.stopPropagation(); onLabLinkClick(e, samplePath(r.runId)) }}
+          className="font-mono underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" data-sample-link={r.runId}>
+          {r.runId}
+        </a>
+      ),
     },
     { key: 'policy', label: t('lab.public.catalog.col.policy'), format: (r) => <Mono>{r.policy || '—'}</Mono> },
     { key: 'fleet', label: t('lab.public.catalog.col.fleet'), align: 'right', format: (r) => t('lab.public.catalog.fleet', { n: r.nUav }) },
     { key: 'obs', label: t('lab.public.catalog.col.obs'), format: (r) => <Mono>{r.obsLevel || '—'}</Mono> },
     { key: 'files', label: t('lab.public.catalog.col.files'), align: 'right', format: (r) => t('lab.public.catalog.files', { n: sampleFiles(r).length }) },
+    {
+      key: 'open', label: '', align: 'right', width: '2.5rem',
+      format: () => <Icon icon="chev.right" className="size-4 text-muted-foreground" aria-hidden="true" />,
+    },
   ]
   return (
     <section data-view="lab-public-catalog" className="flex flex-col gap-4">
@@ -66,9 +94,22 @@ export function CatalogPage({ index }: LabRouteProps) {
       {rows.length === 0 ? (
         <LabEmpty title={t('lab.public.catalog.emptyTitle')} description={t('lab.public.catalog.emptyHint')} />
       ) : (
-        <div className="overflow-x-auto">
-          <LfTable columns={cols} rows={rows} rowKey={(r) => r.runId} ariaLabel={t('lab.public.catalog.aria')} figureId="lab-public-catalog"
-            height={tableMaxHeight(rows.length)} />
+        <div className="flex flex-col gap-6">
+          {groups.map((g) => (
+            <div key={g.eventId} className="flex flex-col gap-2" data-catalog-event={g.eventId}>
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h2 className="font-mono text-sm font-semibold">{g.eventId}</h2>
+                {EVENT_TYPES[g.eventId] ? <Badge variant="outline" className="font-mono">{EVENT_TYPES[g.eventId]}</Badge> : null}
+                <span className="text-hud-sub text-muted-foreground">
+                  {t('lab.public.catalog.eventMeta', { version: g.eventVersion, world: g.worldId ?? '—', n: g.runs.length })}
+                </span>
+              </div>
+              <div className="overflow-x-auto" data-catalog-rows="">
+                <LfTable columns={cols} rows={g.runs} rowKey={(r) => r.runId} ariaLabel={t('lab.public.catalog.aria')} figureId="lab-public-catalog"
+                  height={tableMaxHeight(g.runs.length)} rowHeight={44} onRowClick={(r) => labNavigate(samplePath(r.runId))} />
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </section>

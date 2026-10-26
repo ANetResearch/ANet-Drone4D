@@ -143,7 +143,7 @@ timeline 回放段（M12-AC-028、047、026、051；M11-AC-042）：总是自起
 
 #### 1.6.3 API 标题（FX-WEB2-to-M11 第 3 条）
 
-`create_app` 的 FastAPI 标题改为 "ANet Drone4D World Runtime API"（ADR-056），`tools/contracts/gen_openapi.py` 重新生成
+`create_app` 的 FastAPI 标题改为 "ANet4D World Runtime API"（ADR-056），`tools/contracts/gen_openapi.py` 重新生成
 `packages/contracts/rest/openapi.snapshot.json`（68 个路径；同时吸收了第 1 轮之后其他工作包对 REST 的改动），`--check` 与
 `tests/contracts/test_openapi_snapshot.py` 通过。
 
@@ -207,7 +207,7 @@ timeline 回放段（M12-AC-028、047、026、051；M11-AC-042）：总是自起
 | `python/awr/api/rt/events.py`（续作） | M11 | `EventIngest.probe` |
 | `python/awr/runtime/events.py`（续作） | M11-R | `EventSubscriber.probe`、`on_probe_reply`、`_Tracker.probing/unconfirmed` |
 | `python/awr/recorder/app.py`（续作） | M12 | 事件纪元 = 重启次数 + 1（`event_epoch`） |
-| `python/awr/api/main.py`、`packages/contracts/rest/openapi.snapshot.json`（续作） | M11、M00 | API 标题 ANet Drone4D；快照重新生成 |
+| `python/awr/api/main.py`、`packages/contracts/rest/openapi.snapshot.json`（续作） | M11、M00 | API 标题 ANet4D；快照重新生成 |
 | `tools/ci/bom.json`（新建，续作）、`tools/lint/check-deps.mjs`（续作） | M00 | BOM 95 条；§7.3 全字段校验、PyPI 直接依赖登记 |
 | `.cache/research/t11/bom_supplement_meta.tsv`（新建，续作） | M00 | 5 个补录仓库的 GitHub API 原始输出（AWR-11 附录 B 证据） |
 | `apps/web/perf/skeleton.server.ts`、`skeleton.spec.ts`（续作） | M16（SK-E2E） | `startSkeletonServer(0)` 取空闲端口；D1-AC-35 的静态服务与 fake_gw 不再用固定的 4193/8097 + 10k |

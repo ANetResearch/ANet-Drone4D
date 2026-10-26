@@ -3,7 +3,7 @@
 ANet4D is simulation infrastructure for collaborative embodied agents. It is pre-1.0 (current release V0.3.2), and its
 interfaces may still change between minor versions. It is built on real-world grounded 4D worlds: the browser shows the
 world, the server computes it, and the World is the core asset. Versions up to V0.3.1 were published under the former
-name ANet Drone4D; protocol and schema identifiers such as `drone4d.event.v1` keep that name as legacy identifiers and
+name ANet4D; protocol and schema identifiers such as `drone4d.event.v1` keep that name as legacy identifiers and
 are not renamed in contributions.
 
 ## Ground rules

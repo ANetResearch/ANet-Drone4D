@@ -1,6 +1,6 @@
 // About (M15-FR-110, FR-026; AWR-15 §4.2; AWR-14 §5.6 "关于"; M16-FR-006 honesty; LICENSE condition 1b): the full badge
 // at 320 px on the popover surface (never removed or altered), the product name "ANet4D" (repository ANetResearch/
-// ANet-Drone4D, legacy name until renamed; lib/site.ts) with its version, the licence summary, the repository link, the data source and citation of
+// ANet4D; lib/site.ts) with its version, the licence summary, the repository link, the data source and citation of
 // the built-in worlds (UrbanScene3D, used under authorization of the dataset rights holders with the ECCV 2022 BibTeX,
 // ADR-109; World Packages not in the repository), the fidelity statement
 // (simulated results, schematic coordinates), the copyright line and the component versions (contracts, world

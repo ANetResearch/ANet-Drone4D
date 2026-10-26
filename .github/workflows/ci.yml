@@ -3,17 +3,17 @@
 # copy of the tracked files before it was added here (docs/impl/SHOW-CI-报告.md). `make ci` stays the full local gate G1;
 # `make ci-nodata` runs the same no-data steps locally.
 #
-# D3 regression gate (docs/05 section 4.8, D3-AC-01; seal task G05): pushes to d3-dev and pull requests into d3-dev also run
+# D3 regression gate (docs/05 section 4.8, D3-AC-01; seal task G05): pushes to main and pull requests into main also run
 # the light gate (`make gate-d3-light`: contracts, Vitest unit, lint, import direction, resim frame digests against the D2
 # baseline, public demo build with K9, the K9 D3 extension, extension point 15 build parity against v0.2.1 and the /lab/
 # static build). The heavy part (D2 Python full set, zero impact relay batch, resim) runs nightly on the dmax CPU pool
 # (`make gate-d3-nightly`, tools/deploy/dmax/run_d3_gate.sh); `make gate-d3-check GATE_TIER=full` joins both by tree id.
-# A D3 work package merges into d3-dev only when this workflow is green for its commit.
+# Since 2026-10-26 main is the only branch (docs/05 ADR-225): a change merges into main only when this workflow is green for its commit.
 name: ci
 
 on:
   push:
-    branches: [main, d3-dev]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -110,7 +110,7 @@ jobs:
 
   d3-gate:
     name: D3 regression gate, light (D3-AC-01)
-    if: github.ref == 'refs/heads/d3-dev' || github.base_ref == 'd3-dev' || github.event_name == 'workflow_dispatch'
+    if: github.ref == 'refs/heads/main' || github.base_ref == 'main' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

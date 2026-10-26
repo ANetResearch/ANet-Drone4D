@@ -2,7 +2,7 @@
 
 | 项 | 内容 |
 |---|---|
-| 用途 | 登记 ANet Drone4D Python SDK（`drone4d`）在干净主机上按快速上手文档完成首个 Run 的步骤与耗时，作为 D3-AC-58"15 min 内运行示例 Agent"条款的文档化测量 |
+| 用途 | 登记 ANet4D Python SDK（`drone4d`）在干净主机上按快速上手文档完成首个 Run 的步骤与耗时，作为 D3-AC-58"15 min 内运行示例 Agent"条款的文档化测量 |
 | 验收编号 | D3-AC-58（`pip install drone4d` 后按文档在 15 min 内以 `make(..., physics="realistic")` 与 `physics="fast"` 运行示例 Agent，同一 Agent 代码在两档上不改动） |
 | 依据 | docs/05 §11.2 D3-AC-58、§5.5；ADR-194 (3)、ADR-202（`docs/impl/D3-决策登记.md`）；M26-FR-080、M26-AC-030；快速上手 `docs/sdk/quickstart.zh-CN.md` |
 | 口径 | ADR-202 (1)：以 dmax 上新拉起的 `python:3.12-slim`（amd64）容器作为干净主机，不挂载仓库、不预装依赖，只读挂载离线 wheel 目录作为包索引；计时从研究者侧容器启动开始，到示例 Agent 完成首个 Run（平台侧发送 CLOSE、Agent 进程全部以 0 退出、容器退出）为止。上手时间属于功能性测量，不属于 R-D3-63 的性能类条款，共享主机上的测量计入本记录 |
@@ -17,7 +17,7 @@
 | 主机 | dmax（2 × Intel Xeon Gold 6326，64 逻辑核，1 TB 内存，Docker 29.1.4）；共享生产机，演练期间系统负载约 32（64 核），不使用 GPU |
 | 研究者侧镜像 | `python:3.12-slim` 的 linux/amd64 版本，经 dmax 配置的 Docker Hub 镜像源以独立名称 `docker.m.daocloud.io/library/python:3.12-slim` 新拉取，不覆盖 dmax 共享标签 `python:3.12-slim`（该标签为 linux/arm64，见第 7 节）。索引摘要 `sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1`，镜像 ID `sha256:df18428df8a0f9189c84e7424d214b4c50092af1f9dca5842a00c41c39bda316`，构建时间 2026-10-06T02:04:40Z，119.4 MB；容器内 `uname -m` 为 `x86_64`，`python3 -V` 为 `Python 3.12.15` |
 | 研究者侧容器 | 每次演练新建（`--rm`），`--network none --cpus 2 --memory 8g`，非 root 用户（`--user` 为宿主账户，`HOME=/tmp`）；挂载只有 3 项：离线 wheel 目录 `/wheels`（只读）、快速上手文档 `/doc/quickstart.zh-CN.md`（只读，用于取得第 3 节的示例代码）、套接字目录 `/tmp/d4d-sock`；另挂载一个只写记录目录 `/out` 保存安装日志与步骤时刻。未挂载仓库代码，镜像内除 Python 标准发行外无预装包 |
-| 平台侧（终端 A） | `d3-gz:dev`（`sha256:7350b8d8b935…`，Python 3.12.3，Gazebo Sim 与 Drone4D 插件），`--network none --cpus 8 --memory 16g`；运行快速上手第 4.1 节的 `run_quickstart.py`，Gazebo Sim 以 `--gz-launcher local` 在同一容器内启动 |
+| 平台侧（终端 A） | `d3-gz:dev`（`sha256:7350b8d8b935…`，Python 3.12.3，Gazebo Sim 与 ANet4D 插件），`--network none --cpus 8 --memory 16g`；运行快速上手第 4.1 节的 `run_quickstart.py`，Gazebo Sim 以 `--gz-launcher local` 在同一容器内启动 |
 | 源码 | `d3-dev` 的 9ae4c76（`git archive`，不含工作树中未提交的改动）；仓库以只读方式挂载到平台侧容器 |
 | 世界与事件 | `oryahovo-crop1`、已编译事件 `crop-handoff-001`（dmax `/data/anet-drone4d-d3/d3dev/worlds`、`d3data/events`，只读）；Run 规格 `configs/bench.d3/crop-handoff-001.l1-3uav.run_spec.json`（L1 观测档，3 架 x500，10 Hz 控制步，60 s 回合，种子 1；物理档见第 4 节） |
 

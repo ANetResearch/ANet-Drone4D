@@ -24,10 +24,10 @@ authors:
   - name: "Agent Network Research"
     website: "https://anet0.com"
     email: "hi@anet0.com"
-version: "0.3.2"
-repository-code: "https://github.com/ANetResearch/ANet-Drone4D"
+version: "0.3.3"
+repository-code: "https://github.com/ANetResearch/ANet4D"
 url: "https://anet4d.agentnetwork.org.cn"
-license-url: "https://github.com/ANetResearch/ANet-Drone4D/blob/main/LICENSE"
+license-url: "https://github.com/ANetResearch/ANet4D/blob/main/LICENSE"
 keywords:
   - embodied agents
   - multi-agent collaboration

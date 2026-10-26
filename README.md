@@ -6,8 +6,8 @@
 
 ANet4D is simulation infrastructure for collaborative embodied agents. ANet4D aims to be for collaborative embodied-agent research what NS-3 is for network research. Its scope covers multi-UAV teams, unmanned ground and surface vehicles (UGV, USV), ground robots, fixed sensors and software agents; the released versions implement drones as the first entity class on real-world 4D digital twins. The Interactive Sandbox (V0.2) runs city-scale point-cloud digital twins, fleet simulation, swarm control and target perception on one simulation clock; its server needs no GPU, and the scene renders in the visitor's browser. The Event Lab (V0.3) adds mesh worlds, event tapes with Gazebo Sim lockstep, mesh-rendered camera, thermal and LiDAR sensors and a benchmark runtime; its sensor generation requires an NVIDIA GPU on the server.
 
-[![Release](https://img.shields.io/github/v/release/ANetResearch/ANet-Drone4D?label=release&color=1f1f1f)](https://github.com/ANetResearch/ANet-Drone4D/releases/latest)
-[![CI](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/ANetResearch/ANet4D?label=release&color=1f1f1f)](https://github.com/ANetResearch/ANet4D/releases/latest)
+[![CI](https://github.com/ANetResearch/ANet4D/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ANetResearch/ANet4D/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-Read%20the%20Docs%20layout-1f1f1f)](https://docs.agentnetwork.org.cn/anet4d/en/latest/)
 [![Live demo](https://img.shields.io/badge/live%20demo-anet4d.agentnetwork.org.cn-e0322d)](https://anet4d.agentnetwork.org.cn)
 [![License](https://img.shields.io/badge/license-modified%20Apache--2.0-1f1f1f)](LICENSE)
@@ -15,7 +15,7 @@ ANet4D is simulation infrastructure for collaborative embodied agents. ANet4D ai
 **[Live demo](https://anet4d.agentnetwork.org.cn)** · **[Documentation](https://docs.agentnetwork.org.cn/anet4d/en/latest/)** ·
 [Quick start](https://docs.agentnetwork.org.cn/anet4d/en/latest/intro/quickstart.html) ·
 [Open API](https://docs.agentnetwork.org.cn/anet4d/en/latest/api/rest.html) ·
-[Releases](https://github.com/ANetResearch/ANet-Drone4D/releases) · [ANet](https://github.com/ANetResearch/ANet)
+[Releases](https://github.com/ANetResearch/ANet4D/releases) · [ANet](https://github.com/ANetResearch/ANet)
 
 **English** · [简体中文](README.zh-CN.md)
 
@@ -60,7 +60,7 @@ Statuses reflect the published V0.2 and V0.3 releases and the [D3 design baselin
 The **[live demo](https://anet4d.agentnetwork.org.cn)** requires no registration. It provides a read-only shared show and an isolated sandbox per visitor. To run the platform locally on Linux:
 
 ```sh
-git clone https://github.com/ANetResearch/ANet-Drone4D.git && cd ANet-Drone4D
+git clone https://github.com/ANetResearch/ANet4D.git && cd ANet4D
 make setup        # Python and Node dependencies
 make demo-world   # generate ANet Synthetic City
 make run          # then open http://127.0.0.1:8000/world/synthcity
@@ -238,9 +238,10 @@ The vehicle catalogue includes the P600 digital twin in its MID-360 configuratio
 | V0.2 | Interactive Sandbox: targets and quantified perception, nests and relay watch, open API, phones and tablets, city monitoring shows; patch releases from `v0.2.1` | Released |
 | V0.3 | Event Lab: GLB mesh worlds, event tapes, Gazebo Sim lockstep, mesh cameras and LiDAR, FAST-LIVO2 evaluation, event-level observation benchmark | Released |
 | V0.3.2 | Renaming to ANet4D with the embodied-agent positioning; scene-target foundations (target appearance, activity and life bindings), experimental and disabled by default | Released |
+| V0.3.3 | Event Lab samples extended to seven sample runs over five dev events, sample gallery on the landing page, repository renamed to `ANetResearch/ANet4D`, sample dataset `inksong/ANet4D-samples` | Released |
 | V0.3.x | Increments on the V0.3 baseline, including the SITL physics tier and the 3DGS appearance layer | Planned |
 
-The cross-entity collaborative experimentation platform (phase D4) is in research and concept design and is not scheduled here; see the [concept design](docs/06-D4-协同实验平台概念设计.md). Progress is tracked in [GitHub milestones](https://github.com/ANetResearch/ANet-Drone4D/milestones) and the pinned [roadmap issue](https://github.com/ANetResearch/ANet-Drone4D/issues/1). See [Roadmap](https://docs.agentnetwork.org.cn/anet4d/en/latest/project/roadmap.html) and the
+The cross-entity collaborative experimentation platform (phase D4) is in research and concept design and is not scheduled here; see the [concept design](docs/06-D4-协同实验平台概念设计.md). Progress is tracked in [GitHub milestones](https://github.com/ANetResearch/ANet4D/milestones) and the pinned [roadmap issue](https://github.com/ANetResearch/ANet4D/issues/1). See [Roadmap](https://docs.agentnetwork.org.cn/anet4d/en/latest/project/roadmap.html) and the
 [D3 design](docs/05-D3-设计增补与决策记录.md).
 
 </details>
@@ -257,7 +258,7 @@ V0.2.0 is evaluated against 55 acceptance criteria (D2-AC-01 to D2-AC-55). Round
 | P0 (50) | 41 | 9 | 0 |
 | P1 (5) | 3 | 0 | 2 |
 
-A 24 h soak test under a cgroup simulation of the 4-core public host completed with zero restarts and a memory growth rate of 0.48 MB/h. Remaining items are documented as known issues in the [release notes](https://github.com/ANetResearch/ANet-Drone4D/releases/tag/v0.2.0); see the full report in [docs/impl/D2-验收报告-第2轮.md](docs/impl/D2-验收报告-第2轮.md).
+A 24 h soak test under a cgroup simulation of the 4-core public host completed with zero restarts and a memory growth rate of 0.48 MB/h. Remaining items are documented as known issues in the [release notes](https://github.com/ANetResearch/ANet4D/releases/tag/v0.2.0); see the full report in [docs/impl/D2-验收报告-第2轮.md](docs/impl/D2-验收报告-第2轮.md).
 
 </details>
 
@@ -315,8 +316,8 @@ To cite ANet4D, use GitHub's "Cite this repository" feature ([CITATION.cff](CITA
   title   = {ANet4D: Simulation Infrastructure for Collaborative Embodied Agents},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.3.2},
-  url     = {https://github.com/ANetResearch/ANet-Drone4D}
+  version = {0.3.3},
+  url     = {https://github.com/ANetResearch/ANet4D}
 }
 ```
 

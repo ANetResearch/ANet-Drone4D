@@ -14,7 +14,7 @@
 | 任务 | 结果 | 证据 |
 |---|---|---|
 | 1 构建并加载 synthcity + S0 | 完成。`make build` 与私有测试构建（`VITE_AWR_TEST_SWITCHES=1`）；supervisor 以 `AWR_WORLD=synthcity AWR_SCENARIO=s0-synthcity-showcase` 启动（`make run` 的最后一步，`.cache/showm/backend.sh`），Playwright + Chrome 151 在 1920 × 1080、deviceScaleFactor 1 拍摄 | `.cache/showm/backend.log` 等；每个批次一个新 run |
-| 1a hero-sandbox | 完成：`screenshot-hero.jpg`。完整 UI（顶栏 logo 与 ANet Drone4D、左栏世界/图层/环境、右栏 7 架机群、底部 Timeline、性能 HUD），Tier B、`?fixedB=1500000`，1,274,052 点，地标塔双段立面螺旋与街区覆盖航线，4 架带轨迹或航线 | §2、§4 |
+| 1a hero-sandbox | 完成：`screenshot-hero.jpg`。完整 UI（顶栏 logo 与 ANet4D、左栏世界/图层/环境、右栏 7 架机群、底部 Timeline、性能 HUD），Tier B、`?fixedB=1500000`，1,274,052 点，地标塔双段立面螺旋与街区覆盖航线，4 架带轨迹或航线 | §2、§4 |
 | 1b streaming | 完成：`screenshot-streaming.jpg`，相机跳到近景后粗层 → 细化 → 完成三联，图注为各帧 HUD 读数（点数、加载比例、在途、受点预算限制） | §4.2 |
 | 1c swarm | 完成：`screenshot-swarm.jpg`，三机 V 形编队掉头（轨迹）与覆盖机割草机航线（任务图层） | §4 |
 | 1d weather | 完成：`screenshot-weather.jpg`，同一视角小雨 → 起雾过渡 → 雾，能见度 6.0 km / 690 m / 150 m | §4 |

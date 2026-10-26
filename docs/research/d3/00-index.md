@@ -1,6 +1,6 @@
 # 00-index：D3 研究总览——从"无人机仿真"到"可反复观测的 4D 事件沙盘"
 
-> 项目：ANet Drone4D（github.com/ANetResearch/ANet-Drone4D）｜ 阶段：D3 研究整合 ｜ 日期：2026-10-11 ｜ 作者：D3 首席研究整合
+> 项目：ANet4D（github.com/ANetResearch/ANet4D）｜ 阶段：D3 研究整合 ｜ 日期：2026-10-11 ｜ 作者：D3 首席研究整合
 >
 > 输入：
 > - 用户诉求：固定沙盘、固定事件（A、B、C 沿建筑与道路从 X 到 Y 再到 Z，期间有遮挡、风速变化、下雨）；机队数量、飞行策略、协同策略都可变，同一事件可反复采集；沙盘基于 3DGS + mesh；物理引擎决定位姿与视角，渲染出"无人机当时的真实视角"；每机没有全局视野；在 GLB 沙盘里模拟 LiDAR 做重建与采集；深入研究 FAST-LIVO2。
@@ -417,7 +417,7 @@ D1/D2 前序研究仍然有效：`r03`（3DGS/gsplat）、`r05`（FAST-LIO/LIVO/
 | SITL | PX4 + gz（官方镜像） | 有 | slaved_realtime | 不保证 | 10 架 RTF 0.96 | 飞控交互与失效保护，不进排行榜 |
 
 - **共同规则**：
-  - 三档都把位姿窗口送进同一个 M25；指令语义统一为世界系速度加偏航角速度，高层指令在 Drone4D 侧由同一个路径跟踪器换算。
+  - 三档都把位姿窗口送进同一个 M25；指令语义统一为世界系速度加偏航角速度，高层指令在 ANet4D 侧由同一个路径跟踪器换算。
   - 事件磁带在 gz 中由 `Drone4DClock`/TapeSystem 在 PreUpdate 中写入：actor 无脚本，`<pose>` 为单位位姿，`loop=true` 并在末尾加驻留路点；车辆用运动学模型。
   - gz 进程在 PostUpdate 把位姿镜像到 StateRing，网关、UI、录制链路不改。
 - **导出器** `awr/world/export/gz.py`：

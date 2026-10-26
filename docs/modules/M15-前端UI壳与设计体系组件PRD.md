@@ -354,7 +354,7 @@ M15 位于 Web Runtime 层（AWR-03 §3.2），是所有前端模块的"呈现�
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
 | M15-FR-109 | 品牌资产本地托管 `public/brand/`：`anet-logo.svg`（与 `refs/design/ANet/docs/media/anet-logo.svg` 字节一致）、`avatar-96.png`、`avatar-460.png`（由 `https://avatars.githubusercontent.com/u/305781773?s=96&v=4` 及其 `s=460` 版本下载一次）、`favicon-16.png`、`favicon-32.png`、`brand.lock.json`（sha256、来源、获取日期）；运行时禁止引用 GitHub URL | P0 | V0.1 | 是 | M15-AC-056 | ADR-032；AWR-15 §4.1 |
-| M15-FR-110 | 品牌组件：`BrandLockup`（顶栏：头像 24 px + "ANet Drone4D" + 分隔线 + "World Runtime"，紧凑档省略副名；产品显示名见 ADR-056）、`BrandBadge`（完整徽章，宽 ≥ 320 px，实色底，禁止改色与滤镜）、`BootMask`（480 px）、`AboutDialog`（320 px）、测试报告封面（480 px，FR-080）、全视口空状态（徽章）、面板空状态（头像 48 px）；徽章不得位于 `[data-viewport]` 内；入场只允许 opacity + translateY `--distance-micro`，`--duration-fast`；公开演示构建的关于区块另有演示站一行（FR-124，ADR-083）。 | P0 | V0.1 | 是 | M15-AC-056 | ADR-032；AWR-15 §4.2–§4.6 |
+| M15-FR-110 | 品牌组件：`BrandLockup`（顶栏：头像 24 px + "ANet4D" + 分隔线 + "World Runtime"，紧凑档省略副名；产品显示名见 ADR-056）、`BrandBadge`（完整徽章，宽 ≥ 320 px，实色底，禁止改色与滤镜）、`BootMask`（480 px）、`AboutDialog`（320 px）、测试报告封面（480 px，FR-080）、全视口空状态（徽章）、面板空状态（头像 48 px）；徽章不得位于 `[data-viewport]` 内；入场只允许 opacity + translateY `--distance-micro`，`--duration-fast`；公开演示构建的关于区块另有演示站一行（FR-124，ADR-083）。 | P0 | V0.1 | 是 | M15-AC-056 | ADR-032；AWR-15 §4.2–§4.6 |
 
 ### 4.16 lint、可访问性与分辨率
 
@@ -373,7 +373,7 @@ M15 位于 Web Runtime 层（AWR-03 §3.2），是所有前端模块的"呈现�
 | M15-FR-121 | 落地页 `/`（`app/demo/Landing.tsx`，入口 `app/demo/entry.tsx`）：品牌头图、一句话定位、主按钮"进入演示 / Launch demo"（`/world/synthcity`）、合成城市真实截图与 `demo-flight.webp`（懒加载）、四个功能要点（渐进加载与疏密自动调节、4D 环境场、多机仿真与安全、ANet 协作）、"演示说明"（公开只读、synthcity 程序生成、未含 GPU 重建等服务端重计算功能、性能取决于访客 GPU）、lieflat 皮肤的"本站运行的内容"表、仓库与文档链接、中英切换；首屏只加载运行时、react 与 landing 分块（不加载 three、引擎、实时客户端），`index.html` 在脚本执行前隐藏启动遮罩 | P1 | V0.1 | 是 | M15-AC-071 | ADR-083 |
 | M15-FR-122 | 演示路由与入口：只注册 `/`、`/world/:id`（只接受 synthcity）、`/worlds`、`/settings`；应用内的 `/` 进入 `/world/synthcity`；顶栏去掉重建任务、录制列表、回放录制与 GPU 自检，帮助菜单增加"演示首页"；面包屑的 run 不链接录制列表；命令面板与快捷键去掉打开重建任务与录制列表；时间轴不再请求 `/api/runs/**`；世界列表只列 synthcity | P1 | V0.1 | 是 | M15-AC-072 | ADR-083 |
 | M15-FR-123 | 演示只读：token 一律按 viewer 申请；`hint.readOnly`、`detail.readOnly`、`hint.needSeat`、`hint.replaySeat` 显示"公开演示为只读模式"，`role.viewer` 显示"公开演示 · 只读"；顶栏为带 Tooltip 的只读徽标，顶栏、详情页与设置都不出现"申请控制"；环境面板的禁用控件与时间轴"添加书签"以 shadcn Tooltip 说明只读；相机、选择、遥测、图层、着色、画质、时间轴实时查看与 Perf 面板照常 | P1 | V0.1 | 是 | M15-AC-072 | ADR-083；AWR-14 §7.8 |
-| M15-FR-124 | 演示站标识：页面标题"<视图> · ANet Drone4D 公开演示"；关于区块最前增加"演示站"一行（只读、只运行 synthcity 与循环剧本 S0、不提供服务端 GPU 功能、帧率取决于访客 GPU）；落地页文案与演示文案在 zh-CN 与 en 两份词典中都有译文 | P1 | V0.1 | 是 | M15-AC-073 | ADR-083、ADR-056 |
+| M15-FR-124 | 演示站标识：页面标题"<视图> · ANet4D 公开演示"；关于区块最前增加"演示站"一行（只读、只运行 synthcity 与循环剧本 S0、不提供服务端 GPU 功能、帧率取决于访客 GPU）；落地页文案与演示文案在 zh-CN 与 en 两份词典中都有译文 | P1 | V0.1 | 是 | M15-AC-073 | ADR-083、ADR-056 |
 
 ---
 
@@ -2037,7 +2037,7 @@ npx tsc -p tsconfig.json --noEmit && npx playwright test perf/m15/smoke.spec.ts
 | M15-FR-202 | 演示构建的运行期角色切换（ADR-111）：编译期开关 `VITE_AWR_DEMO=public` 保留，但写入界面不再在编译期剔除；`useSessionRole()` 返回 `shared-viewer`（共享展示）、`sandbox-operator`（持有该 sid 的沙盒 token）、`sandbox-viewer`（观摩链接，P1）或 `local`（非演示构建）；`PanelCtx` 增加 `session ∈ {shared, sandbox, local}`；面板、命令、快捷键与命令面板动作按角色显隐；服务端独立执行同样的策略（客户端隐藏不是安全边界） | P0 | V0.2-demo | 是 | M15-AC-202 | ADR-111、ADR-093 |
 | M15-FR-203 | 路由：演示构建注册 `/`、`/world/:id`、`/worlds`、`/settings`、`/sandbox/:sid`、`/sandbox/api`；`/world/:id` 接受七个世界：与共享展示 run 同世界时进入共享展示，否则为静态浏览（只加载点云与地形，不建 WS 订阅，状态条提示"静态浏览，开启沙盒即可在此城市运行仿真"）；`/worlds` 列出七个世界及"可立即开沙盒"状态；`/sandbox/:sid` 的世界取自会话；其余路径回到 `/worlds`；面板可经 `?panel=<id>` 深链（沿用 D1 `urlSync`），使"无人机管理""待识别物管理"可直接分享 | P0 | V0.2-demo | 是 | M15-AC-202 | ADR-111；AWR-04 §10.2；R-D2-07、R-D2-13 |
 | M15-FR-204 | 落地页：两个主按钮"进入演示"（`/world/synthcity`）与"开启我的沙盒"；后者打开 `SandboxLaunchSheet`（shadcn Sheet）：世界列表（七个，标"可立即开始"或"需排队"与原因）、场景模板（T1–T6，缺省 synthcity + T5 区域值守）、"恢复上次配置"（同一世界存在本地快照时）；确认后 `POST /api/sandbox/v1/sessions{world, template, principal_hint, config_snapshot?}`，需要工作量证明（409 `509`）时在 Web Worker 中求解并显示"正在验证"（不阻塞主线程）；成功进入 `/sandbox/:sid`，排队时进入共享展示并显示排队卡片；视口小于 1280 × 720 时按钮禁用并说明"沙盒需要桌面浏览器窗口 ≥ 1280 × 720"，不发起请求；落地页仍不加载 three、引擎与实时客户端（M15-FR-121 的分块约束不变） | P0 | V0.2-demo | 是 | M15-AC-203 | ADR-111、ADR-112；AWR-04 §10.2、§11.5 |
-| M15-FR-205 | 文案（zh-CN 与 en 两份词典）：角色徽标"公开演示 · 只读"与"我的沙盒 · 可操作"；只读提示改为"共享展示为只读，开启我的沙盒即可操作"；页面标题共享展示为"<视图> · ANet Drone4D 公开演示"、沙盒为"<视图> · 我的沙盒 · ANet Drone4D"；关于区块与落地页"演示说明"写明共享展示运行 S7（7×24 接力演示）、每位访客可开一个隔离沙盒（30 min 起、可续期）、七个世界、UrbanScene3D 六城经数据集权利方授权使用并附 ECCV 2022 引用、帧率取决于访客 GPU；全部参考机型参数旁标"模拟参考值，非任何真实产品" | P0 | V0.2-demo | 是 | M15-AC-202、AC-218 | ADR-109、ADR-111；AWR-04 §5.2、§10.2 |
+| M15-FR-205 | 文案（zh-CN 与 en 两份词典）：角色徽标"公开演示 · 只读"与"我的沙盒 · 可操作"；只读提示改为"共享展示为只读，开启我的沙盒即可操作"；页面标题共享展示为"<视图> · ANet4D 公开演示"、沙盒为"<视图> · 我的沙盒 · ANet4D"；关于区块与落地页"演示说明"写明共享展示运行 S7（7×24 接力演示）、每位访客可开一个隔离沙盒（30 min 起、可续期）、七个世界、UrbanScene3D 六城经数据集权利方授权使用并附 ECCV 2022 引用、帧率取决于访客 GPU；全部参考机型参数旁标"模拟参考值，非任何真实产品" | P0 | V0.2-demo | 是 | M15-AC-202、AC-218 | ADR-109、ADR-111；AWR-04 §5.2、§10.2 |
 
 #### 15.2.2 沙盒会话界面
 

@@ -5,8 +5,8 @@
 **ANet4D 与 ANet Drone4D 是什么关系？**
 二者是同一个项目。自 0.3.2 起产品名为 ANet4D，即新一代具身智能体协同模拟基础设施；原名 ANet Drone4D 不再使用。公开站由
 `drone4d.agentnetwork.org.cn` 迁至 [anet4d.agentnetwork.org.cn](https://anet4d.agentnetwork.org.cn)，本文档站由
-`docs.agentnetwork.org.cn/drone4d/` 迁至 `docs.agentnetwork.org.cn/anet4d/`，原地址永久跳转。GitHub 仓库地址目前仍为
-{gh}`github.com/ANetResearch/ANet-Drone4D </>`；仓库改名后，GitHub 会把原地址跳转到新地址。
+`docs.agentnetwork.org.cn/drone4d/` 迁至 `docs.agentnetwork.org.cn/anet4d/`，原地址永久跳转。GitHub 仓库地址为
+{gh}`github.com/ANetResearch/ANet4D </>`，原仓库地址 `ANetResearch/ANet-Drone4D` 由 GitHub 跳转到新地址。
 
 **为什么有些标识符仍含 `drone4d`？**
 属于协议、数据契约或已录制数据的标识符保留原有拼写，使已有录制、事件磁带、提交与安装继续有效，回放保持逐字节一致。这些遗留标识符包括

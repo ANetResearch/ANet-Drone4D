@@ -1,0 +1,114 @@
+[
+ {
+  "run": "run-koyqeft6xe",
+  "event": "crop-handoff-001",
+  "eventType": "rendezvous_handoff",
+  "world": "oryahovo-crop1",
+  "policy": "track_share",
+  "nUav": 3,
+  "obsLevel": "L2",
+  "thumb": "/demo/lab/samples/run-koyqeft6xe.webp",
+  "thumbW": 1280,
+  "thumbH": 720,
+  "caption": {
+   "en": "Three UAVs run the Track and share baseline under Realistic physics with L2 observations, and all four scored events of the handoff event are captured.",
+   "zh": "在 Realistic 物理档与 L2 观测下，三架无人机运行 Track and share 基线，交接事件的四个计分事件全部被采集。"
+  }
+ },
+ {
+  "run": "run-tewcvq73zu",
+  "event": "crop-handoff-001",
+  "eventType": "rendezvous_handoff",
+  "world": "oryahovo-crop1",
+  "policy": "coverage_scan",
+  "nUav": 3,
+  "obsLevel": "L2",
+  "thumb": "/demo/lab/samples/run-tewcvq73zu.webp",
+  "thumbW": 1280,
+  "thumbH": 720,
+  "caption": {
+   "en": "Three UAVs fly the Coverage scan baseline lanes under Realistic physics with L2 observations, and three of the four scored events of the handoff event are captured.",
+   "zh": "在 Realistic 物理档与 L2 观测下，三架无人机按 Coverage scan 基线沿条带航线飞行，交接事件的四个计分事件中采集到三个。"
+  }
+ },
+ {
+  "run": "run-meaim5fvwv",
+  "event": "crop-handoff-001",
+  "eventType": "rendezvous_handoff",
+  "world": "oryahovo-crop1",
+  "policy": "static_guard",
+  "nUav": 3,
+  "obsLevel": "L2",
+  "thumb": "/demo/lab/samples/run-meaim5fvwv.webp",
+  "thumbW": 1280,
+  "thumbH": 720,
+  "caption": {
+   "en": "Three UAVs hold fixed observation points with a sweeping camera (Static guard baseline) under Realistic physics with L2 observations, and all four scored events of the handoff event are captured.",
+   "zh": "在 Realistic 物理档与 L2 观测下，三架无人机以 Static guard 基线驻守固定观察位并扫视，交接事件的四个计分事件全部被采集。"
+  }
+ },
+ {
+  "run": "run-4737nz65yu",
+  "event": "crop-handoff-002",
+  "eventType": "rendezvous_handoff",
+  "world": "oryahovo-crop1",
+  "policy": "track_share",
+  "nUav": 3,
+  "obsLevel": "L2",
+  "thumb": "/demo/lab/samples/run-4737nz65yu.webp",
+  "thumbW": 1280,
+  "thumbH": 720,
+  "caption": {
+   "en": "Two pedestrians hand over a package at the plaza while three UAVs run the Track and share baseline under Realistic physics with L2 observations; the meeting, the handoff and the building entry are all captured.",
+   "zh": "两名行人在广场交接包裹，三架无人机在 Realistic 物理档与 L2 观测下运行 Track and share 基线，会遇、交接与进楼三个计分事件全部被采集。"
+  }
+ },
+ {
+  "run": "run-6z62wc3jnp",
+  "event": "crop-reid-001",
+  "eventType": "reid_occlusion",
+  "world": "oryahovo-crop1",
+  "policy": "track_share",
+  "nUav": 3,
+  "obsLevel": "L2",
+  "thumb": "/demo/lab/samples/run-6z62wc3jnp.webp",
+  "thumbW": 1280,
+  "thumbH": 720,
+  "caption": {
+   "en": "The target enters two buildings among look-alike distractors while three UAVs run the Track and share baseline under Realistic physics with L2 observations; both scored building entries are captured.",
+   "zh": "目标先后进入两栋建筑并有外观相近的干扰者在场，三架无人机在 Realistic 物理档与 L2 观测下运行 Track and share 基线，两个计分的进楼事件均被采集。"
+  }
+ },
+ {
+  "run": "run-wkspxqgwbt",
+  "event": "crop-search-001",
+  "eventType": "target_search",
+  "world": "oryahovo-crop1",
+  "policy": "coverage_scan",
+  "nUav": 3,
+  "obsLevel": "L2",
+  "thumb": "/demo/lab/samples/run-wkspxqgwbt.webp",
+  "thumbW": 1280,
+  "thumbH": 720,
+  "caption": {
+   "en": "Three UAVs fly lanes ordered by the search prior (Coverage scan baseline) under Realistic physics with L2 observations, and all three scored target windows are captured.",
+   "zh": "在 Realistic 物理档与 L2 观测下，三架无人机按搜索先验排序的航带飞行（Coverage scan 基线），三个计分的目标窗口全部被采集。"
+  }
+ },
+ {
+  "run": "run-tflakpv2ed",
+  "event": "crop-vehicle-001",
+  "eventType": "vehicle_track",
+  "world": "oryahovo-crop1",
+  "policy": "track_share",
+  "nUav": 3,
+  "obsLevel": "L2",
+  "thumb": "/demo/lab/samples/run-tflakpv2ed.webp",
+  "thumbW": 1280,
+  "thumbH": 720,
+  "caption": {
+   "en": "A target vehicle drives among distractor vehicles while three UAVs run the Track and share baseline under Realistic physics with L2 observations; the scored junction pass is captured.",
+   "zh": "目标车辆与干扰车辆同场行驶，三架无人机在 Realistic 物理档与 L2 观测下运行 Track and share 基线，计分的路口通过事件被采集。"
+  }
+ }
+]
