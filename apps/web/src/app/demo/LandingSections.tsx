@@ -73,8 +73,8 @@ export function useNearViewport<T extends Element>(margin: string = '200px'): [R
     const el = ref.current
     if (near || !el) return
     if (typeof IntersectionObserver === 'undefined') {
-      setNear(true)
-      return
+      const id = setTimeout(() => setNear(true), 0)
+      return () => clearTimeout(id)
     }
     const io = new IntersectionObserver((es) => {
       if (es.some((e) => e.isIntersecting)) {
