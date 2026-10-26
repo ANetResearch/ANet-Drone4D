@@ -106,7 +106,7 @@ export const ANET4D_BIBTEX = `@software{anet4d_2026,
   title   = {ANet4D: Simulation Infrastructure for Collaborative Embodied Agents},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.3.3},
+  version = {0.3.4},
   url     = {${REPO_URL}}
 }`
 

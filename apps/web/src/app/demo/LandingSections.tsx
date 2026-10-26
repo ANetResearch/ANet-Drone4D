@@ -62,10 +62,38 @@ export function Section({ id, index, eyebrow, title, sub, children, ...rest }: {
 // back to the browser's own broken-image presentation (the alt text stays readable either way).
 // V0.3.1: `frame` letterboxes an image of another aspect ratio (the 640x512 thermal frame) into a 16:9 box, so it lines up
 // with the 16:9 frame beside it.
+/** whether the element has come within `margin` of the viewport (IntersectionObserver; stays true). Landing images take their
+ * `src` only then, with the address kept in `data-src`: the native lazy loading of Chrome starts images 1250 to 2500 px ahead, so
+ * the Event Lab images right below the hero (about 1 MB since V0.3.3) loaded with the page and delayed the sandbox chunks behind
+ * them on the 3 Mbps uplink of the public host. Without IntersectionObserver the image loads at once */
+export function useNearViewport<T extends Element>(margin: string = '200px'): [React.RefObject<T | null>, boolean] {
+  const ref = React.useRef<T | null>(null)
+  const [near, setNear] = React.useState(false)
+  React.useEffect(() => {
+    const el = ref.current
+    if (near || !el) return
+    if (typeof IntersectionObserver === 'undefined') {
+      setNear(true)
+      return
+    }
+    const io = new IntersectionObserver((es) => {
+      if (es.some((e) => e.isIntersecting)) {
+        setNear(true)
+        io.disconnect()
+      }
+    }, { rootMargin: margin })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [near, margin])
+  return [ref, near]
+}
+
 export function Figure({ m, wide = false, frame = false, sizes }: { m: Media; wide?: boolean; frame?: boolean; sizes: string }) {
   const t = useT()
   const text = t(`landing.media.${m.key}`)
   const [loaded, setLoaded] = React.useState(false)
+  const [ref, near] = useNearViewport<HTMLElement>()
+  const url = `/demo/${m.file}`
   const retried = React.useRef(false)
   const onError = (e: React.SyntheticEvent<HTMLImageElement>): void => {
     if (retried.current) return
@@ -73,16 +101,16 @@ export function Figure({ m, wide = false, frame = false, sizes }: { m: Media; wi
     e.currentTarget.src = `/demo/${m.file}?retry=1`
   }
   return (
-    <figure className={cn('landing-reveal flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card', wide && 'md:col-span-2')}
+    <figure ref={ref} className={cn('landing-reveal flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card', wide && 'md:col-span-2')}
       data-media={m.key}>
       {frame ? (
         <div className="relative aspect-video bg-muted">
-          <img src={`/demo/${m.file}`} alt={text} width={m.w} height={m.h} sizes={sizes} loading="lazy" decoding="async"
+          <img src={near ? url : undefined} data-src={url} alt={text} width={m.w} height={m.h} sizes={sizes} loading="lazy" decoding="async"
             data-media-loaded={loaded} onLoad={() => setLoaded(true)} onError={onError}
             className="absolute inset-0 block size-full object-contain" />
         </div>
       ) : (
-        <img src={`/demo/${m.file}`} alt={text} width={m.w} height={m.h} sizes={sizes} loading="lazy" decoding="async"
+        <img src={near ? url : undefined} data-src={url} alt={text} width={m.w} height={m.h} sizes={sizes} loading="lazy" decoding="async"
           data-media-loaded={loaded} onLoad={() => setLoaded(true)} onError={onError}
           className="block h-auto w-full bg-muted" />
       )}

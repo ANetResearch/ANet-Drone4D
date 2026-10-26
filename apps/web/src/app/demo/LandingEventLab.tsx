@@ -11,7 +11,7 @@ import { Button } from '@/ui/components/ui/button'
 import { Icon } from '@/ui/icons/Icon'
 import { LAB_PUBLIC_ENTRY } from '@/app/lab-public/flags'
 import { LAB_MEDIA, LAB_POINTS, LAB_SAMPLE, LAB_SAMPLES, LAB_WORLD_AUTHOR, LAB_WORLD_LICENSE, labRunUrl, labSampleUrl, sectionIndex, type LabSample } from './LandingContent'
-import { Figure, Section } from './LandingSections'
+import { Figure, Section, useNearViewport } from './LandingSections'
 
 const EXT = { target: '_blank', rel: 'noreferrer noopener' } as const
 
@@ -38,11 +38,12 @@ function Attribution() {
 function SampleCard({ s, wide }: { s: LabSample; wide: boolean }) {
   const t = useT()
   const caption = s.caption ? s.caption[getLocale() === 'zh-CN' ? 'zh' : 'en'] : null
+  const [ref, near] = useNearViewport<HTMLLIElement>()
   return (
-    <li className="landing-reveal min-w-0" data-lab-sample-card={s.run}>
+    <li ref={ref} className="landing-reveal min-w-0" data-lab-sample-card={s.run}>
       <a href={labRunUrl(s.run)} data-landing-lab-card={s.run}
         className={cn('group flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-foreground/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring', wide && 'md:flex-row')}>
-        <img src={s.thumb} alt={t('landing.lab.card.alt', { run: s.run, event: s.event })} width={s.thumbW} height={s.thumbH}
+        <img src={near ? s.thumb : undefined} data-src={s.thumb} alt={t('landing.lab.card.alt', { run: s.run, event: s.event })} width={s.thumbW} height={s.thumbH}
           sizes={wide ? '(min-width: 1152px) 640px, (min-width: 768px) 55vw, 100vw' : '(min-width: 1024px) 352px, (min-width: 640px) 50vw, 100vw'}
           loading="lazy" decoding="async" className={cn('block h-auto w-full bg-muted', wide && 'md:w-[58%] md:shrink-0 md:self-start')} />
         <div className={cn('flex flex-1 flex-col gap-3 border-t border-border px-4 py-4', wide && 'md:justify-center md:border-t-0 md:border-l md:px-6')}>

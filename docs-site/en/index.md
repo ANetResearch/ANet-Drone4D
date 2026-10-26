@@ -19,7 +19,7 @@ The delivered entity type today is the drone (multirotor, fixed-wing and VTOL ai
 collaborative experimentation platform with declarative experiment specifications, replaceable collaboration algorithms and comparable
 evidence; see {doc}`project/roadmap`.
 
-This documentation covers **0.3.3** (V0.3.3 · ANet4D). The public instance runs at
+This documentation covers **0.3.4** (V0.3.4 · ANet4D). The public instance runs at
 [anet4d.agentnetwork.org.cn](https://anet4d.agentnetwork.org.cn), and the source code is on {gh}`GitHub </>`. ANet4D was
 previously published as ANet Drone4D; the former site and documentation addresses redirect to the new ones, and a small set of legacy
 identifiers keeps the former name (see {doc}`project/faq`).

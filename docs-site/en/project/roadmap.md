@@ -54,7 +54,9 @@ V0.3.3 extends the public samples of the Event Lab (`/lab/`) to seven runs over 
 `crop-search-001` and `crop-vehicle-001`. Each run offers the event replay, the RGB and thermal private views of every UAV and Rerun data
 inspection; the samples are single-seed single runs, not ranked results. Sample media moves to the ModelScope dataset
 `inksong/ANet4D-samples`, and the landing page of the public site shows a sample gallery right after the first screen. The repository is
-renamed to `ANetResearch/ANet4D`; development happens on `main` only, and earlier releases are checked out by tag.
+renamed to `ANetResearch/ANet4D`; development happens on `main` only, and earlier releases are checked out by tag. V0.3.4 is a patch release: the images of the Event
+Lab section on the landing page load only near the viewport, so they no longer compete with the sandbox for the outbound bandwidth of the
+public host.
 
 ## D3 design record: event simulation and active observation benchmark
 

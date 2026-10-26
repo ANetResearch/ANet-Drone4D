@@ -315,7 +315,7 @@ ANet4D 是 Agent Network Research 旗下 ANet 生态的组成部分，与 [ANet]
   title   = {ANet4D: Simulation Infrastructure for Collaborative Embodied Agents},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.3.3},
+  version = {0.3.4},
   url     = {https://github.com/ANetResearch/ANet4D}
 }
 ```

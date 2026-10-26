@@ -1,6 +1,6 @@
 {
   "name": "anet-drone",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "private": true,
   "type": "module",
   "description": "ANet Drone / World Runtime（AWR）npm workspaces 根清单（M00）",

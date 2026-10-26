@@ -58,8 +58,10 @@ describe('landing page Event Lab entries (VITE_AWR_LAB_PUBLIC, V0.3.1)', () => {
     const { LAB_SAMPLES } = await import('@/app/demo/LandingContent')
     expect(imgs).toHaveLength(5 + LAB_SAMPLES.length) // the five frames and one gallery thumbnail per sample run
     for (const f of ['lab-oblique', 'lab-junction', 'lab-thermal', 'lab-residential', 'lab-blocks']) {
-      const img = imgs.find((i) => i.includes(`src="/demo/lab/${f}.webp"`))
+      const img = imgs.find((i) => i.includes(`data-src="/demo/lab/${f}.webp"`))
       expect(img, f).toBeDefined()
+      // the address is set only near the viewport (useNearViewport), not with the page: no eager src in the markup
+      expect(img).not.toMatch(/ src="/)
       expect(img).toContain('loading="lazy"')
       expect(img).toMatch(f === 'lab-thermal' ? /width="640" height="512"/ : /width="1600" height="900"/)
     }
@@ -114,7 +116,8 @@ describe('landing page Event Lab entries (VITE_AWR_LAB_PUBLIC, V0.3.1)', () => {
     expect(img).toMatch(/loading="lazy"/)
     expect(img).toMatch(/decoding="async"/)
     expect(img).toMatch(new RegExp(`width="${LAB_SAMPLES[0]!.thumbW}" height="${LAB_SAMPLES[0]!.thumbH}"`))
-    expect(img).toContain(`src="${LAB_SAMPLES[0]!.thumb}"`)
+    expect(img).toContain(`data-src="${LAB_SAMPLES[0]!.thumb}"`)
+    expect(img).not.toMatch(/ src="/)
     expect(gallery).toContain('Policy track_share')
     expect(gallery).toContain('3 UAVs')
     expect(gallery).toContain('Observation L2')

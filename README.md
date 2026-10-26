@@ -316,7 +316,7 @@ To cite ANet4D, use GitHub's "Cite this repository" feature ([CITATION.cff](CITA
   title   = {ANet4D: Simulation Infrastructure for Collaborative Embodied Agents},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.3.3},
+  version = {0.3.4},
   url     = {https://github.com/ANetResearch/ANet4D}
 }
 ```
